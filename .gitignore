@@ -1,0 +1,32 @@
+# Build artifacts
+TurtleNeckDetector.app/
+build/
+test_3d_pose
+test_camera
+test_camera2
+test_camera3
+test_camera4
+test_face
+test_runner
+test_vision_file
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Xcode
+TurtleNeckDetector.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+
+# macOS
+.DS_Store
+
+# Calibration data (user-specific)
+calibration_data.json
+
+# MediaPipe model
+pose_landmarker_lite.task
+
+# Debug logs
+/tmp/turtle_*.log
