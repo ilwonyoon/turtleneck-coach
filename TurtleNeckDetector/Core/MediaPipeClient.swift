@@ -58,7 +58,7 @@ final class MediaPipeClient: @unchecked Sendable {
     /// Find the pose_server.py script and its directory.
     private func findServerScript() -> (script: String, dir: String)? {
         let candidates = [
-            // Dev mode: relative to project
+            // Dev mode: relative to project source
             Bundle.main.bundlePath + "/../python_server/pose_server.py",
             // Alongside the app bundle
             Bundle.main.bundlePath + "/Contents/Resources/python_server/pose_server.py",
@@ -66,6 +66,8 @@ final class MediaPipeClient: @unchecked Sendable {
             NSHomeDirectory() + "/.pt_turtle/server/pose_server.py",
             // Direct project path (for development)
             "./python_server/pose_server.py",
+            // Absolute project path (DerivedData builds)
+            NSHomeDirectory() + "/Documents/Turtle_neck_detector/python_server/pose_server.py",
         ]
 
         for path in candidates {
@@ -265,6 +267,11 @@ final class MediaPipeClient: @unchecked Sendable {
         // Parse JSON
         do {
             let result = try JSONDecoder().decode(MediaPipeResult.self, from: responseData)
+            if let fl = result.faceLandmarks {
+                log("faceLandmarks count=\(fl.count) (need 1434 for 3D mesh)")
+            } else {
+                log("faceLandmarks=nil")
+            }
             return result
         } catch {
             log("JSON decode error: \(error)")

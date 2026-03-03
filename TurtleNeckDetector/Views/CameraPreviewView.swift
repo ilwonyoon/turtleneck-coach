@@ -157,26 +157,57 @@ struct SkeletonOverlay: View {
                         context.stroke(featurePath, with: .color(Color.cyan.opacity(0.7)), lineWidth: 1.2)
                     }
 
-                    // Body connections: neck to shoulders
-                    let bodyConnections: [(String, String)] = [
+                    // Body skeleton — styled to match face mesh aesthetic
+                    let bodyConnections: [(from: String, to: String)] = [
                         ("nose", "neck"),
                         ("neck", "leftShoulder"),
                         ("neck", "rightShoulder"),
                         ("leftShoulder", "rightShoulder"),
+                        ("leftEar", "leftEye"),
+                        ("rightEar", "rightEye"),
                     ]
-                    for (from, to) in bodyConnections {
-                        guard let p1 = pointMap[from], let p2 = pointMap[to] else { continue }
+
+                    // Glow layer (wider, translucent cyan)
+                    for conn in bodyConnections {
+                        guard let p1 = pointMap[conn.from], let p2 = pointMap[conn.to] else { continue }
                         var path = Path()
                         path.move(to: p1)
                         path.addLine(to: p2)
-                        context.stroke(path, with: .color(.white.opacity(0.6)), lineWidth: 2)
+                        context.stroke(path, with: .color(Color.cyan.opacity(0.15)), lineWidth: 6)
                     }
 
-                    // Shoulder + neck dots
-                    for name in ["neck", "leftShoulder", "rightShoulder"] {
-                        guard let point = pointMap[name] else { continue }
-                        let rect = CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)
-                        context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.8)))
+                    // Main body lines (solid cyan, matching mesh color)
+                    for conn in bodyConnections {
+                        guard let p1 = pointMap[conn.from], let p2 = pointMap[conn.to] else { continue }
+                        var path = Path()
+                        path.move(to: p1)
+                        path.addLine(to: p2)
+                        context.stroke(path, with: .color(Color.cyan.opacity(0.7)), lineWidth: 2.5)
+                    }
+
+                    // Joint dots with glow — larger for key joints, smaller for secondary
+                    let majorJoints = ["neck", "leftShoulder", "rightShoulder"]
+                    let minorJoints = ["nose", "leftEar", "rightEar", "leftEye", "rightEye"]
+
+                    for name in majorJoints {
+                        guard let pt = pointMap[name] else { continue }
+                        // Outer glow
+                        let glowRect = CGRect(x: pt.x - 8, y: pt.y - 8, width: 16, height: 16)
+                        context.fill(Path(ellipseIn: glowRect), with: .color(Color.cyan.opacity(0.15)))
+                        // Dot
+                        let dotRect = CGRect(x: pt.x - 5, y: pt.y - 5, width: 10, height: 10)
+                        context.fill(Path(ellipseIn: dotRect), with: .color(Color.cyan.opacity(0.8)))
+                        // Inner bright center
+                        let innerRect = CGRect(x: pt.x - 2.5, y: pt.y - 2.5, width: 5, height: 5)
+                        context.fill(Path(ellipseIn: innerRect), with: .color(.white.opacity(0.9)))
+                    }
+
+                    for name in minorJoints {
+                        guard let pt = pointMap[name] else { continue }
+                        let dotRect = CGRect(x: pt.x - 3, y: pt.y - 3, width: 6, height: 6)
+                        context.fill(Path(ellipseIn: dotRect), with: .color(Color.cyan.opacity(0.6)))
+                        let innerRect = CGRect(x: pt.x - 1.5, y: pt.y - 1.5, width: 3, height: 3)
+                        context.fill(Path(ellipseIn: innerRect), with: .color(.white.opacity(0.7)))
                     }
 
                 } else {

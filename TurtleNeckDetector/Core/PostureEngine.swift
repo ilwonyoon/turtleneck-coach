@@ -302,6 +302,11 @@ final class PostureEngine: ObservableObject {
 
         bodyDetected = true
         currentJoints = result.joints
+        if let mesh = result.joints.faceMesh {
+            engineLog("faceMesh present: \(mesh.landmarks.count) landmarks, \(mesh.depthValues.count) depths")
+        } else {
+            engineLog("faceMesh=nil")
+        }
         let rawCVA = result.metrics.neckEarAngle
 
         // Adaptive EMA smoothing — reduce alpha on large jumps to prevent oscillation

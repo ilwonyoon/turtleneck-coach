@@ -196,9 +196,10 @@ def compute_combined_cva(geometric_cva: float, head_pitch: float,
     Yaw penalty: turning head sideways is NOT good posture — penalize CVA.
     Smooth quadratic ramp from 5° to 30° (no hard threshold).
     """
-    # 3D-based pitch: ~3-7° when sitting straight, ~15-25° when forward
+    # 3D-based pitch: magnitude indicates forward/backward tilt
+    # Sign depends on camera angle, so use absolute value
     # Dead zone: < 5° is normal upright posture variation
-    effective_tilt = max(0.0, head_pitch - 5.0)
+    effective_tilt = max(0.0, abs(head_pitch) - 5.0)
     pitch_based_cva = max(15.0, min(65.0, 62.0 - effective_tilt * 2.5))
 
     # Yaw penalty: turning head sideways should lower CVA (worse posture)
