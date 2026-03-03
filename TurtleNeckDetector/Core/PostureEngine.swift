@@ -139,12 +139,8 @@ final class PostureEngine: ObservableObject {
            let pos = CameraPosition(rawValue: saved) {
             cameraPosition = pos
         }
-        // Request all permissions upfront at app launch so dialogs don't
-        // interrupt the popover later (macOS closes popovers on system dialogs).
-        Task {
-            _ = await CameraManager.requestPermission()
-            notificationService.requestPermission()
-        }
+        // Permissions are now requested in TurtleNeckDetectorApp before
+        // the popover content appears, so no dialogs interrupt the UI.
 
         // Frame callback runs on camera's background queue
         // CameraManager already rotates portrait frames to landscape
