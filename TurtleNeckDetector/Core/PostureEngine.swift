@@ -205,6 +205,9 @@ final class PostureEngine: ObservableObject {
                 }
 
                 scheduleAnalysis()
+
+                // Auto-calibrate on every start so baseline matches current session
+                startCalibration()
             } catch CameraManager.CameraError.notAuthorized {
                 lastError = "Camera access denied. Enable in System Settings > Privacy."
                 isMonitoring = false
