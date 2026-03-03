@@ -56,18 +56,17 @@ final class MediaPipeClient: @unchecked Sendable {
     // MARK: - Python Process Management
 
     /// Find the pose_server.py script and its directory.
+    /// Uses ~/.pt_turtle/server/ to avoid ~/Documents TCC permission prompts.
     private func findServerScript() -> (script: String, dir: String)? {
         let candidates = [
-            // Dev mode: relative to project source
-            Bundle.main.bundlePath + "/../python_server/pose_server.py",
-            // Alongside the app bundle
-            Bundle.main.bundlePath + "/Contents/Resources/python_server/pose_server.py",
-            // Home directory install
+            // Primary: user-local install (no TCC permission needed)
             NSHomeDirectory() + "/.pt_turtle/server/pose_server.py",
-            // Direct project path (for development)
+            // Dev mode: relative to project source (when launched from Xcode)
+            Bundle.main.bundlePath + "/../python_server/pose_server.py",
+            // Bundled inside .app
+            Bundle.main.bundlePath + "/Contents/Resources/python_server/pose_server.py",
+            // CWD (for development)
             "./python_server/pose_server.py",
-            // Absolute project path (DerivedData builds)
-            NSHomeDirectory() + "/Documents/Turtle_neck_detector/python_server/pose_server.py",
         ]
 
         for path in candidates {
