@@ -325,51 +325,67 @@ final class VisionPoseDetector {
         var forwardScore: CGFloat = 0.0  // 0 = perfect, higher = more forward
 
         if let baseY = calibratedFaceY, let baseH = calibratedFaceHeight, let baseP = calibratedPitch {
+            // Auto-adapt face baseline: if face readings are consistently near baseline
+            // (within 0.06 Y), gently nudge baseline toward current readings.
+            // This handles systematic offset between body-pose-time and face-only-time.
+            let yDiff = abs(smoothY - baseY)
+            if yDiff < 0.06 {
+                calibratedFaceY = baseY * 0.95 + smoothY * 0.05
+                calibratedFaceHeight = baseH * 0.95 + smoothHeight * 0.05
+                if smoothPitch != 0 {
+                    calibratedPitch = baseP * 0.95 + smoothPitch * 0.05
+                }
+            }
+            let adjBaseY = calibratedFaceY!
+            let adjBaseH = calibratedFaceHeight!
+            let adjBaseP = calibratedPitch!
+
             // Signal 1: Face Y drop (head moves forward & down)
-            // Dead zone: ignore changes < 0.015 (natural face bbox jitter)
-            let yDrop = baseY - smoothY  // positive = dropped
-            let yContrib = yDrop > 0.015 ? (yDrop - 0.015) * 4.0 : 0.0
+            // Dead zone: 0.04 absorbs natural face bbox variance
+            let yDrop = adjBaseY - smoothY  // positive = dropped
+            let yContrib = yDrop > 0.04 ? (yDrop - 0.04) * 4.0 : 0.0
             forwardScore += yContrib
 
             // Signal 2: Face getting bigger (leaning toward camera)
-            // Dead zone: ignore < 5% size change
-            let sizeIncrease = (smoothHeight - baseH) / baseH
-            let sizeContrib = sizeIncrease > 0.05 ? (sizeIncrease - 0.05) * 3.0 : 0.0
+            // Dead zone: ignore < 8% size change
+            let sizeIncrease = (smoothHeight - adjBaseH) / adjBaseH
+            let sizeContrib = sizeIncrease > 0.08 ? (sizeIncrease - 0.08) * 3.0 : 0.0
             forwardScore += sizeContrib
 
             // Signal 3: Pitch change (head tilting forward)
-            let pitchChange = baseP - smoothPitch
-            let pitchContrib = pitchChange > 0.05 ? (pitchChange - 0.05) * 3.0 : 0.0
+            let pitchChange = adjBaseP - smoothPitch
+            let pitchContrib = pitchChange > 0.08 ? (pitchChange - 0.08) * 3.0 : 0.0
             forwardScore += pitchContrib
 
             // Signal 4: Face Y rising while pitch drops = chin-poke posture
-            let yRise = smoothY - baseY
-            if yRise > 0.02 && smoothPitch < baseP - 0.05 {
+            let yRise = smoothY - adjBaseY
+            if yRise > 0.04 && smoothPitch < adjBaseP - 0.08 {
                 forwardScore += yRise * 3.0
             }
 
             // Debug logging every 3rd frame (~1s at 0.33s interval)
             if debugCounter % 3 == 0 {
-                log(String(format: "[FACE] Y:%.4f(Δ%.4f) H:%.4f(Δ%.4f) P:%.3f(Δ%.3f) → fwd=%.4f CVA=%.1f",
-                      smoothY, yDrop, smoothHeight, sizeIncrease, smoothPitch, pitchChange, forwardScore,
-                      forwardScore < 0.02 ? 56.0 : max(30, min(56, 56.0 - forwardScore * 50.0))))
+                log(String(format: "[FACE] Y:%.4f(base%.4f Δ%.4f) H:%.4f(Δ%.4f) P:%.3f(Δ%.3f) → fwd=%.4f CVA=%.1f",
+                      smoothY, adjBaseY, yDrop, smoothHeight, sizeIncrease, smoothPitch, pitchChange, forwardScore,
+                      forwardScore < 0.02 ? 65.0 : max(20, min(65, 65.0 - forwardScore * 75.0))))
             }
         }
 
         // Convert forward score to CVA angle (clinical range)
         // With dead zones, forwardScore stays near 0 for natural jitter.
         // Meaningful movement produces forwardScore 0.05-0.5+
-        //   0    → 56° (normal)
-        //   0.05 → 53° (still good)
-        //   0.15 → 48° (mild)
-        //   0.30 → 41° (moderate)
-        //   0.50+→ 30° (severe)
+        // Range: 65° (perfect) down to 20° (severe)
+        //   0    → 65° (normal, score ~98)
+        //   0.05 → 61° (still good, score ~91)
+        //   0.20 → 51° (mild, score ~72)
+        //   0.40 → 37° (moderate, score ~46)
+        //   0.60+→ 20° (severe, score ~14)
         let estimatedCVA: CGFloat
         if forwardScore < 0.02 {
-            estimatedCVA = 56.0
+            estimatedCVA = 65.0
         } else {
-            let drop = forwardScore * 50.0
-            estimatedCVA = max(30, min(56, 56.0 - drop))
+            let drop = forwardScore * 75.0
+            estimatedCVA = max(20, min(65, 65.0 - drop))
         }
 
         // Normalized joints for skeleton
@@ -400,7 +416,7 @@ final class VisionPoseDetector {
             eyeShoulderDistanceLeft: eyeShL, eyeShoulderDistanceRight: eyeShR,
             headForwardRatio: headFwdRatio, headTiltAngle: roll * 180 / .pi,
             neckEarAngle: estimatedCVA, shoulderEvenness: 0,
-            earsVisible: true, landmarksDetected: true
+            earsVisible: false, landmarksDetected: true  // false = use CVA-based deviation in PostureAnalyzer
         )
 
         return DetectionResult(metrics: metrics, joints: joints)
