@@ -134,7 +134,7 @@ final class PostureEngine: ObservableObject {
             try? initLine.data(using: .utf8)?.write(to: initUrl)
         }
 
-        calibrationData = CalibrationManager.loadSaved()
+        // No saved calibration loaded — always recalibrate on app start
         if let saved = UserDefaults.standard.string(forKey: "cameraPosition"),
            let pos = CameraPosition(rawValue: saved) {
             cameraPosition = pos

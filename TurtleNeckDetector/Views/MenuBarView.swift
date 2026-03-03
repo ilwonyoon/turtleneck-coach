@@ -79,27 +79,30 @@ struct MenuBarView: View {
                         )
                     }
 
-                    // Score ring (when monitoring and body detected)
+                    // Unified posture card (score + status + badges)
                     if engine.isMonitoring && !engine.isCalibrating && engine.bodyDetected {
-                        PostureScoreView(
-                            score: engine.postureScore,
-                            emoji: engine.postureEmoji,
-                            accentColor: accentColor
-                        )
-                        .animation(.easeInOut(duration: 0.8), value: engine.postureScore)
-                        .padding(.horizontal, 4)
-                    }
+                        VStack(spacing: 12) {
+                            PostureScoreView(
+                                score: engine.postureScore,
+                                emoji: engine.postureEmoji,
+                                accentColor: accentColor
+                            )
+                            .animation(.easeInOut(duration: 0.8), value: engine.postureScore)
 
-                    // STATUS section
-                    section("STATUS") {
-                        VStack(spacing: 10) {
+                            Divider()
                             statusCard
 
+                            Divider()
+                            badgesRow
+                        }
+                        .padding(12)
+                        .background(.thickMaterial)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                    } else {
+                        section(nil) {
+                            statusCard
                         }
                     }
-
-                    // Badges row (outside sections, compact)
-                    badgesRow
 
                     // Controls
                     controlButtons
