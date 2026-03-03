@@ -7,25 +7,25 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A10001 /* TurtleNeckDetectorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10001; };
-		A10002 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10002; };
-		A10003 /* VisionPoseDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10003; };
-		A10004 /* PostureAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10004; };
-		A10005 /* CalibrationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10005; };
-		A10006 /* PostureEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10006; };
-		A10007 /* PostureMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10007; };
-		A10008 /* CalibrationData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008; };
-		A10009 /* PostureState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10009; };
-		A10010 /* CameraPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010; };
-		A10011 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011; };
-		A10012 /* FeedbackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012; };
-		A10013 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10013; };
-		A10014 /* PostureScoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10014; };
-		A10015 /* CalibrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10015; };
-		A10016 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10016; };
-		A10017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10017; };
-		A10018 /* MediaPipeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10021; };
-		A10019 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10022; };
+		A10001 /* TurtleNeckDetectorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10001 /* TurtleNeckDetectorApp.swift */; };
+		A10002 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10002 /* CameraManager.swift */; };
+		A10003 /* VisionPoseDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10003 /* VisionPoseDetector.swift */; };
+		A10004 /* PostureAnalyzer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10004 /* PostureAnalyzer.swift */; };
+		A10005 /* CalibrationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10005 /* CalibrationManager.swift */; };
+		A10006 /* PostureEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10006 /* PostureEngine.swift */; };
+		A10007 /* PostureMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10007 /* PostureMetrics.swift */; };
+		A10008 /* CalibrationData.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10008 /* CalibrationData.swift */; };
+		A10009 /* PostureState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10009 /* PostureState.swift */; };
+		A10010 /* CameraPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10010 /* CameraPosition.swift */; };
+		A10011 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011 /* NotificationService.swift */; };
+		A10012 /* FeedbackEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012 /* FeedbackEngine.swift */; };
+		A10013 /* MenuBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10013 /* MenuBarView.swift */; };
+		A10014 /* PostureScoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10014 /* PostureScoreView.swift */; };
+		A10015 /* CalibrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10015 /* CalibrationView.swift */; };
+		A10016 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10016 /* SettingsView.swift */; };
+		A10017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10017 /* Assets.xcassets */; };
+		A10018 /* MediaPipeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10021 /* MediaPipeClient.swift */; };
+		A10019 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10022 /* CameraPreviewView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -64,7 +64,7 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		D10001 /* Root */ = {
+		D10001 = {
 			isa = PBXGroup;
 			children = (
 				D10002 /* TurtleNeckDetector */,
@@ -191,7 +191,7 @@
 				en,
 				Base,
 			);
-			mainGroup = D10001 /* Root */;
+			mainGroup = D10001;
 			productRefGroup = D10008 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -363,9 +363,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = TurtleNeckDetector/Resources/TurtleNeckDetector.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 964AYGFZ22;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TurtleNeckDetector/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -386,9 +388,11 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = TurtleNeckDetector/Resources/TurtleNeckDetector.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 964AYGFZ22;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TurtleNeckDetector/Resources/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -425,7 +429,6 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
-
 	};
 	rootObject = G10001 /* Project object */;
 }
