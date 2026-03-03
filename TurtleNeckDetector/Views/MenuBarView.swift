@@ -95,11 +95,6 @@ struct MenuBarView: View {
                         VStack(spacing: 10) {
                             statusCard
 
-                            // Movement meter
-                            if engine.calibrationData != nil && engine.isMonitoring {
-                                Divider()
-                                deviationMeter
-                            }
                         }
                     }
 
@@ -125,7 +120,7 @@ struct MenuBarView: View {
         .onReceive(refreshTimer) { _ in
             engine.objectWillChange.send()
         }
-        .onChange(of: engine.calibrationSuccess) { _, newValue in
+        .onChange(of: engine.calibrationSuccess) { newValue in
             guard let success = newValue else { return }
             lastCalibrationSuccess = success
             withAnimation(.easeInOut(duration: 0.3)) {
@@ -246,6 +241,12 @@ struct MenuBarView: View {
         guard engine.calibrationData != nil else { return "Set your baseline" }
         if engine.isCalibrating { return "Reading your posture..." }
 
+        // Head turned sideways — show rotation-specific main text
+        let absYaw = abs(engine.currentHeadYaw)
+        if absYaw > 15 {
+            return absYaw > 30 ? "Head turned away" : "Head slightly turned"
+        }
+
         switch engine.postureState.severity {
         case .good:
             let msg = FeedbackEngine.goodMessage(forDuration: engine.goodPostureDuration)
@@ -269,7 +270,7 @@ struct MenuBarView: View {
             let msg = FeedbackEngine.goodMessage(forDuration: engine.goodPostureDuration)
             return msg.sub
         case .mild, .moderate, .severe:
-            return FeedbackEngine.severityTip(for: engine.postureState.severity)
+            return FeedbackEngine.severityTip(for: engine.postureState.severity, headYaw: engine.currentHeadYaw)
         }
     }
 
@@ -307,31 +308,76 @@ struct MenuBarView: View {
         .clipShape(Capsule())
     }
 
-    // MARK: - Deviation Meter
+    // MARK: - Head Position Widget
 
-    private var deviationMeter: some View {
-        HStack(spacing: 8) {
-            Text("Movement")
+    private var headPositionWidget: some View {
+        HStack(spacing: 10) {
+            Text("Head")
                 .font(.caption)
                 .foregroundColor(.secondary)
-                .frame(width: 65, alignment: .leading)
+                .frame(width: 35, alignment: .leading)
 
-            let fill = min(engine.postureState.deviationScore * 3, 1.0)
+            // Crosshair showing head yaw (x) and pitch (y)
+            let size: CGFloat = 36
+            let maxYaw: CGFloat = 40    // ±40° maps to edges
+            let maxPitch: CGFloat = 30  // ±30° maps to edges
 
-            Capsule()
-                .fill(Color(.separatorColor).opacity(0.3))
-                .frame(height: 4)
-                .overlay(alignment: .leading) {
-                    GeometryReader { geo in
-                        Capsule()
-                            .fill(Color.primary.opacity(0.5))
-                            .frame(width: max(0, fill * geo.size.width))
-                            .animation(.easeInOut(duration: 0.3), value: engine.postureState.deviationScore)
-                    }
+            // Clamp and normalize to -1...1
+            let nx = min(1, max(-1, engine.currentHeadYaw / maxYaw))
+            let ny = min(1, max(-1, engine.currentHeadPitch / maxPitch))
+
+            ZStack {
+                // Background circle
+                Circle()
+                    .fill(Color(.separatorColor).opacity(0.15))
+
+                // Crosshair lines
+                Path { p in
+                    p.move(to: CGPoint(x: size / 2, y: 2))
+                    p.addLine(to: CGPoint(x: size / 2, y: size - 2))
                 }
-                .clipShape(Capsule())
+                .stroke(Color(.separatorColor).opacity(0.3), lineWidth: 0.5)
+
+                Path { p in
+                    p.move(to: CGPoint(x: 2, y: size / 2))
+                    p.addLine(to: CGPoint(x: size - 2, y: size / 2))
+                }
+                .stroke(Color(.separatorColor).opacity(0.3), lineWidth: 0.5)
+
+                // Head position dot
+                // x: yaw (positive = left in mirrored view, so negate for natural feel)
+                // y: pitch (positive = forward/down)
+                let dotX = size / 2 + (-nx) * (size / 2 - 4)
+                let dotY = size / 2 + ny * (size / 2 - 4)
+                let dotColor: Color = (abs(nx) < 0.375 && ny < 0.5) ? .green : .orange
+
+                Circle()
+                    .fill(dotColor)
+                    .frame(width: 6, height: 6)
+                    .position(x: dotX, y: dotY)
+                    .animation(.easeOut(duration: 0.15), value: nx)
+                    .animation(.easeOut(duration: 0.15), value: ny)
+            }
+            .frame(width: size, height: size)
+
+            // Labels
+            VStack(alignment: .leading, spacing: 1) {
+                let pitchLabel = engine.currentHeadPitch < 3 ? "Straight" :
+                                 engine.currentHeadPitch < 15 ? "Slight tilt" : "Forward"
+                let yawLabel = abs(engine.currentHeadYaw) < 10 ? "Center" :
+                               abs(engine.currentHeadYaw) < 25 ? "Turned" : "Far turn"
+
+                Text(pitchLabel)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+                Text(yawLabel)
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
         }
-        .frame(height: 20)
+        .frame(height: 40)
     }
 
     // MARK: - Controls

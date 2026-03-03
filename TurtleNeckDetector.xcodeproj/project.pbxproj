@@ -24,6 +24,8 @@
 		A10015 /* CalibrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10015; };
 		A10016 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10016; };
 		A10017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B10017; };
+		A10018 /* MediaPipeClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10021; };
+		A10019 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10022; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -47,6 +49,8 @@
 		B10018 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		B10019 /* TurtleNeckDetector.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TurtleNeckDetector.entitlements; sourceTree = "<group>"; };
 		B10020 /* TurtleNeckDetector.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TurtleNeckDetector.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B10021 /* MediaPipeClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaPipeClient.swift; sourceTree = "<group>"; };
+		B10022 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +93,7 @@
 				B10004 /* PostureAnalyzer.swift */,
 				B10005 /* CalibrationManager.swift */,
 				B10006 /* PostureEngine.swift */,
+				B10021 /* MediaPipeClient.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -120,6 +125,7 @@
 				B10014 /* PostureScoreView.swift */,
 				B10015 /* CalibrationView.swift */,
 				B10016 /* SettingsView.swift */,
+				B10022 /* CameraPreviewView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -227,6 +233,8 @@
 				A10014 /* PostureScoreView.swift in Sources */,
 				A10015 /* CalibrationView.swift in Sources */,
 				A10016 /* SettingsView.swift in Sources */,
+				A10018 /* MediaPipeClient.swift in Sources */,
+				A10019 /* CameraPreviewView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

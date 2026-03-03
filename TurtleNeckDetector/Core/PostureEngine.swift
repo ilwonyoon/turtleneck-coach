@@ -75,9 +75,17 @@ final class PostureEngine: ObservableObject {
     // MARK: - Private
 
     private let poseDetector = VisionPoseDetector()
+    private let mediaPipeClient = MediaPipeClient()
     private let calibrationManager = CalibrationManager()
     private let notificationService = NotificationService()
     private var analysisTimer: Timer?
+    private var useMediaPipe = true  // prefer MediaPipe, fallback to Vision
+    private var mediaPipeConnectAttempted = false
+    private var lastMediaPipeHeadPitch: CGFloat = 0
+    /// Current head yaw (horizontal rotation) — published for UI feedback
+    @Published var currentHeadYaw: CGFloat = 0
+    /// Current head pitch (forward tilt, 0=straight, positive=forward) — published for UI
+    @Published var currentHeadPitch: CGFloat = 0
 
     // Menu bar held severity — only changes after sustained threshold
     @Published private(set) var menuBarSeverity: Severity = .good
@@ -102,9 +110,8 @@ final class PostureEngine: ObservableObject {
         }
     }
 
-    // EMA smoothing for CVA — keep it simple, let raw signal through
+    // EMA smoothing for CVA — adaptive alpha based on jump size (computed per-frame)
     private var smoothedCVA: CGFloat? = nil
-    private let emaAlpha: CGFloat = 0.5
 
     // Thread-safe frame storage
     private let frameLock = NSLock()
@@ -189,6 +196,18 @@ final class PostureEngine: ObservableObject {
                 try await camera.start()
                 // Small delay for camera warmup
                 try? await Task.sleep(nanoseconds: 300_000_000)
+
+                // Try connecting to MediaPipe server
+                if useMediaPipe && !mediaPipeConnectAttempted {
+                    mediaPipeConnectAttempted = true
+                    let connected = mediaPipeClient.connect()
+                    if connected {
+                        engineLog("MediaPipe server connected — using enhanced detection")
+                    } else {
+                        engineLog("MediaPipe server unavailable — falling back to Vision framework")
+                    }
+                }
+
                 scheduleAnalysis()
             } catch CameraManager.CameraError.notAuthorized {
                 lastError = "Camera access denied. Enable in System Settings > Privacy."
@@ -205,6 +224,8 @@ final class PostureEngine: ObservableObject {
         analysisTimer?.invalidate()
         analysisTimer = nil
         camera.stop()
+        mediaPipeClient.disconnect()
+        mediaPipeConnectAttempted = false
         currentFrame = nil
         currentJoints = nil
         bodyDetected = false
@@ -244,127 +265,159 @@ final class PostureEngine: ObservableObject {
         }
         if Int.random(in: 0..<10) == 0 { engineLog("analyzing frame \(image.width)x\(image.height)") }
 
-        do {
-            guard let result = try poseDetector.detect(in: image) else {
-                bodyDetected = false
-                currentJoints = nil
-                return
-            }
+        // Try MediaPipe first, then fall back to Vision framework
+        let detectionResult: DetectionResult?
+        let usingMediaPipe: Bool
 
-            bodyDetected = true
-            currentJoints = result.joints
-            let rawCVA = result.metrics.neckEarAngle
+        if useMediaPipe && mediaPipeClient.isConnected,
+           let mpResult = mediaPipeClient.sendFrame(image),
+           mpResult.confidence > 0.1 {
+            // MediaPipe path — convert result to DetectionResult
+            let joints = mediaPipeClient.resultToJoints(mpResult)
+            let metrics = mediaPipeClient.resultToMetrics(mpResult, imageWidth: image.width, imageHeight: image.height)
+            detectionResult = DetectionResult(metrics: metrics, joints: joints)
+            lastMediaPipeHeadPitch = CGFloat(mpResult.headPitch)
+            currentHeadPitch = CGFloat(mpResult.headPitch)
+            currentHeadYaw = CGFloat(mpResult.headYaw)
+            usingMediaPipe = true
+        } else {
+            // Vision framework fallback
+            detectionResult = try? poseDetector.detect(in: image)
+            usingMediaPipe = false
 
-            // Simple EMA smoothing — no special cases, just let the signal through.
-            // Face fallback CVA=56 is a valid "good posture" reading, not a mask.
-            let smoothed: CGFloat
-            if let prev = smoothedCVA {
-                smoothed = emaAlpha * rawCVA + (1 - emaAlpha) * prev
-            } else {
-                smoothed = rawCVA
-            }
-            smoothedCVA = smoothed
-
-            // Rebuild metrics with smoothed CVA
-            let metrics = PostureMetrics(
-                earShoulderDistanceLeft: result.metrics.earShoulderDistanceLeft,
-                earShoulderDistanceRight: result.metrics.earShoulderDistanceRight,
-                eyeShoulderDistanceLeft: result.metrics.eyeShoulderDistanceLeft,
-                eyeShoulderDistanceRight: result.metrics.eyeShoulderDistanceRight,
-                headForwardRatio: result.metrics.headForwardRatio,
-                headTiltAngle: result.metrics.headTiltAngle,
-                neckEarAngle: smoothed,
-                shoulderEvenness: result.metrics.shoulderEvenness,
-                earsVisible: result.metrics.earsVisible,
-                landmarksDetected: result.metrics.landmarksDetected
-            )
-
-            // Calibration mode
-            if calibrationManager.isCalibrating {
-                if let calResult = calibrationManager.addSample(metrics) {
-                    calibrationMessage = calResult.message
-                    calibrationSuccess = calResult.isValid
-                    isCalibrating = false
-
-                    if calResult.isValid, let data = calResult.data {
-                        calibrationData = data
-                        // Store face baseline so face-based CVA estimation works
-                        poseDetector.calibrateFaceBaseline()
-                        notificationService.resetCooldown()
-                        postureState = .initial
-                        goodPostureStart = Date()
-                    }
-
-                    // Restore normal analysis interval
-                    scheduleAnalysis()
+            // Try reconnecting MediaPipe periodically
+            if useMediaPipe && !mediaPipeClient.isConnected && Int.random(in: 0..<90) == 0 {
+                let connected = mediaPipeClient.connect()
+                if connected {
+                    engineLog("MediaPipe reconnected")
                 }
-                calibrationProgress = calibrationManager.progress
-                return
             }
-
-            // Normal monitoring
-            if let baseline = calibrationData {
-                // Full evaluation against calibrated baseline
-                let newState = PostureAnalyzer.evaluate(
-                    metrics: metrics,
-                    baseline: baseline,
-                    previousState: postureState,
-                    cameraPosition: cameraPosition
-                )
-                postureState = newState
-
-                // Track good posture duration — based on severity, not isTurtleNeck
-                if newState.severity == .good {
-                    if goodPostureStart == nil {
-                        goodPostureStart = Date()
-                    }
-                } else {
-                    goodPostureStart = nil
-                }
-
-                // Send notification if sustained bad posture
-                if newState.isTurtleNeck {
-                    let msg = NotificationService.message(for: newState.severity)
-                    notificationService.notify(
-                        title: "PT Turtle",
-                        message: msg,
-                        severity: newState.severity
-                    )
-                }
-            } else {
-                // No calibration yet - still show live CVA and severity from detection
-                let severity = PostureAnalyzer.classifySeverity(metrics.neckEarAngle)
-                postureState = PostureState(
-                    badPostureStart: nil,
-                    isTurtleNeck: false,
-                    deviationScore: 0,
-                    usingFallback: !metrics.earsVisible,
-                    severity: severity,
-                    currentCVA: metrics.neckEarAngle,
-                    baselineCVA: 0
-                )
-            }
-
-            // Record score for rolling average (works with or without calibration)
-            let score = PostureAnalyzer.cvaToScore(postureState.currentCVA)
-            let now2 = Date()
-            scoreHistory.append((date: now2, score: score))
-            // Debug: log smoothed CVA, score, and severity every 3rd frame
-            if Int.random(in: 0..<3) == 0 {
-                engineLog(String(format: "[SCORE] rawCVA=%.1f smoothedCVA=%.1f score=%d severity=%@ menuBar=%@",
-                    rawCVA, smoothed, score, postureState.severity.rawValue, menuBarSeverity.rawValue))
-            }
-            // Prune entries older than 2 minutes
-            let pruneDate = now2.addingTimeInterval(-120)
-            scoreHistory.removeAll { $0.date < pruneDate }
-
-            // Update menu bar held severity with hold timer
-            updateMenuBarSeverity(newSeverity: postureState.severity, now: now2)
-
-            lastError = nil
-        } catch {
-            // Silently ignore detection errors
         }
+
+        guard let result = detectionResult else {
+            bodyDetected = false
+            currentJoints = nil
+            return
+        }
+
+        bodyDetected = true
+        currentJoints = result.joints
+        let rawCVA = result.metrics.neckEarAngle
+
+        // Adaptive EMA smoothing — reduce alpha on large jumps to prevent oscillation
+        let cvaDelta = abs(rawCVA - (smoothedCVA ?? rawCVA))
+        let currentAlpha: CGFloat
+        if cvaDelta > 10 {
+            currentAlpha = 0.3  // large jump → smooth more aggressively
+        } else {
+            currentAlpha = usingMediaPipe ? 0.6 : 0.5
+        }
+        let smoothed: CGFloat
+        if let prev = smoothedCVA {
+            smoothed = currentAlpha * rawCVA + (1 - currentAlpha) * prev
+        } else {
+            smoothed = rawCVA
+        }
+        smoothedCVA = smoothed
+
+        // Rebuild metrics with smoothed CVA
+        let metrics = PostureMetrics(
+            earShoulderDistanceLeft: result.metrics.earShoulderDistanceLeft,
+            earShoulderDistanceRight: result.metrics.earShoulderDistanceRight,
+            eyeShoulderDistanceLeft: result.metrics.eyeShoulderDistanceLeft,
+            eyeShoulderDistanceRight: result.metrics.eyeShoulderDistanceRight,
+            headForwardRatio: result.metrics.headForwardRatio,
+            headTiltAngle: result.metrics.headTiltAngle,
+            neckEarAngle: smoothed,
+            shoulderEvenness: result.metrics.shoulderEvenness,
+            earsVisible: result.metrics.earsVisible,
+            landmarksDetected: result.metrics.landmarksDetected
+        )
+
+        // Calibration mode
+        if calibrationManager.isCalibrating {
+            if let calResult = calibrationManager.addSample(metrics, headPitch: lastMediaPipeHeadPitch) {
+                calibrationMessage = calResult.message
+                calibrationSuccess = calResult.isValid
+                isCalibrating = false
+
+                if calResult.isValid, let data = calResult.data {
+                    calibrationData = data
+                    // Store face baseline so face-based CVA estimation works (Vision fallback)
+                    poseDetector.calibrateFaceBaseline()
+                    notificationService.resetCooldown()
+                    postureState = .initial
+                    goodPostureStart = Date()
+                }
+
+                // Restore normal analysis interval
+                scheduleAnalysis()
+            }
+            calibrationProgress = calibrationManager.progress
+            return
+        }
+
+        // Normal monitoring
+        if let baseline = calibrationData {
+            // Full evaluation against calibrated baseline
+            let newState = PostureAnalyzer.evaluate(
+                metrics: metrics,
+                baseline: baseline,
+                previousState: postureState,
+                cameraPosition: cameraPosition
+            )
+            postureState = newState
+
+            // Track good posture duration — based on severity, not isTurtleNeck
+            if newState.severity == .good {
+                if goodPostureStart == nil {
+                    goodPostureStart = Date()
+                }
+            } else {
+                goodPostureStart = nil
+            }
+
+            // Send notification if sustained bad posture
+            if newState.isTurtleNeck {
+                let msg = NotificationService.message(for: newState.severity)
+                notificationService.notify(
+                    title: "PT Turtle",
+                    message: msg,
+                    severity: newState.severity
+                )
+            }
+        } else {
+            // No calibration yet - still show live CVA and severity from detection
+            let severity = PostureAnalyzer.classifySeverity(metrics.neckEarAngle)
+            postureState = PostureState(
+                badPostureStart: nil,
+                isTurtleNeck: false,
+                deviationScore: 0,
+                usingFallback: !metrics.earsVisible,
+                severity: severity,
+                currentCVA: metrics.neckEarAngle,
+                baselineCVA: 0
+            )
+        }
+
+        // Record score for rolling average (works with or without calibration)
+        let score = PostureAnalyzer.cvaToScore(postureState.currentCVA)
+        let now2 = Date()
+        scoreHistory.append((date: now2, score: score))
+        // Debug: log smoothed CVA, score, and severity every 3rd frame
+        if Int.random(in: 0..<3) == 0 {
+            let source = usingMediaPipe ? "MP" : "Vision"
+            engineLog(String(format: "[SCORE/%@] rawCVA=%.1f smoothedCVA=%.1f score=%d severity=%@ menuBar=%@ pitch=%.1f",
+                source, rawCVA, smoothed, score, postureState.severity.rawValue, menuBarSeverity.rawValue, lastMediaPipeHeadPitch))
+        }
+        // Prune entries older than 2 minutes
+        let pruneDate = now2.addingTimeInterval(-120)
+        scoreHistory.removeAll { $0.date < pruneDate }
+
+        // Update menu bar held severity with hold timer
+        updateMenuBarSeverity(newSeverity: postureState.severity, now: now2)
+
+        lastError = nil
     }
 
     // MARK: - Menu Bar Severity Hold Timer

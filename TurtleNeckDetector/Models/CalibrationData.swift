@@ -12,6 +12,46 @@ struct CalibrationData: Codable {
     let neckEarAngle: CGFloat  // baseline CVA proxy
     let shoulderEvenness: CGFloat
     let earsWereVisible: Bool
+    let headPitch: CGFloat  // baseline head pitch from MediaPipe solvePnP
+
+    /// Decode with backward compatibility — headPitch defaults to 0 if missing.
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        earShoulderDistanceLeft = try c.decode(CGFloat.self, forKey: .earShoulderDistanceLeft)
+        earShoulderDistanceRight = try c.decode(CGFloat.self, forKey: .earShoulderDistanceRight)
+        eyeShoulderDistanceLeft = try c.decode(CGFloat.self, forKey: .eyeShoulderDistanceLeft)
+        eyeShoulderDistanceRight = try c.decode(CGFloat.self, forKey: .eyeShoulderDistanceRight)
+        headForwardRatio = try c.decode(CGFloat.self, forKey: .headForwardRatio)
+        headTiltAngle = try c.decode(CGFloat.self, forKey: .headTiltAngle)
+        neckEarAngle = try c.decode(CGFloat.self, forKey: .neckEarAngle)
+        shoulderEvenness = try c.decode(CGFloat.self, forKey: .shoulderEvenness)
+        earsWereVisible = try c.decode(Bool.self, forKey: .earsWereVisible)
+        headPitch = try c.decodeIfPresent(CGFloat.self, forKey: .headPitch) ?? 0
+    }
+
+    init(
+        earShoulderDistanceLeft: CGFloat,
+        earShoulderDistanceRight: CGFloat,
+        eyeShoulderDistanceLeft: CGFloat,
+        eyeShoulderDistanceRight: CGFloat,
+        headForwardRatio: CGFloat,
+        headTiltAngle: CGFloat,
+        neckEarAngle: CGFloat,
+        shoulderEvenness: CGFloat,
+        earsWereVisible: Bool,
+        headPitch: CGFloat = 0
+    ) {
+        self.earShoulderDistanceLeft = earShoulderDistanceLeft
+        self.earShoulderDistanceRight = earShoulderDistanceRight
+        self.eyeShoulderDistanceLeft = eyeShoulderDistanceLeft
+        self.eyeShoulderDistanceRight = eyeShoulderDistanceRight
+        self.headForwardRatio = headForwardRatio
+        self.headTiltAngle = headTiltAngle
+        self.neckEarAngle = neckEarAngle
+        self.shoulderEvenness = shoulderEvenness
+        self.earsWereVisible = earsWereVisible
+        self.headPitch = headPitch
+    }
 }
 
 /// Result of a calibration attempt with validation feedback.

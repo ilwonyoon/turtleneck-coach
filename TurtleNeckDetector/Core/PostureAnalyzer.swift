@@ -11,11 +11,11 @@ struct PostureAnalyzer {
     static let sideViewEarThreshold: CGFloat = 0.15
     static let sustainedDurationSec: TimeInterval = 5.0
 
-    // CVA severity thresholds (matched to Python prototype)
-    // Normal: >50°, Mild FHP: 38-50°, Moderate FHP: 25-38°, Severe FHP: <25°
-    static let cvaGood: CGFloat = 50.0
-    static let cvaMild: CGFloat = 38.0
-    static let cvaModerate: CGFloat = 25.0
+    // CVA severity thresholds (tightened for MediaPipe accuracy)
+    // Normal: ≥52°, Mild FHP: 42-52°, Moderate FHP: 32-42°, Severe FHP: <32°
+    static let cvaGood: CGFloat = 52.0
+    static let cvaMild: CGFloat = 42.0
+    static let cvaModerate: CGFloat = 32.0
 
     /// Evaluate current posture metrics against calibration baseline.
     /// Returns a new PostureState (immutable pattern - creates new state each call).
@@ -185,12 +185,12 @@ struct PostureAnalyzer {
     // MARK: - Score Mapping
 
     /// Convert CVA angle to a 0-100 posture score.
-    /// Matched to Python prototype: linear mapping from CVA 15-65° → score 5-98.
-    /// CVA 43° → ~57, CVA 50° → ~70, CVA 56° → ~81
+    /// Narrower input range for MediaPipe: CVA 20-65° → score 5-98.
+    /// More sensitive to posture changes with accurate landmarks.
     static func cvaToScore(_ cva: CGFloat) -> Int {
-        if cva <= 15 { return 5 }
+        if cva <= 20 { return 5 }
         if cva >= 65 { return 98 }
-        return Int(round(5 + (cva - 15) * (93.0 / 50.0)))
+        return Int(round(5 + (cva - 20) * (93.0 / 45.0)))
     }
 
     /// Map posture score to emoji.

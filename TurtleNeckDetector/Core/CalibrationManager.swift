@@ -4,8 +4,8 @@ import Foundation
 /// Port of Python calibration.py.
 final class CalibrationManager {
 
-    static let requiredSamples = 30
-    static let minCalibrationCVA: CGFloat = 35.0
+    static let requiredSamples = 20
+    static let minCalibrationCVA: CGFloat = 40.0
     private static let userDefaultsKey = "calibrationData"
 
     private(set) var samples: [PostureMetrics] = []
@@ -22,17 +22,22 @@ final class CalibrationManager {
         isCalibrating = true
     }
 
+    // Head pitch samples collected alongside posture metrics
+    private var headPitchSamples: [CGFloat] = []
+
     /// Add a sample during calibration. Returns CalibrationResult when enough samples collected.
-    func addSample(_ metrics: PostureMetrics) -> CalibrationResult? {
+    func addSample(_ metrics: PostureMetrics, headPitch: CGFloat = 0) -> CalibrationResult? {
         guard isCalibrating, metrics.landmarksDetected else { return nil }
 
         samples.append(metrics)
+        headPitchSamples.append(headPitch)
 
         guard samples.count >= Self.requiredSamples else { return nil }
 
         isCalibrating = false
-        let result = collectCalibration(samples: samples)
+        let result = collectCalibration(samples: samples, headPitchSamples: headPitchSamples)
         samples = []
+        headPitchSamples = []
 
         if result.isValid, let data = result.data {
             save(data)
@@ -45,6 +50,7 @@ final class CalibrationManager {
     func cancelCalibration() {
         isCalibrating = false
         samples = []
+        headPitchSamples = []
     }
 
     /// Load saved calibration from UserDefaults.
@@ -71,7 +77,7 @@ final class CalibrationManager {
 
     /// Average samples into baseline and validate posture quality.
     /// Port of collect_calibration() from calibration.py.
-    private func collectCalibration(samples: [PostureMetrics]) -> CalibrationResult {
+    private func collectCalibration(samples: [PostureMetrics], headPitchSamples: [CGFloat] = []) -> CalibrationResult {
         let valid = samples.filter { $0.landmarksDetected }
         guard !valid.isEmpty else {
             return CalibrationResult(
@@ -88,6 +94,13 @@ final class CalibrationManager {
 
         let avgCVA = valid.map(\.neckEarAngle).reduce(0, +) / n
 
+        let avgHeadPitch: CGFloat
+        if !headPitchSamples.isEmpty {
+            avgHeadPitch = headPitchSamples.reduce(0, +) / CGFloat(headPitchSamples.count)
+        } else {
+            avgHeadPitch = 0
+        }
+
         let data = CalibrationData(
             earShoulderDistanceLeft: valid.map(\.earShoulderDistanceLeft).reduce(0, +) / n,
             earShoulderDistanceRight: valid.map(\.earShoulderDistanceRight).reduce(0, +) / n,
@@ -97,7 +110,8 @@ final class CalibrationManager {
             headTiltAngle: valid.map(\.headTiltAngle).reduce(0, +) / n,
             neckEarAngle: avgCVA,
             shoulderEvenness: valid.map(\.shoulderEvenness).reduce(0, +) / n,
-            earsWereVisible: earsMostlyVisible
+            earsWereVisible: earsMostlyVisible,
+            headPitch: avgHeadPitch
         )
 
         if avgCVA < Self.minCalibrationCVA {
