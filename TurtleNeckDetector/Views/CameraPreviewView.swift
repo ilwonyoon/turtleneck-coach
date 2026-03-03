@@ -4,7 +4,6 @@ import SwiftUI
 struct CameraPreviewView: View {
     let frame: CGImage?
     let joints: DetectedJoints?
-    let severity: Severity
 
     var body: some View {
         GeometryReader { geo in
@@ -27,7 +26,7 @@ struct CameraPreviewView: View {
 
                 // Skeleton overlay
                 if let joints {
-                    SkeletonOverlay(joints: joints, severity: severity)
+                    SkeletonOverlay(joints: joints)
                 }
             }
         }
@@ -37,16 +36,6 @@ struct CameraPreviewView: View {
 /// Draws pose skeleton lines and joint dots on top of camera feed.
 struct SkeletonOverlay: View {
     let joints: DetectedJoints
-    let severity: Severity
-
-    private var lineColor: Color {
-        switch severity {
-        case .good: return .green
-        case .mild: return .yellow
-        case .moderate: return .orange
-        case .severe: return .red
-        }
-    }
 
     var body: some View {
         GeometryReader { geo in
@@ -65,15 +54,15 @@ struct SkeletonOverlay: View {
                     var path = Path()
                     path.move(to: p1)
                     path.addLine(to: p2)
-                    context.stroke(path, with: .color(lineColor.opacity(0.8)), lineWidth: 2)
+                    context.stroke(path, with: .color(.white.opacity(0.6)), lineWidth: 2)
                 }
 
                 // Draw joint dots
                 for (_, point) in pointMap {
                     let rect = CGRect(x: point.x - 4, y: point.y - 4, width: 8, height: 8)
-                    context.fill(Path(ellipseIn: rect), with: .color(.green))
+                    context.fill(Path(ellipseIn: rect), with: .color(.white.opacity(0.8)))
                     let outerRect = CGRect(x: point.x - 5, y: point.y - 5, width: 10, height: 10)
-                    context.stroke(Path(ellipseIn: outerRect), with: .color(.white.opacity(0.8)), lineWidth: 1)
+                    context.stroke(Path(ellipseIn: outerRect), with: .color(.white.opacity(0.4)), lineWidth: 1)
                 }
             }
         }

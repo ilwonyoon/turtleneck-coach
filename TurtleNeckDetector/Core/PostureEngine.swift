@@ -326,7 +326,7 @@ final class PostureEngine: ObservableObject {
                 if newState.isTurtleNeck {
                     let msg = NotificationService.message(for: newState.severity)
                     notificationService.notify(
-                        title: "Turtle Neck Alert!",
+                        title: "PT Turtle",
                         message: msg,
                         severity: newState.severity
                     )

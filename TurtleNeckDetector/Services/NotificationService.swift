@@ -2,7 +2,6 @@ import UserNotifications
 import Foundation
 
 /// Manages macOS native notifications with cooldown.
-/// Port of Python Notifier from notifier.py.
 final class NotificationService {
     private let cooldownSeconds: TimeInterval
     private var lastNotificationTime: Date = .distantPast
@@ -42,17 +41,17 @@ final class NotificationService {
         return true
     }
 
-    /// Severity-specific notification messages (from web_app.py).
+    /// PT Turtle notification messages by severity.
     static func message(for severity: Severity) -> String {
         switch severity {
         case .mild:
-            return "Mild forward head posture detected."
+            return "Your head is drifting forward. Quick reset: chin back, sit tall."
         case .moderate:
-            return "Moderate forward head posture. Sit up straight!"
+            return "Your neck is doing extra work. Sit back and bring your chin in."
         case .severe:
-            return "Severe forward head posture! Take a break and stretch."
+            return "Time for a break. Stand up, roll your shoulders, stretch your neck."
         case .good:
-            return "Good posture!"
+            return "Looking good. Keep going."
         }
     }
 

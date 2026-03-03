@@ -1,7 +1,7 @@
 import Foundation
 
 /// Dynamic feedback messages and streak tracking.
-/// Port of goodMessages/warningTips from web_app.py JS.
+/// PT Turtle brand voice: firm but kind coach, short/clear/actionable, no medical claims.
 struct FeedbackEngine {
 
     struct FeedbackMessage {
@@ -11,21 +11,21 @@ struct FeedbackEngine {
 
     // Good posture messages by duration threshold (seconds)
     private static let goodMessages: [(after: TimeInterval, main: String, sub: String)] = [
-        (0,    "Good posture!",          "Keep it up"),
-        (30,   "Nice form!",             "30 seconds of good posture"),
-        (60,   "Great job!",             "1 minute streak going strong"),
-        (120,  "Excellent!",             "2 minutes - your neck thanks you"),
-        (300,  "Posture champion!",      "5 min streak! Take a stretch break soon"),
-        (600,  "Amazing discipline!",    "10 min! Consider standing up briefly"),
-        (1200, "Incredible focus!",      "20 min - time for a quick break?"),
-        (1800, "You're on fire!",        "30 min streak! Stand and stretch"),
+        (0,    "Looking good.",           "Nice and tall. Keep it here."),
+        (30,   "30 seconds strong.",      "Your neck says thank you."),
+        (60,   "One minute, solid.",      "This is building a habit."),
+        (120,  "Two minutes straight.",   "Consistency beats perfection."),
+        (300,  "Five minutes in.",        "Nice run. Stretch your neck soon."),
+        (600,  "Ten solid minutes.",      "Stand up and move for 30 seconds."),
+        (1200, "Twenty minutes. Respect.", "Walk to the kitchen. Get water."),
+        (1800, "Half hour. Impressive.",  "Time to stand. Roll your shoulders back."),
     ]
 
     private static let warningTips = [
-        "Try pulling your chin back slightly",
-        "Imagine a string pulling the top of your head up",
-        "Roll your shoulders back and down",
-        "Check: are your ears above your shoulders?",
+        "Tuck your chin back gently.",
+        "Sit tall. Crown of your head toward the ceiling.",
+        "Shoulders back and down. Hold three seconds.",
+        "Quick check: ears over shoulders?",
     ]
 
     /// Get the appropriate good-posture message for the given streak duration.
@@ -56,13 +56,13 @@ struct FeedbackEngine {
     static func severityTip(for severity: Severity) -> String {
         switch severity {
         case .mild:
-            return "Pull your chin back and sit up tall"
+            return "Head's drifting forward. Tuck your chin back."
         case .moderate:
-            return "Your head is significantly forward - sit back and realign"
+            return "Your neck is working hard right now. Sit back. Chin in."
         case .severe:
-            return "Stop and take a break! Stand up and do neck stretches"
+            return "Time to reset. Stand up and roll your neck gently."
         case .good:
-            return "Keep it up!"
+            return "Right where you should be."
         }
     }
 }

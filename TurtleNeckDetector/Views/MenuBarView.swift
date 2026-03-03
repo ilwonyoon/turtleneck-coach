@@ -5,6 +5,19 @@ struct MenuBarView: View {
     @ObservedObject var engine: PostureEngine
     @State private var showSettings = false
     @State private var refreshTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    @State private var showCalibrationToast = false
+    @State private var lastCalibrationSuccess: Bool?
+
+    /// Single accent color derived from severity — the ONLY color used semantically.
+    private var accentColor: Color {
+        guard engine.isMonitoring, engine.calibrationData != nil else { return .gray }
+        switch engine.postureState.severity {
+        case .good: return .green
+        case .mild: return .yellow
+        case .moderate: return .orange
+        case .severe: return .red
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -17,89 +30,89 @@ struct MenuBarView: View {
             Divider()
 
             ScrollView {
-                VStack(spacing: 12) {
+                VStack(spacing: 16) {
                     // Error banner
                     if let error = engine.lastError {
                         errorBanner(error)
                     }
 
-                    // Camera preview with skeleton
+                    // LIVE VIEW section
                     if engine.isMonitoring {
-                        ZStack {
-                            CameraPreviewView(
-                                frame: engine.currentFrame,
-                                joints: engine.currentJoints,
-                                severity: engine.postureState.severity
-                            )
-                            .frame(height: 200)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .strokeBorder(cameraBorderColor, lineWidth: cameraBorderWidth)
-                            )
-                            .overlay(cvaOverlay, alignment: .topTrailing)
-
-                            // Body detection status
-                            if engine.currentFrame != nil && !engine.bodyDetected {
-                                VStack {
-                                    Spacer()
-                                    Text("No body detected")
-                                        .font(.caption.weight(.medium))
-                                        .foregroundColor(.white)
-                                        .padding(.horizontal, 10)
-                                        .padding(.vertical, 5)
-                                        .background(.red.opacity(0.7))
-                                        .clipShape(Capsule())
-                                        .padding(.bottom, 8)
-                                }
+                        section("LIVE VIEW") {
+                            ZStack {
+                                CameraPreviewView(
+                                    frame: engine.currentFrame,
+                                    joints: engine.currentJoints
+                                )
                                 .frame(height: 200)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .strokeBorder(Color(.separatorColor), lineWidth: 1)
+                                )
+                                .overlay(cvaOverlay, alignment: .topTrailing)
+
+                                // Body detection status
+                                if engine.currentFrame != nil && !engine.bodyDetected {
+                                    VStack {
+                                        Spacer()
+                                        Text("No body detected")
+                                            .font(.caption.weight(.medium))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 10)
+                                            .padding(.vertical, 5)
+                                            .background(.ultraThinMaterial)
+                                            .clipShape(Capsule())
+                                            .padding(.bottom, 8)
+                                    }
+                                    .frame(height: 200)
+                                }
                             }
                         }
                     }
 
-                    // Calibration overlay
+                    // Calibration overlay (active only)
                     if engine.isCalibrating {
                         CalibrationView(
                             progress: engine.calibrationProgress,
-                            message: engine.calibrationMessage,
-                            success: nil
+                            message: engine.calibrationMessage
                         )
-                    } else if let success = engine.calibrationSuccess {
-                        CalibrationView(
-                            progress: 1.0,
-                            message: engine.calibrationMessage,
-                            success: success
-                        )
-                        .onTapGesture {
-                            engine.calibrationSuccess = nil
-                        }
                     }
 
-                    // Score gauge (when monitoring and body/face detected)
+                    // Score ring (when monitoring and body detected)
                     if engine.isMonitoring && !engine.isCalibrating && engine.bodyDetected {
                         PostureScoreView(
                             score: engine.postureScore,
-                            emoji: engine.postureEmoji
+                            emoji: engine.postureEmoji,
+                            accentColor: accentColor
                         )
                         .animation(.easeInOut(duration: 0.8), value: engine.postureScore)
                         .padding(.horizontal, 4)
                     }
 
-                    // Status card
-                    statusCard
+                    // STATUS section
+                    section("STATUS") {
+                        VStack(spacing: 10) {
+                            statusCard
 
-                    // Badges
-                    badgesRow
-
-                    // Deviation meter
-                    if engine.calibrationData != nil && engine.isMonitoring {
-                        deviationMeter
+                            // Movement meter
+                            if engine.calibrationData != nil && engine.isMonitoring {
+                                Divider()
+                                deviationMeter
+                            }
+                        }
                     }
+
+                    // Badges row (outside sections, compact)
+                    badgesRow
 
                     // Controls
                     controlButtons
                 }
                 .padding(16)
+            }
+            .overlay(alignment: .top) {
+                calibrationToast
             }
 
             Divider()
@@ -112,19 +125,46 @@ struct MenuBarView: View {
         .onReceive(refreshTimer) { _ in
             engine.objectWillChange.send()
         }
+        .onChange(of: engine.calibrationSuccess) { _, newValue in
+            guard let success = newValue else { return }
+            lastCalibrationSuccess = success
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showCalibrationToast = true
+            }
+            // Auto-dismiss after 2 seconds
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    showCalibrationToast = false
+                }
+                engine.calibrationSuccess = nil
+            }
+        }
+    }
+
+    // MARK: - Section Helper
+
+    private func section(_ title: String?, @ViewBuilder content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let title {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+            }
+            content()
+                .padding(12)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
     }
 
     // MARK: - Header
 
     private var header: some View {
         HStack {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Turtle Neck Detector")
-                    .font(.headline)
-                Text("Posture monitoring")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            Text("PT Turtle")
+                .font(.title3.weight(.semibold))
             Spacer()
             Button {
                 showSettings.toggle()
@@ -157,22 +197,27 @@ struct MenuBarView: View {
         }
     }
 
-    private var cameraBorderColor: Color {
-        guard engine.calibrationData != nil else { return Color.gray.opacity(0.3) }
-        switch engine.postureState.severity {
-        case .good: return .green
-        case .mild: return .yellow
-        case .moderate: return .orange
-        case .severe: return .red
-        }
-    }
+    // MARK: - Calibration Toast
 
-    private var cameraBorderWidth: CGFloat {
-        guard engine.calibrationData != nil else { return 1 }
-        switch engine.postureState.severity {
-        case .good: return 1
-        case .mild: return 2
-        case .moderate, .severe: return 3
+    private var calibrationToast: some View {
+        Group {
+            if showCalibrationToast, let success = lastCalibrationSuccess {
+                HStack(spacing: 8) {
+                    Image(systemName: success ? "checkmark.circle.fill" : "xmark.circle.fill")
+                        .foregroundColor(success ? .green : .red)
+                    Text(success ? "Calibrated" : engine.calibrationMessage)
+                        .font(.subheadline.weight(.medium))
+                }
+                .padding(.horizontal, 16)
+                .frame(height: 44)
+                .frame(maxWidth: .infinity)
+                .background(.regularMaterial)
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
     }
 
@@ -181,8 +226,8 @@ struct MenuBarView: View {
     private var statusCard: some View {
         HStack(spacing: 10) {
             Circle()
-                .fill(statusDotColor)
-                .frame(width: 12, height: 12)
+                .fill(accentColor)
+                .frame(width: 10, height: 10)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(statusMainText)
@@ -194,43 +239,30 @@ struct MenuBarView: View {
 
             Spacer()
         }
-        .padding(12)
-        .background(statusCardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 10))
-    }
-
-    private var statusDotColor: Color {
-        guard engine.isMonitoring, engine.calibrationData != nil else { return .gray }
-        switch engine.postureState.severity {
-        case .good: return .green
-        case .mild: return .yellow
-        case .moderate: return .orange
-        case .severe: return .red
-        }
     }
 
     private var statusMainText: String {
-        guard engine.isMonitoring else { return "Monitoring paused" }
-        guard engine.calibrationData != nil else { return "Calibrate to start" }
-        if engine.isCalibrating { return "Calibrating..." }
+        guard engine.isMonitoring else { return "Paused" }
+        guard engine.calibrationData != nil else { return "Set your baseline" }
+        if engine.isCalibrating { return "Reading your posture..." }
 
         switch engine.postureState.severity {
         case .good:
             let msg = FeedbackEngine.goodMessage(forDuration: engine.goodPostureDuration)
             return msg.main
         case .mild:
-            return "Mild forward head posture"
+            return "Head drifting forward"
         case .moderate:
-            return "Moderate forward head posture"
+            return "Neck under strain"
         case .severe:
-            return "Severe forward head posture"
+            return "Time to reset"
         }
     }
 
     private var statusSubText: String {
-        guard engine.isMonitoring else { return "Press Start to begin" }
-        guard engine.calibrationData != nil else { return "Sit in your best posture, then calibrate" }
-        if engine.isCalibrating { return "Hold your correct posture" }
+        guard engine.isMonitoring else { return "Tap Start when you're ready." }
+        guard engine.calibrationData != nil else { return "Sit tall and hit Calibrate." }
+        if engine.isCalibrating { return "Hold still. Almost there." }
 
         switch engine.postureState.severity {
         case .good:
@@ -241,51 +273,25 @@ struct MenuBarView: View {
         }
     }
 
-    private var statusCardBackground: some ShapeStyle {
-        guard engine.isMonitoring, engine.calibrationData != nil else {
-            return AnyShapeStyle(Color.gray.opacity(0.08))
-        }
-        switch engine.postureState.severity {
-        case .good: return AnyShapeStyle(Color.green.opacity(0.08))
-        case .mild: return AnyShapeStyle(Color.yellow.opacity(0.08))
-        case .moderate: return AnyShapeStyle(Color.orange.opacity(0.08))
-        case .severe: return AnyShapeStyle(Color.red.opacity(0.1))
-        }
-    }
-
     // MARK: - Badges
 
     private var badgesRow: some View {
         HStack(spacing: 6) {
-            badge(engine.cameraPosition.rawValue.capitalized, color: .blue, icon: "camera")
+            badge(engine.cameraPosition.rawValue.capitalized, icon: "camera")
 
             if engine.postureState.usingFallback {
-                badge("Eye Mode", color: .yellow, icon: "eye")
-            }
-
-            if engine.isMonitoring, engine.calibrationData != nil,
-               engine.postureState.severity != .good {
-                badge(engine.postureState.severity.rawValue.uppercased(), color: severityBadgeColor)
+                badge("Eye Mode", icon: "eye")
             }
 
             if engine.goodPostureDuration >= 30 {
-                badge(FeedbackEngine.formatTime(engine.goodPostureDuration) + " streak", color: .green, icon: "flame")
+                badge(FeedbackEngine.formatTime(engine.goodPostureDuration) + " streak", icon: "flame")
             }
 
             Spacer()
         }
     }
 
-    private var severityBadgeColor: Color {
-        switch engine.postureState.severity {
-        case .mild: return .yellow
-        case .moderate: return .orange
-        case .severe: return .red
-        case .good: return .green
-        }
-    }
-
-    private func badge(_ text: String, color: Color, icon: String? = nil) -> some View {
+    private func badge(_ text: String, icon: String? = nil) -> some View {
         HStack(spacing: 3) {
             if let icon {
                 Image(systemName: icon)
@@ -294,12 +300,11 @@ struct MenuBarView: View {
             Text(text)
                 .font(.system(size: 10))
         }
-        .foregroundColor(color)
+        .foregroundColor(.secondary)
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
-        .background(color.opacity(0.12))
+        .background(.quaternary.opacity(0.5))
         .clipShape(Capsule())
-        .overlay(Capsule().strokeBorder(color.opacity(0.3), lineWidth: 0.5))
     }
 
     // MARK: - Deviation Meter
@@ -311,26 +316,22 @@ struct MenuBarView: View {
                 .foregroundColor(.secondary)
                 .frame(width: 65, alignment: .leading)
 
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.gray.opacity(0.15))
+            let fill = min(engine.postureState.deviationScore * 3, 1.0)
 
-                    let fill = min(engine.postureState.deviationScore * 3, 1.0)
-                    Capsule()
-                        .fill(deviationColor(fill))
-                        .frame(width: max(0, fill * geo.size.width))
-                        .animation(.easeInOut(duration: 0.3), value: engine.postureState.deviationScore)
+            Capsule()
+                .fill(Color(.separatorColor).opacity(0.3))
+                .frame(height: 4)
+                .overlay(alignment: .leading) {
+                    GeometryReader { geo in
+                        Capsule()
+                            .fill(Color.primary.opacity(0.5))
+                            .frame(width: max(0, fill * geo.size.width))
+                            .animation(.easeInOut(duration: 0.3), value: engine.postureState.deviationScore)
+                    }
                 }
-            }
-            .frame(height: 6)
+                .clipShape(Capsule())
         }
-    }
-
-    private func deviationColor(_ value: CGFloat) -> Color {
-        if value < 0.3 { return .green }
-        if value < 0.6 { return .yellow }
-        return .red
+        .frame(height: 20)
     }
 
     // MARK: - Controls
@@ -375,11 +376,10 @@ struct MenuBarView: View {
                 .foregroundColor(.red)
             Text(message)
                 .font(.caption)
-                .foregroundColor(.red)
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.red.opacity(0.1))
+        .background(.regularMaterial)
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
