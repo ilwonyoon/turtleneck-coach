@@ -1,6 +1,5 @@
 import SwiftUI
 import AppKit
-import AVFoundation
 import UserNotifications
 
 struct OnboardingView: View {
@@ -11,6 +10,7 @@ struct OnboardingView: View {
     @State private var isRequestingPermissions = false
     @State private var cameraDenied = false
     @State private var notificationsDenied = false
+    @State private var didAttemptNotificationRequest = false
 
     private var cameraAspectRatio: CGFloat {
         guard let frame = engine.currentFrame else { return 4.0 / 3.0 }
@@ -173,6 +173,11 @@ struct OnboardingView: View {
                 step = 2
             }
         }
+        .task {
+            // Brief delay so the popover is fully stable before the system dialog appears.
+            try? await Task.sleep(for: .seconds(1.5))
+            requestNotificationPermissionIfNeeded()
+        }
         .onChange(of: engine.isCalibrating) { _, isCalibrating in
             guard !isCalibrating else { return }
             if engine.calibrationSuccess == true && engine.calibrationData != nil {
@@ -276,6 +281,15 @@ struct OnboardingView: View {
             DispatchQueue.main.async {
                 notificationsDenied = settings.authorizationStatus == .denied
             }
+        }
+    }
+
+    private func requestNotificationPermissionIfNeeded() {
+        guard !didAttemptNotificationRequest else { return }
+        didAttemptNotificationRequest = true
+        Task {
+            await TurtleNeckDetectorApp.requestNotificationPermissionIfNeeded()
+            checkNotificationStatus()
         }
     }
 

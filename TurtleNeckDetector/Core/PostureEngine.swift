@@ -194,8 +194,7 @@ final class PostureEngine: ObservableObject {
            let pos = CameraPosition(rawValue: saved) {
             cameraPosition = pos
         }
-        // Permissions are now requested in TurtleNeckDetectorApp before
-        // the popover content appears, so no dialogs interrupt the UI.
+        // Notification permission is requested after camera starts in OnboardingView.
 
         // Frame callback runs on camera's background queue
         // CameraManager already rotates portrait frames to landscape
