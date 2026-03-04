@@ -1,5 +1,19 @@
 import Foundation
 
+/// Tunable FHP detection parameters (adjustable via debug sliders).
+final class FHPTuning: ObservableObject {
+    static let shared = FHPTuning()
+
+    /// Face shrink threshold: faceSize drop % to trigger FHP (negative, e.g. -0.03 = -3%)
+    @Published var faceShrinkThreshold: Double = -0.03
+
+    /// Depth penalty scale: how much depth increase penalizes CVA (higher = more penalty)
+    @Published var depthPenaltyScale: Double = 180.0
+
+    /// Pitch gate: if pitch drops more than this (degrees), classify as lookingDown not FHP
+    @Published var pitchGateDegrees: Double = 5.0
+}
+
 /// Classifies posture deviation type using pitch and depth proxy signals.
 struct PostureClassifier {
 
@@ -18,29 +32,50 @@ struct PostureClassifier {
         currentFaceSize: CGFloat,
         baselineFaceSize: CGFloat,
         cvaDrop: CGFloat,
-        yawDegrees: CGFloat
+        yawDegrees: CGFloat,
+        forwardDepth: CGFloat = 0,
+        baselineForwardDepth: CGFloat = 0
     ) -> PostureClassification {
         // Can't classify with high yaw or missing data
         guard yawDegrees < 20 else { return .unknown }
         guard baselineFaceSize > 0 else { return .unknown }
 
-        // No significant CVA drop — posture is fine
-        guard cvaDrop > 1.5 else { return .normal }
-
-        // Compute relative changes
-        // Vision face pitch is in radians but can be large absolute values;
-        // use raw difference without radian-to-degree conversion since we
-        // calibrate relative to baseline.
-        let pitchDelta = currentPitch - baselinePitch  // negative = looking more downward for Vision
-        let absPitchDelta = abs(pitchDelta)
+        let depthIncrease = forwardDepth - baselineForwardDepth
         let faceSizeChange = baselineFaceSize > 0
             ? (currentFaceSize - baselineFaceSize) / baselineFaceSize
-            : 0
+            : CGFloat(0)
+        // Priority 1: Detect forward head posture aggressively.
+        // Priority 2: Looking down handled via notification suppression, not classification.
+        //
+        // FHP signals (any one triggers):
+        //   a) Face shrinking > 6% (head moved forward, appears smaller)
+        //   b) Depth increased > 0.04 (nose moved forward of shoulders in Z)
+        //   c) cvaDrop negative + face shrinking (pitch masked the CVA drop)
+        let tuning = FHPTuning.shared
+        let pitchDrop = baselinePitch - currentPitch  // positive = head tilted more down
+        let isLookingDown = pitchDrop > tuning.pitchGateDegrees
 
-        // Vision pitch: values like -6 to -9; a delta of 0.3+ is meaningful
+        let faceShrinking = faceSizeChange < tuning.faceShrinkThreshold
+        let depthUp = baselineForwardDepth > 0 && depthIncrease > 0.04
+
+        // If face is shrinking or depth increased, it's FHP — unless pitch gate says looking down
+        if (faceShrinking || depthUp) && !isLookingDown {
+            return .forwardHead
+        }
+
+        if cvaDrop < -3.0 && faceSizeChange < tuning.faceShrinkThreshold && !isLookingDown {
+            return .forwardHead
+        }
+
+        // No significant deviation
+        guard cvaDrop > 1.5 else { return .normal }
+
+        // CVA dropped. Classify by pitch.
+        let pitchDelta = currentPitch - baselinePitch
+        let absPitchDelta = abs(pitchDelta)
         let strongPitchDown = absPitchDelta > 0.5
         let mildPitchDown = absPitchDelta > 0.2
-        let faceGrowing = faceSizeChange > 0.04        // head moving toward camera
+        let faceGrowing = faceSizeChange > 0.04
 
         if strongPitchDown && !faceGrowing {
             return .lookingDown
@@ -51,7 +86,7 @@ struct PostureClassifier {
         } else if mildPitchDown && !faceGrowing {
             return .lookingDown
         } else {
-            return .forwardHead  // default: CVA dropped without clear pitch = FHP
+            return .forwardHead
         }
     }
 }

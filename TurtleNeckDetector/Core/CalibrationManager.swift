@@ -21,6 +21,7 @@ final class CalibrationManager {
         samples = []
         headPitchSamples = []
         faceSizeSamples = []
+        forwardDepthSamples = []
         isCalibrating = true
     }
 
@@ -28,6 +29,8 @@ final class CalibrationManager {
     private var headPitchSamples: [CGFloat] = []
     // Face size samples collected alongside posture metrics
     private var faceSizeSamples: [CGFloat] = []
+    // Forward depth samples (Z-depth nose vs shoulders)
+    private var forwardDepthSamples: [CGFloat] = []
 
     /// Add a sample during calibration. Returns CalibrationResult when enough samples collected.
     func addSample(_ metrics: PostureMetrics, headPitch: CGFloat = 0) -> CalibrationResult? {
@@ -36,14 +39,16 @@ final class CalibrationManager {
         samples.append(metrics)
         headPitchSamples.append(headPitch)
         faceSizeSamples.append(metrics.faceSizeNormalized)
+        forwardDepthSamples.append(metrics.forwardDepth)
 
         guard samples.count >= Self.requiredSamples else { return nil }
 
         isCalibrating = false
-        let result = collectCalibration(samples: samples, headPitchSamples: headPitchSamples, faceSizeSamples: faceSizeSamples)
+        let result = collectCalibration(samples: samples, headPitchSamples: headPitchSamples, faceSizeSamples: faceSizeSamples, forwardDepthSamples: forwardDepthSamples)
         samples = []
         headPitchSamples = []
         faceSizeSamples = []
+        forwardDepthSamples = []
 
         if result.isValid, let data = result.data {
             save(data)
@@ -58,6 +63,7 @@ final class CalibrationManager {
         samples = []
         headPitchSamples = []
         faceSizeSamples = []
+        forwardDepthSamples = []
     }
 
     /// Load saved calibration from UserDefaults.
@@ -87,7 +93,8 @@ final class CalibrationManager {
     private func collectCalibration(
         samples: [PostureMetrics],
         headPitchSamples: [CGFloat] = [],
-        faceSizeSamples: [CGFloat] = []
+        faceSizeSamples: [CGFloat] = [],
+        forwardDepthSamples: [CGFloat] = []
     ) -> CalibrationResult {
         let valid = samples.filter { $0.landmarksDetected }
         guard !valid.isEmpty else {
@@ -119,6 +126,13 @@ final class CalibrationManager {
             avgFaceSize = 0
         }
 
+        let avgForwardDepth: CGFloat
+        if !forwardDepthSamples.isEmpty {
+            avgForwardDepth = forwardDepthSamples.reduce(0, +) / CGFloat(forwardDepthSamples.count)
+        } else {
+            avgForwardDepth = 0
+        }
+
         let data = CalibrationData(
             earShoulderDistanceLeft: valid.map(\.earShoulderDistanceLeft).reduce(0, +) / n,
             earShoulderDistanceRight: valid.map(\.earShoulderDistanceRight).reduce(0, +) / n,
@@ -130,7 +144,8 @@ final class CalibrationManager {
             shoulderEvenness: valid.map(\.shoulderEvenness).reduce(0, +) / n,
             earsWereVisible: earsMostlyVisible,
             headPitch: avgHeadPitch,
-            baselineFaceSize: avgFaceSize
+            baselineFaceSize: avgFaceSize,
+            forwardDepth: avgForwardDepth
         )
 
         if avgCVA < Self.minCalibrationCVA {

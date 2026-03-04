@@ -194,26 +194,19 @@ def is_front_facing(ear_left, ear_right, shoulder_left, shoulder_right):
 
 
 def compute_combined_cva(geometric_cva: float, head_pitch: float,
-                         front_facing: bool = True) -> float:
+                         front_facing: bool = True, forward_depth: float = 0.0) -> float:
     """Combine geometric CVA and head pitch into a single CVA estimate.
 
-    head_pitch: normalized forward tilt (0 = straight, 20 = moderate forward).
-    Maps to CVA-like scale: tilt 0 -> CVA ~60, tilt 15 -> CVA ~38, tilt 30 -> CVA ~15.
-
-    For front-facing cameras, geometric CVA is unreliable (always ~80-90)
-    so we rely on head_pitch exclusively.
-
+    forward_depth is passed through to the response but NOT used for CVA penalty here.
+    FHP detection uses forward_depth delta (current vs baseline) on the Swift side.
     """
-    # 3D-based pitch: magnitude indicates forward/backward tilt
-    # Sign depends on camera angle, so use absolute value
-    # Dead zone: < 5° is normal upright posture variation
     effective_tilt = max(0.0, abs(head_pitch) - 5.0)
     pitch_based_cva = max(15.0, min(65.0, 62.0 - effective_tilt * 2.5))
 
     if front_facing:
         return pitch_based_cva
     else:
-        return 0.4 * geometric_cva + 0.6 * pitch_based_cva
+        return max(15.0, 0.4 * geometric_cva + 0.6 * pitch_based_cva)
 
 
 class PoseServer:
@@ -249,6 +242,7 @@ class PoseServer:
         self.filter_yaw = OneEuroFilter(freq=30, min_cutoff=1.0, beta=0.007)
         self.filter_roll = OneEuroFilter(freq=30, min_cutoff=1.0, beta=0.007)
         self.filter_cva = OneEuroFilter(freq=30, min_cutoff=0.8, beta=0.005)
+        self.depth_filter = OneEuroFilter(freq=15.0, min_cutoff=0.5, beta=0.01)
         self.frame_count = 0
 
         # Hold-on-loss: keep last valid face data during brief detection drops
@@ -289,6 +283,7 @@ class PoseServer:
             "left_eye": [0.0, 0.0],
             "right_eye": [0.0, 0.0],
             "cva_angle": 0.0,
+            "forward_depth": 0.0,
             "confidence": 0.0,
             "frame_number": self.frame_count,
             "face_landmarks": [],  # all 478 face landmarks as flat [x0,y0,z0,x1,y1,z1,...]
@@ -347,6 +342,10 @@ class PoseServer:
                 lm = pose_lms[idx]
                 return [round(lm.x, 4), round(lm.y, 4)]
 
+            def lm_xyz(idx):
+                lm = pose_lms[idx]
+                return [round(lm.x, 4), round(lm.y, 4), round(getattr(lm, 'z', 0.0), 4)]
+
             def lm_vis(idx):
                 return pose_lms[idx].visibility if hasattr(pose_lms[idx], 'visibility') else 0.5
 
@@ -361,6 +360,13 @@ class PoseServer:
             ear_mid = [(l_ear[0] + r_ear[0]) / 2, (l_ear[1] + r_ear[1]) / 2]
             sh_mid = [(l_sh[0] + r_sh[0]) / 2, (l_sh[1] + r_sh[1]) / 2]
             neck_mid = [round(sh_mid[0], 4), round(sh_mid[1], 4)]
+            nose_xyz = lm_xyz(POSE_NOSE)
+            l_sh_xyz = lm_xyz(POSE_LEFT_SHOULDER)
+            r_sh_xyz = lm_xyz(POSE_RIGHT_SHOULDER)
+            sh_mid_z = (l_sh_xyz[2] + r_sh_xyz[2]) / 2
+            forward_depth = round(sh_mid_z - nose_xyz[2], 4)
+            forward_depth = round(self.depth_filter(forward_depth), 4)
+            response["forward_depth"] = forward_depth
 
             response["ear_left"] = l_ear
             response["ear_right"] = r_ear
@@ -385,7 +391,7 @@ class PoseServer:
             front = is_front_facing(l_ear, r_ear, l_sh, r_sh)
 
             if has_face and head_pitch != 0.0:
-                cva = compute_combined_cva(geometric_cva, head_pitch, front_facing=front)
+                cva = compute_combined_cva(geometric_cva, head_pitch, front_facing=front, forward_depth=forward_depth)
             else:
                 cva = geometric_cva
 

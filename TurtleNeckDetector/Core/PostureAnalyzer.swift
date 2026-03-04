@@ -106,16 +106,20 @@ struct PostureAnalyzer {
             currentFaceSize: metrics.faceSizeNormalized,
             baselineFaceSize: baseline.baselineFaceSize,
             cvaDrop: cvaDrop,
-            yawDegrees: abs(yawDegrees)
+            yawDegrees: abs(yawDegrees),
+            forwardDepth: metrics.forwardDepth,
+            baselineForwardDepth: baseline.forwardDepth
         )
 
         // Debug: log classifier inputs every ~3s
         let pitchDelta = metrics.headPitch - baseline.headPitch
         let fsc = baseline.baselineFaceSize > 0 ? (metrics.faceSizeNormalized - baseline.baselineFaceSize) / baseline.baselineFaceSize : 0
-        let debugLine = String(format: "[CLASSIFY] pitch=%.2f base=%.2f Δ=%.3f faceSize=%.4f base=%.4f Δ=%.1f%% cvaDrop=%.1f yaw=%.1f → %@",
+        let debugLine = String(format: "[CLASSIFY] pitch=%.2f base=%.2f Δ=%.3f faceSize=%.4f base=%.4f Δ=%.1f%% cvaDrop=%.1f yaw=%.1f fwdZ=%.4f baseZ=%.4f → %@",
             metrics.headPitch, baseline.headPitch, pitchDelta,
             metrics.faceSizeNormalized, baseline.baselineFaceSize, fsc * 100,
-            cvaDrop, abs(yawDegrees), classification.rawValue)
+            cvaDrop, abs(yawDegrees),
+            metrics.forwardDepth, baseline.forwardDepth,
+            classification.rawValue)
         if let data = (debugLine + "\n").data(using: .utf8) {
             let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
             if let fh = try? FileHandle(forWritingTo: url) {
@@ -131,6 +135,21 @@ struct PostureAnalyzer {
             adjustedCVA = metrics.neckEarAngle + drop * 0.5  // recover 50% of CVA drop
         } else {
             adjustedCVA = metrics.neckEarAngle
+        }
+
+        // Debug: log adjusted CVA and score
+        let t = FHPTuning.shared
+        let adjDebug = String(format: "[ADJUST] rawCVA=%.1f adjustedCVA=%.1f baseline=%.1f class=%@ score=%d [tuning: shrink=%.1f%% scale=%.0f pitch=%.1f°]",
+            metrics.neckEarAngle, adjustedCVA, baseline.neckEarAngle,
+            classification.rawValue, Int(Self.cvaToScore(adjustedCVA)),
+            t.faceShrinkThreshold * 100, t.depthPenaltyScale, t.pitchGateDegrees)
+        if let adjData = (adjDebug + "\n").data(using: .utf8) {
+            let adjUrl = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
+            if let fh = try? FileHandle(forWritingTo: adjUrl) {
+                fh.seekToEndOfFile()
+                fh.write(adjData)
+                fh.closeFile()
+            }
         }
 
         let severity = classifySeverity(adjustedCVA, mode: sensitivityMode)

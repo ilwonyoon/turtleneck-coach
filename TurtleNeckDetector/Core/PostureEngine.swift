@@ -106,6 +106,64 @@ final class PostureEngine: ObservableObject {
     private let cvaBoundaryBuffer: CGFloat = 2.0
     private let cvaTransitionCrossover: CGFloat = 3.0
 
+    // MARK: - Debug Capture
+    @Published var debugCaptureLabel: String?
+    private var debugCaptureStart: Date?
+    private let debugCaptureDuration: TimeInterval = 5.0
+    private var debugSnapshotTimer: Timer?
+    private var debugSnapshotCount = 0
+
+    func startDebugCapture(label: String) {
+        debugCaptureLabel = label
+        debugCaptureStart = Date()
+        debugSnapshotCount = 0
+        let header = "\n===== DEBUG CAPTURE: \(label) START =====\n"
+        appendToDebugLog(header)
+        // Take snapshot immediately, then every 1 second
+        saveDebugSnapshot(label: label)
+        debugSnapshotTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.saveDebugSnapshot(label: label)
+            }
+        }
+        // Auto-stop after 5 seconds
+        DispatchQueue.main.asyncAfter(deadline: .now() + debugCaptureDuration) { [weak self] in
+            self?.stopDebugCapture()
+        }
+    }
+
+    private func stopDebugCapture() {
+        guard let label = debugCaptureLabel else { return }
+        debugSnapshotTimer?.invalidate()
+        debugSnapshotTimer = nil
+        let footer = "===== DEBUG CAPTURE: \(label) END (\(debugSnapshotCount) snapshots saved) =====\n\n"
+        appendToDebugLog(footer)
+        debugCaptureLabel = nil
+        debugCaptureStart = nil
+    }
+
+    private func saveDebugSnapshot(label: String) {
+        guard let frame = currentFrame else { return }
+        let idx = debugSnapshotCount
+        debugSnapshotCount += 1
+        let path = "/tmp/turtle_debug_snapshots/\(label)_\(idx).png"
+        let rep = NSBitmapImageRep(cgImage: frame)
+        if let png = rep.representation(using: .png, properties: [:]) {
+            try? png.write(to: URL(fileURLWithPath: path))
+        }
+    }
+
+    private func appendToDebugLog(_ text: String) {
+        if let data = text.data(using: .utf8) {
+            let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
+            if let fh = try? FileHandle(forWritingTo: url) {
+                fh.seekToEndOfFile()
+                fh.write(data)
+                fh.closeFile()
+            }
+        }
+    }
+
     // MARK: - Notification Suppression State
     private var sustainedBadStart: Date? = nil
     private let sustainedBadThreshold: TimeInterval = 25.0
@@ -408,7 +466,8 @@ final class PostureEngine: ObservableObject {
             faceSizeNormalized: result.metrics.faceSizeNormalized,
             shoulderEvenness: result.metrics.shoulderEvenness,
             earsVisible: result.metrics.earsVisible,
-            landmarksDetected: result.metrics.landmarksDetected
+            landmarksDetected: result.metrics.landmarksDetected,
+            forwardDepth: result.metrics.forwardDepth
         )
 
         // Calibration mode
@@ -462,8 +521,15 @@ final class PostureEngine: ObservableObject {
             // Send notification based on held severity with suppression gate
             let held = menuBarSeverity
             if held == .correction || held == .bad {
+                // Suppress notifications for looking down / mixed (not real FHP)
+                let classif = postureState.classification
+                let pitchDrop = (calibrationData?.headPitch ?? 0) - lastMediaPipeHeadPitch
+                let isLikelyLookingDown = classif == .lookingDown || classif == .mixed
+                    || (classif == .forwardHead && pitchDrop > 4.0)  // pitch dropped >4° = head tilted down
+
                 let shouldSuppress =
-                    checkSustainedDurationGate()
+                    isLikelyLookingDown
+                    || checkSustainedDurationGate()
                     || checkMotionSuppression(currentCVA: smoothed)
                     || checkScaleChangeSuppression(currentFaceSize: metrics.faceSizeNormalized)
                     || checkLandmarkJitterSuppression(nosePosition: result.joints.nose)

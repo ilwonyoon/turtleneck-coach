@@ -15,6 +15,7 @@ struct PostureMetrics {
     let shoulderEvenness: CGFloat
     let earsVisible: Bool
     let landmarksDetected: Bool
+    let forwardDepth: CGFloat  // Z-depth: nose forward of shoulders (0 if unavailable)
 
     static let empty = PostureMetrics(
         earShoulderDistanceLeft: 0,
@@ -28,6 +29,7 @@ struct PostureMetrics {
         faceSizeNormalized: 0,
         shoulderEvenness: 0,
         earsVisible: false,
-        landmarksDetected: false
+        landmarksDetected: false,
+        forwardDepth: 0
     )
 }

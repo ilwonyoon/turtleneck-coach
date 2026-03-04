@@ -363,7 +363,8 @@ final class VisionPoseDetector {
             headPitch: CGFloat(faceObservation?.pitch?.floatValue ?? 0),
             faceSizeNormalized: faceSizeNormalized,
             shoulderEvenness: abs(lSh.y - rSh.y),
-            earsVisible: earsVisible, landmarksDetected: true
+            earsVisible: earsVisible, landmarksDetected: true,
+            forwardDepth: 0
         )
         return DetectionResult(metrics: metrics, joints: joints)
     }
@@ -581,7 +582,8 @@ final class VisionPoseDetector {
             headPitch: pitch,
             faceSizeNormalized: faceHeightNorm,
             shoulderEvenness: 0,
-            earsVisible: false, landmarksDetected: true  // false = use CVA-based deviation in PostureAnalyzer
+            earsVisible: false, landmarksDetected: true,  // false = use CVA-based deviation in PostureAnalyzer
+            forwardDepth: 0
         )
 
         return DetectionResult(metrics: metrics, joints: joints)

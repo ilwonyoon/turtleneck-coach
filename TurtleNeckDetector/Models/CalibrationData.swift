@@ -14,6 +14,7 @@ struct CalibrationData: Codable {
     let earsWereVisible: Bool
     let headPitch: CGFloat  // baseline head pitch from MediaPipe solvePnP
     let baselineFaceSize: CGFloat   // Face size at calibration time
+    let forwardDepth: CGFloat  // baseline nose-shoulder Z-depth
 
     /// Decode with backward compatibility — headPitch/baselineFaceSize default to 0 if missing.
     init(from decoder: Decoder) throws {
@@ -29,6 +30,7 @@ struct CalibrationData: Codable {
         earsWereVisible = try c.decode(Bool.self, forKey: .earsWereVisible)
         headPitch = try c.decodeIfPresent(CGFloat.self, forKey: .headPitch) ?? 0
         baselineFaceSize = try c.decodeIfPresent(CGFloat.self, forKey: .baselineFaceSize) ?? 0
+        forwardDepth = try c.decodeIfPresent(CGFloat.self, forKey: .forwardDepth) ?? 0
     }
 
     init(
@@ -42,7 +44,8 @@ struct CalibrationData: Codable {
         shoulderEvenness: CGFloat,
         earsWereVisible: Bool,
         headPitch: CGFloat = 0,
-        baselineFaceSize: CGFloat = 0
+        baselineFaceSize: CGFloat = 0,
+        forwardDepth: CGFloat = 0
     ) {
         self.earShoulderDistanceLeft = earShoulderDistanceLeft
         self.earShoulderDistanceRight = earShoulderDistanceRight
@@ -55,6 +58,7 @@ struct CalibrationData: Codable {
         self.earsWereVisible = earsWereVisible
         self.headPitch = headPitch
         self.baselineFaceSize = baselineFaceSize
+        self.forwardDepth = forwardDepth
     }
 }
 
