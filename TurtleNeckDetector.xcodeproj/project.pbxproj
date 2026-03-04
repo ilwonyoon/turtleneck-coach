@@ -28,6 +28,7 @@
 		A10019 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10022 /* CameraPreviewView.swift */; };
 		A10020 /* PostureDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10023 /* PostureDataStore.swift */; };
 		A10021 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10024 /* DashboardView.swift */; };
+		A10022 /* PostureClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025 /* PostureClassifier.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -55,6 +56,7 @@
 		B10022 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
 		B10023 /* PostureDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureDataStore.swift; sourceTree = "<group>"; };
 		B10024 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
+		B10025 /* PostureClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureClassifier.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -95,6 +97,7 @@
 				B10002 /* CameraManager.swift */,
 				B10003 /* VisionPoseDetector.swift */,
 				B10004 /* PostureAnalyzer.swift */,
+				B10025 /* PostureClassifier.swift */,
 				B10005 /* CalibrationManager.swift */,
 				B10006 /* PostureEngine.swift */,
 				B10023 /* PostureDataStore.swift */,
@@ -227,6 +230,7 @@
 				A10002 /* CameraManager.swift in Sources */,
 				A10003 /* VisionPoseDetector.swift in Sources */,
 				A10004 /* PostureAnalyzer.swift in Sources */,
+				A10022 /* PostureClassifier.swift in Sources */,
 				A10005 /* CalibrationManager.swift in Sources */,
 				A10006 /* PostureEngine.swift in Sources */,
 				A10007 /* PostureMetrics.swift in Sources */,

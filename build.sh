@@ -40,6 +40,7 @@ swiftc \
   TurtleNeckDetector/Core/CameraManager.swift \
   TurtleNeckDetector/Core/MediaPipeClient.swift \
   TurtleNeckDetector/Core/PostureAnalyzer.swift \
+  TurtleNeckDetector/Core/PostureClassifier.swift \
   TurtleNeckDetector/Core/PostureDataStore.swift \
   TurtleNeckDetector/Core/PostureEngine.swift \
   TurtleNeckDetector/Core/VisionPoseDetector.swift \

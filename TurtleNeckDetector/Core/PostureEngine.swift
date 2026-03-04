@@ -383,6 +383,8 @@ final class PostureEngine: ObservableObject {
             headForwardRatio: result.metrics.headForwardRatio,
             headTiltAngle: result.metrics.headTiltAngle,
             neckEarAngle: smoothed,
+            headPitch: result.metrics.headPitch,
+            faceSizeNormalized: result.metrics.faceSizeNormalized,
             shoulderEvenness: result.metrics.shoulderEvenness,
             earsVisible: result.metrics.earsVisible,
             landmarksDetected: result.metrics.landmarksDetected
@@ -390,7 +392,7 @@ final class PostureEngine: ObservableObject {
 
         // Calibration mode
         if calibrationManager.isCalibrating {
-            if let calResult = calibrationManager.addSample(metrics, headPitch: lastMediaPipeHeadPitch) {
+            if let calResult = calibrationManager.addSample(metrics, headPitch: metrics.headPitch) {
                 calibrationMessage = calResult.message
                 calibrationSuccess = calResult.isValid
                 isCalibrating = false
@@ -420,6 +422,7 @@ final class PostureEngine: ObservableObject {
                 baseline: baseline,
                 previousState: postureState,
                 cameraPosition: cameraPosition,
+                yawDegrees: abs(currentHeadYaw),
                 sensitivityMode: sensitivityMode
             )
             postureState = newState
@@ -458,6 +461,7 @@ final class PostureEngine: ObservableObject {
                 deviationScore: 0,
                 usingFallback: !metrics.earsVisible,
                 severity: severity,
+                classification: .normal,
                 currentCVA: metrics.neckEarAngle,
                 baselineCVA: 0
             )

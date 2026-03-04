@@ -54,7 +54,11 @@ struct FeedbackEngine {
 
     /// Severity-specific tips shown in the UI.
     /// headYaw: absolute yaw in degrees (0 = facing camera). >15° = turned sideways.
-    static func severityTip(for severity: Severity, headYaw: CGFloat = 0) -> String {
+    static func severityTip(
+        for severity: Severity,
+        headYaw: CGFloat = 0,
+        classification: PostureClassification = .normal
+    ) -> String {
         let absYaw = abs(headYaw)
 
         // Head turned sideways — override with rotation-specific message
@@ -64,6 +68,10 @@ struct FeedbackEngine {
                 return "Head turned far \(direction). Face your screen."
             }
             return "Head turned \(direction). Try to face forward."
+        }
+
+        if classification == .lookingDown {
+            return "Chin up. Eyes to screen level."
         }
 
         switch severity {

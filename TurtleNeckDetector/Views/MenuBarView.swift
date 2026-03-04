@@ -264,6 +264,9 @@ struct MenuBarView: View {
             let msg = FeedbackEngine.goodMessage(forDuration: engine.goodPostureDuration)
             return msg.main
         case .correction:
+            if engine.postureState.classification == .lookingDown {
+                return "Lift your gaze"
+            }
             return "Tuck your chin"
         case .bad:
             return "Reset your posture"
@@ -282,7 +285,11 @@ struct MenuBarView: View {
             let msg = FeedbackEngine.goodMessage(forDuration: engine.goodPostureDuration)
             return msg.sub
         case .correction, .bad, .away:
-            return FeedbackEngine.severityTip(for: engine.menuBarSeverity, headYaw: engine.currentHeadYaw)
+            return FeedbackEngine.severityTip(
+                for: engine.menuBarSeverity,
+                headYaw: engine.currentHeadYaw,
+                classification: engine.postureState.classification
+            )
         }
     }
 

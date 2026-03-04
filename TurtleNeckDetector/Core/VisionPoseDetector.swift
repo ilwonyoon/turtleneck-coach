@@ -194,7 +194,8 @@ final class VisionPoseDetector {
             from: bodyObs,
             imageWidth: image.width,
             imageHeight: image.height,
-            faceYawRadians: yawRadians(from: faceObservation)
+            faceYawRadians: yawRadians(from: faceObservation),
+            faceObservation: faceObservation
            ) {
             if debugCounter % 10 == 0 { log("[PATH] 2D body pose → CVA=\(String(format: "%.1f", bodyResult.metrics.neckEarAngle))") }
             debugCounter += 1
@@ -251,7 +252,8 @@ final class VisionPoseDetector {
         from observation: VNHumanBodyPoseObservation,
         imageWidth: Int,
         imageHeight: Int,
-        faceYawRadians: CGFloat?
+        faceYawRadians: CGFloat?,
+        faceObservation: VNFaceObservation?
     ) throws -> DetectionResult? {
         let w = CGFloat(imageWidth)
         let h = CGFloat(imageHeight)
@@ -283,6 +285,7 @@ final class VisionPoseDetector {
         let yawReliable = faceYawRadians == nil || yawDegrees <= Self.maxReliableYawDegrees
         let yawFactor = sagittalYawFactor(yawRadians: faceYawRadians)
         let confidenceScale: Float = yawReliable ? 1.0 : 0.25
+        let faceSizeNormalized = faceObservation?.boundingBox.height ?? 0
 
         // Pixel coords (top-left origin)
         let nose = CGPoint(x: noseP.location.x * w, y: (1 - noseP.location.y) * h)
@@ -343,6 +346,8 @@ final class VisionPoseDetector {
             eyeShoulderDistanceLeft: eyeShL, eyeShoulderDistanceRight: eyeShR,
             headForwardRatio: headFwdRatio, headTiltAngle: headTilt,
             neckEarAngle: neckEarAngle,
+            headPitch: CGFloat(faceObservation?.pitch?.floatValue ?? 0),
+            faceSizeNormalized: faceSizeNormalized,
             shoulderEvenness: abs(lSh.y - rSh.y),
             earsVisible: earsVisible, landmarksDetected: true
         )
@@ -558,7 +563,10 @@ final class VisionPoseDetector {
             earShoulderDistanceLeft: earShL, earShoulderDistanceRight: earShR,
             eyeShoulderDistanceLeft: eyeShL, eyeShoulderDistanceRight: eyeShR,
             headForwardRatio: headFwdRatio, headTiltAngle: roll * 180 / .pi,
-            neckEarAngle: estimatedCVA, shoulderEvenness: 0,
+            neckEarAngle: estimatedCVA,
+            headPitch: pitch,
+            faceSizeNormalized: faceHeightNorm,
+            shoulderEvenness: 0,
             earsVisible: false, landmarksDetected: true  // false = use CVA-based deviation in PostureAnalyzer
         )
 

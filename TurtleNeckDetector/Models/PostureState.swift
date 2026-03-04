@@ -31,6 +31,15 @@ enum Severity: String, CaseIterable, Comparable {
     }
 }
 
+/// Classification of the type of posture deviation detected.
+enum PostureClassification: String {
+    case normal          // Good posture
+    case forwardHead     // True FHP: head forward, minimal pitch change
+    case lookingDown     // Neck flexion: pitch increased significantly, head not forward
+    case mixed           // Both signals present
+    case unknown         // Insufficient data or yaw too high
+}
+
 /// Current posture detection state, updated each analysis cycle.
 struct PostureState {
     var badPostureStart: Date?
@@ -38,6 +47,7 @@ struct PostureState {
     var deviationScore: CGFloat
     var usingFallback: Bool
     var severity: Severity
+    var classification: PostureClassification
     var currentCVA: CGFloat
     var baselineCVA: CGFloat
 
@@ -47,6 +57,7 @@ struct PostureState {
         deviationScore: 0,
         usingFallback: false,
         severity: .good,
+        classification: .normal,
         currentCVA: 0,
         baselineCVA: 0
     )

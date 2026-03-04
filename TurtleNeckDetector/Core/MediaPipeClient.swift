@@ -401,6 +401,7 @@ final class MediaPipeClient: @unchecked Sendable {
         let rEar = CGPoint(x: CGFloat(result.earRight[0]) * w, y: CGFloat(result.earRight[1]) * h)
         let lEye = CGPoint(x: CGFloat(result.leftEye[0]) * w, y: CGFloat(result.leftEye[1]) * h)
         let rEye = CGPoint(x: CGFloat(result.rightEye[0]) * w, y: CGFloat(result.rightEye[1]) * h)
+        let neckMid = CGPoint(x: CGFloat(result.neckMid[0]) * w, y: CGFloat(result.neckMid[1]) * h)
         let lSh = CGPoint(x: CGFloat(result.shoulderLeft[0]) * w, y: CGFloat(result.shoulderLeft[1]) * h)
         let rSh = CGPoint(x: CGFloat(result.shoulderRight[0]) * w, y: CGFloat(result.shoulderRight[1]) * h)
         let nosePos = CGPoint(x: CGFloat(result.nose[0]) * w, y: CGFloat(result.nose[1]) * h)
@@ -421,6 +422,9 @@ final class MediaPipeClient: @unchecked Sendable {
         let tiltDx = rEar.x - lEar.x
         let tiltDy = rEar.y - lEar.y
         let headTilt = tiltDx != 0 ? atan2(tiltDy, tiltDx) * 180 / .pi : 0
+        let eyeMidY = (lEye.y + rEye.y) / 2
+        let chinY = neckMid.y
+        let faceSizeNormalized = h > 0 ? abs(chinY - eyeMidY) / h : 0
         var neckEarAngle = CGFloat(result.cvaAngle)
         if yawLowConfidence {
             if let lastReliableCVA {
@@ -440,6 +444,8 @@ final class MediaPipeClient: @unchecked Sendable {
             headForwardRatio: headFwdRatio,
             headTiltAngle: headTilt,
             neckEarAngle: neckEarAngle,
+            headPitch: CGFloat(result.headPitch),
+            faceSizeNormalized: faceSizeNormalized,
             shoulderEvenness: abs(lSh.y - rSh.y),
             earsVisible: effectiveConfidence > 0.3,
             landmarksDetected: effectiveConfidence > 0.1

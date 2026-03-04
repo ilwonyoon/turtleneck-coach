@@ -83,6 +83,7 @@ struct PostureAnalyzer {
         baseline: CalibrationData,
         previousState: PostureState,
         cameraPosition: CameraPosition,
+        yawDegrees: CGFloat = 0,
         sensitivityMode: SensitivityMode = currentSensitivityMode
     ) -> PostureState {
         guard metrics.landmarksDetected else {
@@ -92,12 +93,47 @@ struct PostureAnalyzer {
                 deviationScore: 0,
                 usingFallback: previousState.usingFallback,
                 severity: .good,
+                classification: .unknown,
                 currentCVA: 0,
                 baselineCVA: baseline.neckEarAngle
             )
         }
 
-        let severity = classifySeverity(metrics.neckEarAngle, mode: sensitivityMode)
+        let cvaDrop = baseline.neckEarAngle - metrics.neckEarAngle
+        let classification = PostureClassifier.classify(
+            currentPitch: metrics.headPitch,
+            baselinePitch: baseline.headPitch,
+            currentFaceSize: metrics.faceSizeNormalized,
+            baselineFaceSize: baseline.baselineFaceSize,
+            cvaDrop: cvaDrop,
+            yawDegrees: abs(yawDegrees)
+        )
+
+        // Debug: log classifier inputs every ~3s
+        let pitchDelta = metrics.headPitch - baseline.headPitch
+        let fsc = baseline.baselineFaceSize > 0 ? (metrics.faceSizeNormalized - baseline.baselineFaceSize) / baseline.baselineFaceSize : 0
+        let debugLine = String(format: "[CLASSIFY] pitch=%.2f base=%.2f Δ=%.3f faceSize=%.4f base=%.4f Δ=%.1f%% cvaDrop=%.1f yaw=%.1f → %@",
+            metrics.headPitch, baseline.headPitch, pitchDelta,
+            metrics.faceSizeNormalized, baseline.baselineFaceSize, fsc * 100,
+            cvaDrop, abs(yawDegrees), classification.rawValue)
+        if let data = (debugLine + "\n").data(using: .utf8) {
+            let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
+            if let fh = try? FileHandle(forWritingTo: url) {
+                fh.seekToEndOfFile()
+                fh.write(data)
+                fh.closeFile()
+            }
+        }
+
+        let adjustedCVA: CGFloat
+        if classification == .lookingDown {
+            let drop = baseline.neckEarAngle - metrics.neckEarAngle
+            adjustedCVA = metrics.neckEarAngle + drop * 0.5  // recover 50% of CVA drop
+        } else {
+            adjustedCVA = metrics.neckEarAngle
+        }
+
+        let severity = classifySeverity(adjustedCVA, mode: sensitivityMode)
         let useFallback = !metrics.earsVisible
 
         // When using face fallback, shoulder positions are estimated from face bbox
@@ -107,11 +143,11 @@ struct PostureAnalyzer {
 
         if useFallback {
             // Face fallback mode: use CVA difference from baseline as the deviation signal
-            let cvaDrop = baseline.neckEarAngle - metrics.neckEarAngle
+            let effectiveCVADrop = baseline.neckEarAngle - adjustedCVA
             // Normalize: 10° drop = moderate concern, 20° drop = severe
-            score = max(0, cvaDrop / baseline.neckEarAngle)
+            score = max(0, effectiveCVADrop / baseline.neckEarAngle)
             // Bad if CVA dropped below "good" threshold or dropped significantly from baseline
-            isCurrentlyBad = severity != .good || cvaDrop > 8.0
+            isCurrentlyBad = severity != .good || effectiveCVADrop > 8.0
         } else {
             // Body pose mode: use original distance-based deviation
             let forwardDeviation = relativeChange(
@@ -152,7 +188,8 @@ struct PostureAnalyzer {
                 deviationScore: score,
                 usingFallback: useFallback,
                 severity: severity,
-                currentCVA: metrics.neckEarAngle,
+                classification: classification,
+                currentCVA: adjustedCVA,
                 baselineCVA: baseline.neckEarAngle
             )
         }
@@ -163,7 +200,8 @@ struct PostureAnalyzer {
             deviationScore: score,
             usingFallback: useFallback,
             severity: severity,
-            currentCVA: metrics.neckEarAngle,
+            classification: classification,
+            currentCVA: adjustedCVA,
             baselineCVA: baseline.neckEarAngle
         )
     }
