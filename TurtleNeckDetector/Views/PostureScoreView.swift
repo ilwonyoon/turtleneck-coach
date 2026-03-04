@@ -47,7 +47,7 @@ struct PostureScoreView: View {
                         .foregroundColor(.secondary)
                 }
                 Text(scoreLabel)
-                    .font(DS.Font.sysSubhead)
+                    .font(DS.Font.subhead)
                     .foregroundColor(.secondary)
             }
 

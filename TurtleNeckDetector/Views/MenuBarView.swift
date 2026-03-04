@@ -24,14 +24,14 @@ struct MenuBarView: View {
         VStack(spacing: 0) {
             // Header
             header
-                .padding(.horizontal, DS.Space.xl)
-                .padding(.top, DS.Space.lg)
-                .padding(.bottom, DS.Space.md)
+                .padding(.horizontal, DS.Space.lg)
+                .padding(.top, DS.Space.md)
+                .padding(.bottom, DS.Space.sm)
 
             Divider()
 
             ScrollView {
-                VStack(spacing: DS.Space.xl) {
+                VStack(spacing: DS.Space.lg) {
                     // Error banner
                     if let error = engine.lastError {
                         errorBanner(error)
@@ -92,23 +92,23 @@ struct MenuBarView: View {
                             badgesRow
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DS.Space.lg)
+                        .padding(DS.Space.md)
                         .background(DS.Surface.overlay)
-                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
                     } else {
                         section(nil) {
                             statusCard
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(DS.Space.lg)
+                                .padding(DS.Space.md)
                                 .background(DS.Surface.card)
-                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
+                                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
                         }
                     }
 
                     // Controls
                     controlButtons
                 }
-                .padding(DS.Space.xl)
+                .padding(DS.Space.lg)
             }
             .overlay(alignment: .top) {
                 calibrationToast
@@ -118,8 +118,8 @@ struct MenuBarView: View {
 
             // Footer
             footer
-                .padding(.horizontal, DS.Space.xl)
-                .padding(.vertical, DS.Space.md)
+                .padding(.horizontal, DS.Space.lg)
+                .padding(.vertical, DS.Space.sm)
         }
         .onReceive(refreshTimer) { _ in
             engine.objectWillChange.send()
@@ -168,7 +168,7 @@ struct MenuBarView: View {
     private var header: some View {
         HStack {
             Text("PT Turtle")
-                .font(DS.Font.title)
+                .font(DS.Font.titleBold)
             Spacer()
             Button {
                 showDashboard = true
@@ -195,8 +195,8 @@ struct MenuBarView: View {
                 Text("CVA ~\(Int(engine.postureState.currentCVA))\u{00B0}")
                     .font(DS.Font.mono)
                     .foregroundColor(.white)
-                    .padding(.horizontal, DS.Space.md)
-                    .padding(.vertical, DS.Space.sm)
+                    .padding(.horizontal, DS.Space.sm)
+                    .padding(.vertical, DS.Space.xs)
                     .background(.black.opacity(0.6))
                     .clipShape(Capsule())
                     .padding(8)
@@ -213,16 +213,16 @@ struct MenuBarView: View {
                     Image(systemName: success ? "checkmark.circle.fill" : "xmark.circle.fill")
                         .foregroundColor(success ? .green : .red)
                     Text(success ? "Calibrated" : engine.calibrationMessage)
-                        .font(DS.Font.subhead)
+                        .font(DS.Font.subheadMedium)
                 }
-                .padding(.horizontal, DS.Space.xl)
+                .padding(.horizontal, DS.Space.lg)
                 .frame(height: 44)
                 .frame(maxWidth: .infinity)
                 .background(DS.Surface.card)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
                 .shadow(color: .black.opacity(0.1), radius: 8, y: 2)
-                .padding(.horizontal, DS.Space.xl)
-                .padding(.top, DS.Space.md)
+                .padding(.horizontal, DS.Space.lg)
+                .padding(.top, DS.Space.sm)
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
@@ -238,9 +238,9 @@ struct MenuBarView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(statusMainText)
-                    .font(DS.Font.subhead)
+                    .font(DS.Font.subheadMedium)
                 Text(statusSubText)
-                    .font(DS.Font.sysCaption)
+                    .font(DS.Font.caption)
                     .foregroundColor(.secondary)
             }
 
@@ -321,7 +321,7 @@ struct MenuBarView: View {
                 .font(DS.Font.mini)
         }
         .foregroundColor(.secondary)
-        .padding(.horizontal, DS.Space.md)
+        .padding(.horizontal, DS.Space.sm)
         .padding(.vertical, 3) // DS: one-off
         .background(.quaternary.opacity(0.5))
         .clipShape(Capsule())
@@ -332,7 +332,7 @@ struct MenuBarView: View {
     private var headPositionWidget: some View {
         HStack(spacing: 10) {
             Text("Head")
-                .font(DS.Font.sysCaption)
+                .font(DS.Font.caption)
                 .foregroundColor(.secondary)
                 .frame(width: 35, alignment: .leading)
 
@@ -410,7 +410,7 @@ struct MenuBarView: View {
                     engine.isMonitoring ? "Stop" : "Start",
                     systemImage: engine.isMonitoring ? "stop.fill" : "play.fill"
                 )
-                .font(DS.Font.subhead)
+                .font(DS.Font.subheadMedium)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
             }
@@ -422,7 +422,7 @@ struct MenuBarView: View {
                     engine.startCalibration()
                 } label: {
                     Label("Recalibrate", systemImage: "scope")
-                        .font(DS.Font.subhead)
+                        .font(DS.Font.subheadMedium)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 8)
                 }
@@ -438,7 +438,7 @@ struct MenuBarView: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundColor(.red)
             Text(message)
-                .font(DS.Font.sysCaption)
+                .font(DS.Font.caption)
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -457,7 +457,7 @@ struct MenuBarView: View {
             Button("Quit") {
                 NSApplication.shared.terminate(nil)
             }
-            .font(DS.Font.sysCaption)
+            .font(DS.Font.caption)
             .buttonStyle(.plain)
             .foregroundColor(.secondary)
         }

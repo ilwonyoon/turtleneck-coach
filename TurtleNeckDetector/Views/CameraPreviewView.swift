@@ -21,7 +21,7 @@ struct CameraPreviewView: View {
                         .fill(Color.black)
                     Text("Starting camera...")
                         .foregroundColor(.gray)
-                        .font(DS.Font.sysCaption)
+                        .font(DS.Font.caption)
                 }
 
                 // Skeleton overlay

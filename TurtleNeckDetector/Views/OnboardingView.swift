@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import AVFoundation
 import UserNotifications
 
@@ -9,6 +10,7 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var isRequestingPermissions = false
     @State private var cameraDenied = false
+    @State private var notificationsDenied = false
 
     private var cameraAspectRatio: CGFloat {
         guard let frame = engine.currentFrame else { return 4.0 / 3.0 }
@@ -31,13 +33,13 @@ struct OnboardingView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.horizontal, DS.Space.xl)
-        .padding(.vertical, DS.Space.lg)
+        .padding(.horizontal, DS.Space.lg)
+        .padding(.vertical, DS.Space.md)
     }
 
     private var welcomeStep: some View {
-        VStack(spacing: DS.Space.xl) {
-            Spacer(minLength: DS.Space.xl)
+        VStack(spacing: DS.Space.lg) {
+            Spacer(minLength: DS.Space.lg)
 
             Image(systemName: "tortoise.fill")
                 .font(DS.Font.display)
@@ -45,10 +47,10 @@ struct OnboardingView: View {
                 .foregroundStyle(DS.Palette.green)
 
             Text("PT Turtle")
-                .font(DS.Font.title)
+                .font(DS.Font.titleBold)
 
             Text("Monitors your posture while you work.\nNo images are stored or sent anywhere.")
-                .font(DS.Font.subhead)
+                .font(DS.Font.subheadMedium)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
@@ -64,11 +66,11 @@ struct OnboardingView: View {
                            title: "Private by Design",
                            detail: "All processing happens on your Mac. Nothing leaves your device.")
             }
-            .padding(DS.Space.lg)
+            .padding(DS.Space.md)
             .background(DS.Surface.card)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
 
-            Spacer(minLength: DS.Space.xl)
+            Spacer(minLength: DS.Space.lg)
 
             if cameraDenied {
                 cameraDeniedBanner
@@ -78,7 +80,7 @@ struct OnboardingView: View {
                 requestPermissionsAndStart()
             } label: {
                 Text(isRequestingPermissions ? "Requesting Access..." : "Get Started")
-                    .font(DS.Font.subhead)
+                    .font(DS.Font.subheadMedium)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
             }
@@ -93,78 +95,78 @@ struct OnboardingView: View {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(DS.Palette.orange)
                 Text("Camera access is required to monitor posture.")
-                    .font(DS.Font.subhead)
+                    .font(DS.Font.subheadMedium)
                     .foregroundStyle(.primary)
             }
 
             if let cameraSettingsURL {
                 Link("Open System Settings", destination: cameraSettingsURL)
-                    .font(DS.Font.subhead)
+                    .font(DS.Font.subheadMedium)
             }
         }
-        .padding(DS.Space.lg)
+        .padding(DS.Space.md)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(DS.Surface.card)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
     }
 
     private var calibrateStep: some View {
-        VStack(alignment: .leading, spacing: 14) { // DS: one-off
-            Text("Sit up straight")
-                .font(DS.Font.title)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) { // DS: one-off
+                Text("Sit up straight")
+                    .font(DS.Font.titleBold)
 
-            CameraPreviewView(
-                frame: engine.currentFrame,
-                joints: engine.currentJoints
-            )
-            .frame(maxWidth: .infinity)
-            .aspectRatio(cameraAspectRatio, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.md)
-                    .strokeBorder(Color(.separatorColor), lineWidth: 1)
-            )
-
-            if engine.isCalibrating {
-                CalibrationView(
-                    progress: engine.calibrationProgress,
-                    message: engine.calibrationMessage
+                CameraPreviewView(
+                    frame: engine.currentFrame,
+                    joints: engine.currentJoints
                 )
-                .background(DS.Surface.overlay)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
-            } else if engine.calibrationSuccess == false {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Calibration did not complete.")
-                        .font(DS.Font.subhead)
-                    Text("Keep your head centered and hold still.")
-                        .font(DS.Font.subhead)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(DS.Space.lg)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(DS.Surface.card)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
+                .frame(maxWidth: .infinity)
+                .aspectRatio(cameraAspectRatio, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DS.Radius.md)
+                        .strokeBorder(Color(.separatorColor), lineWidth: 1)
+                )
 
-                Button("Retry") {
-                    engine.startCalibration()
+                if engine.isCalibrating {
+                    CalibrationView(
+                        progress: engine.calibrationProgress,
+                        message: engine.calibrationMessage
+                    )
+                    .background(DS.Surface.overlay)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+                } else if engine.calibrationSuccess == false {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Calibration did not complete.")
+                            .font(DS.Font.subheadMedium)
+                        Text("Keep your head centered and hold still.")
+                            .font(DS.Font.subheadMedium)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(DS.Space.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(DS.Surface.card)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+
+                    Button("Retry") {
+                        engine.startCalibration()
+                    }
+                    .font(DS.Font.subheadMedium)
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Starting calibration...")
+                            .font(DS.Font.subheadMedium)
+                        Text("Face the camera and hold still.")
+                            .font(DS.Font.subheadMedium)
+                            .foregroundStyle(.secondary)
+                    }
+                    .padding(DS.Space.md)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(DS.Surface.card)
+                    .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
                 }
-                .font(DS.Font.subhead)
-                .buttonStyle(.borderedProminent)
-            } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Starting calibration...")
-                        .font(DS.Font.subhead)
-                    Text("Face the camera and hold still.")
-                        .font(DS.Font.subhead)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(DS.Space.lg)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(DS.Surface.card)
-                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
             }
-
-            Spacer(minLength: 0)
         }
         .onAppear {
             if engine.calibrationSuccess == true && engine.calibrationData != nil {
@@ -185,14 +187,14 @@ struct OnboardingView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(DS.Font.heroIcon)
                 .foregroundStyle(DS.Palette.green)
-                .padding(.top, DS.Space.xl)
+                .padding(.top, DS.Space.lg)
 
             Text("Calibration Complete")
-                .font(DS.Font.title)
+                .font(DS.Font.titleBold)
                 .padding(.top, 10)
 
             Text("Here's how your score works:")
-                .font(DS.Font.sysSubhead)
+                .font(DS.Font.subhead)
                 .foregroundStyle(.secondary)
                 .padding(.top, 4)
 
@@ -220,24 +222,65 @@ struct OnboardingView: View {
                     detail: "Time to sit up and reset."
                 )
             }
-            .padding(.top, DS.Space.xl)
+            .padding(.top, DS.Space.lg)
+
+            // Notification denied banner
+            if notificationsDenied {
+                notificationDeniedBanner
+                    .padding(.top, DS.Space.md)
+            }
 
             // CTA button
             Button {
                 hasCompletedOnboarding = true
             } label: {
                 Text("Start Monitoring")
-                    .font(DS.Font.subhead)
+                    .font(DS.Font.subheadMedium)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
             }
             .buttonStyle(.borderedProminent)
-            .padding(.top, DS.Space.xxl)
+            .padding(.top, DS.Space.lg)
+        }
+        .onAppear {
+            checkNotificationStatus()
+        }
+    }
+
+    private var notificationDeniedBanner: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "bell.slash.fill")
+                    .foregroundStyle(DS.Palette.orange)
+                Text("Notifications are off")
+                    .font(DS.Font.subheadBold)
+            }
+            Text("Enable notifications in System Settings to get posture alerts.")
+                .font(DS.Font.caption)
+                .foregroundStyle(.secondary)
+            Button("Open Settings") {
+                if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
+                    NSWorkspace.shared.open(url)
+                }
+            }
+            .font(DS.Font.caption)
+        }
+        .padding(DS.Space.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DS.Surface.card)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+    }
+
+    private func checkNotificationStatus() {
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
+            DispatchQueue.main.async {
+                notificationsDenied = settings.authorizationStatus == .denied
+            }
         }
     }
 
     private func scoreZoneCard(color: Color, icon: String, title: String, range: String, detail: String) -> some View {
-        HStack(spacing: DS.Space.lg) {
+        HStack(spacing: DS.Space.md) {
             RoundedRectangle(cornerRadius: DS.Radius.sm)
                 .fill(color.opacity(0.8))
                 .frame(width: DS.Size.colorAccentBar)
@@ -252,7 +295,7 @@ struct OnboardingView: View {
                     Text(title)
                         .font(DS.Font.subheadBold)
                     Text(range)
-                        .font(DS.Font.sysCaption)
+                        .font(DS.Font.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 1)
@@ -260,16 +303,16 @@ struct OnboardingView: View {
                         .clipShape(Capsule())
                 }
                 Text(detail)
-                    .font(DS.Font.sysCaption)
+                    .font(DS.Font.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
         }
-        .padding(.horizontal, DS.Space.lg)
+        .padding(.horizontal, DS.Space.md)
         .padding(.vertical, 10) // DS: one-off
         .background(DS.Surface.card)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
     }
 
     private func featureRow(icon: String, color: Color, title: String, detail: String) -> some View {
@@ -282,9 +325,9 @@ struct OnboardingView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(DS.Font.subhead)
+                    .font(DS.Font.subheadMedium)
                 Text(detail)
-                    .font(DS.Font.sysCaption)
+                    .font(DS.Font.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

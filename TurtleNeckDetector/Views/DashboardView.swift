@@ -19,7 +19,7 @@ struct DashboardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: DS.Space.xl) {
+            VStack(spacing: DS.Space.lg) {
                 header
 
                 summaryCards
@@ -35,7 +35,7 @@ struct DashboardView: View {
 
                 complianceCard
             }
-            .padding(DS.Space.xxl)
+            .padding(DS.Space.xl)
         }
         .frame(minWidth: 600, minHeight: 480)
         .background(Color(nsColor: .windowBackgroundColor))
@@ -56,7 +56,7 @@ struct DashboardView: View {
     private var header: some View {
         HStack {
             Text("Posture Dashboard")
-                .font(DS.Font.titleLg)
+                .font(DS.Font.titleLgBold)
 
             Spacer()
 
@@ -70,36 +70,36 @@ struct DashboardView: View {
     // MARK: - Summary
 
     private var summaryCards: some View {
-        HStack(spacing: DS.Space.lg) {
+        HStack(spacing: DS.Space.md) {
             summaryCard(title: "Monitored") {
                 Text("\(Int(todaySummary.monitoredMinutes.rounded())) min")
-                    .font(DS.Font.title)
+                    .font(DS.Font.titleBold)
             }
 
             summaryCard(title: "Good Posture") {
                 HStack(spacing: 10) {
                     CircularPercentView(percent: todaySummary.goodPosturePercent)
                     Text("\(Int(todaySummary.goodPosturePercent.rounded()))%")
-                        .font(DS.Font.title)
+                        .font(DS.Font.titleBold)
                 }
             }
 
             summaryCard(title: "Average Score") {
                 Text(String(format: "%.0f", todaySummary.averageScore))
-                    .font(DS.Font.title)
+                    .font(DS.Font.titleBold)
             }
 
             summaryCard(title: "Slouch Alerts") {
                 Text("\(todaySummary.slouchAlerts)")
-                    .font(DS.Font.title)
+                    .font(DS.Font.titleBold)
             }
         }
     }
 
     private func summaryCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: DS.Space.md) {
+        VStack(alignment: .leading, spacing: DS.Space.sm) {
             Text(title)
-                .font(DS.Font.sysCaption)
+                .font(DS.Font.caption)
                 .foregroundColor(.secondary)
             content()
             Spacer(minLength: 0)
@@ -112,7 +112,7 @@ struct DashboardView: View {
     // MARK: - Charts
 
     private var scoreTrendCard: some View {
-        VStack(alignment: .leading, spacing: DS.Space.lg) {
+        VStack(alignment: .leading, spacing: DS.Space.md) {
             Text("Score Trend")
                 .font(DS.Font.headline)
 
@@ -365,10 +365,10 @@ struct DashboardView: View {
     }
 
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
             .fill(Color.black.opacity(0.28))
             .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
                     .stroke(Color.white.opacity(0.08), lineWidth: 1)
             )
     }

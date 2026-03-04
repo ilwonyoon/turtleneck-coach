@@ -1,10 +1,13 @@
 import SwiftUI
+import UserNotifications
 
 struct SettingsView: View {
     @ObservedObject var engine: PostureEngine
 
     @AppStorage(NotificationService.notificationsEnabledKey)
     private var notificationsEnabled = true
+
+    @State private var systemNotificationStatus: UNAuthorizationStatus = .authorized
 
     @AppStorage(SensitivityMode.storageKey)
     private var sensitivityModeRawValue = SensitivityMode.defaultMode.rawValue
@@ -101,6 +104,33 @@ struct SettingsView: View {
             }
 
             Section {
+                if systemNotificationStatus == .denied {
+                    LabeledContent("macOS Notifications") {
+                        valueColumn {
+                            HStack(spacing: 6) {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                    .foregroundColor(.orange)
+                                    .font(.caption)
+                                Text("Denied")
+                                    .foregroundColor(.secondary)
+                                Button("Open Settings") {
+                                    if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                }
+                                .font(.caption)
+                            }
+                        }
+                    }
+                } else if systemNotificationStatus == .notDetermined {
+                    LabeledContent("macOS Notifications") {
+                        valueColumn {
+                            Text("Not requested yet")
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+
                 LabeledContent("Enable Notifications") {
                     valueColumn {
                         Toggle("", isOn: $notificationsEnabled)
@@ -189,7 +219,14 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding(DS.Space.xxl)
+        .padding(DS.Space.xl)
         .frame(minWidth: 540, minHeight: 460)
+        .onAppear {
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                DispatchQueue.main.async {
+                    systemNotificationStatus = settings.authorizationStatus
+                }
+            }
+        }
     }
 }
