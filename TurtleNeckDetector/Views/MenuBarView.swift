@@ -250,8 +250,8 @@ struct MenuBarView: View {
 
     private var statusMainText: String {
         guard engine.isMonitoring else { return "Paused" }
-        guard engine.calibrationData != nil else { return "Set your baseline" }
-        if engine.isCalibrating { return "Reading your posture..." }
+        if engine.isCalibrating { return "Calibrating..." }
+        if engine.calibrationData == nil { return "Starting up..." }
 
         // Head turned sideways — show rotation-specific main text
         let absYaw = abs(engine.currentHeadYaw)
@@ -277,8 +277,8 @@ struct MenuBarView: View {
 
     private var statusSubText: String {
         guard engine.isMonitoring else { return "Tap Start when you're ready." }
-        guard engine.calibrationData != nil else { return "Sit tall and hit Calibrate." }
-        if engine.isCalibrating { return "Hold still. Almost there." }
+        if engine.isCalibrating { return "Sit up straight. Hold still." }
+        if engine.calibrationData == nil { return "Preparing camera..." }
 
         switch engine.menuBarSeverity {
         case .good:
@@ -417,19 +417,17 @@ struct MenuBarView: View {
             .buttonStyle(.borderedProminent)
             .tint(engine.isMonitoring ? .red : .blue)
 
-            Button {
-                engine.startCalibration()
-            } label: {
-                Label(
-                    engine.calibrationData != nil ? "Recalibrate" : "Calibrate",
-                    systemImage: "scope"
-                )
-                .font(.subheadline.weight(.medium))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 8)
+            if engine.isMonitoring && !engine.isCalibrating {
+                Button {
+                    engine.startCalibration()
+                } label: {
+                    Label("Recalibrate", systemImage: "scope")
+                        .font(.subheadline.weight(.medium))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
-            .disabled(engine.isCalibrating)
         }
     }
 
