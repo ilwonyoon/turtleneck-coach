@@ -6,6 +6,10 @@ echo "Building TurtleNeckDetector..."
 
 # Ensure app bundle structure exists
 mkdir -p TurtleNeckDetector.app/Contents/MacOS
+mkdir -p TurtleNeckDetector.app/Contents/Resources
+
+# Copy app icon
+cp TurtleNeckDetector/Resources/AppIcon.icns TurtleNeckDetector.app/Contents/Resources/AppIcon.icns
 
 # Create Info.plist if missing
 if [ ! -f TurtleNeckDetector.app/Contents/Info.plist ]; then
@@ -26,6 +30,8 @@ cat > TurtleNeckDetector.app/Contents/Info.plist << 'INFOPLIST'
     <string>1.0</string>
     <key>CFBundleShortVersionString</key>
     <string>1.0</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>LSUIElement</key>
     <true/>
     <key>NSCameraUsageDescription</key>
