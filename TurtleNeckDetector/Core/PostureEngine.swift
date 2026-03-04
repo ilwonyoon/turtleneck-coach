@@ -51,10 +51,10 @@ final class PostureEngine: ObservableObject {
     var postureScoreColor: Color {
         let score = postureScore
         let mode = sensitivityMode
-        if score >= mode.goodThreshold { return .green }
-        if score >= mode.correctionThreshold { return .yellow }
-        if score >= mode.badThreshold { return .orange }
-        return .red
+        if score >= mode.goodThreshold { return DS.Severity.good }
+        if score >= mode.correctionThreshold { return DS.Severity.mild }
+        if score >= mode.badThreshold { return DS.Severity.moderate }
+        return DS.Severity.severe
     }
 
     /// 1-minute rolling average score for menu bar display.
@@ -144,10 +144,10 @@ final class PostureEngine: ObservableObject {
 
     var menuBarSeverityColor: Color {
         switch menuBarSeverity {
-        case .good: return .green
-        case .correction: return .yellow
-        case .bad: return .orange
-        case .away: return .red
+        case .good: return DS.Severity.good
+        case .correction: return DS.Severity.mild
+        case .bad: return DS.Severity.moderate
+        case .away: return DS.Severity.severe
         }
     }
 

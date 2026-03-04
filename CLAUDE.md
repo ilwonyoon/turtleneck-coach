@@ -106,6 +106,16 @@ All three Vision requests are batched in a single `handler.perform()` call.
 
 SwiftUI, Vision, AVFoundation, UserNotifications, AppKit, Network
 
+## Design System
+
+All visual constants live in `TurtleNeckDetector/DesignSystem/DesignTokens.swift` under the `DS` namespace.
+
+- **Primitive tokens**: `DS.Font`, `DS.Space`, `DS.Radius`, `DS.Palette` — raw values
+- **Semantic tokens**: `DS.Severity`, `DS.Surface`, `DS.Label`, `DS.Size` — intent-based
+- **Lint**: `./scripts/lint-design-tokens.sh` — catches hardcoded fonts, colors, radii, materials in view files
+- **One-offs**: Mark with `// DS: one-off` comment to suppress lint warnings
+- **Rule**: New views MUST use `DS.*` tokens. No raw font sizes, colors, or spacing in view files.
+
 ## Token Economy: Codex-First Delegation Strategy
 
 **Claude's role is ORCHESTRATOR. Codex does the heavy lifting.** This saves Claude tokens dramatically by offloading expensive read/write/analysis work to Codex.

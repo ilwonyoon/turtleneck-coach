@@ -14,40 +14,40 @@ struct PostureScoreView: View {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 14) { // DS: one-off
             // Activity Ring with emoji
             ZStack {
                 // Background ring track
                 Circle()
-                    .stroke(scoreColor.opacity(0.2), lineWidth: 6)
+                    .stroke(scoreColor.opacity(0.2), lineWidth: DS.Size.scoreStroke)
 
                 // Filled ring
                 Circle()
                     .trim(from: 0, to: CGFloat(score) / 100.0)
-                    .stroke(scoreColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .stroke(scoreColor, style: StrokeStyle(lineWidth: DS.Size.scoreStroke, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.easeInOut(duration: 0.8), value: score)
 
                 // Emoji center
                 Text(emoji)
-                    .font(.system(size: 22))
+                    .font(DS.Font.emoji)
             }
-            .frame(width: 56, height: 56)
+            .frame(width: DS.Size.scoreRing, height: DS.Size.scoreRing)
 
             // Score + label
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: DS.Space.xs) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(score)")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .font(DS.Font.scoreLg)
                         .foregroundColor(scoreColor)
                         .contentTransition(.numericText())
                         .animation(.easeInOut(duration: 0.8), value: score)
                     Text("/ 100")
-                        .font(.system(size: 14))
+                        .font(DS.Font.callout)
                         .foregroundColor(.secondary)
                 }
                 Text(scoreLabel)
-                    .font(.subheadline)
+                    .font(DS.Font.sysSubhead)
                     .foregroundColor(.secondary)
             }
 

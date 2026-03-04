@@ -42,6 +42,7 @@ INFOPLIST
 fi
 
 swiftc \
+  TurtleNeckDetector/DesignSystem/DesignTokens.swift \
   TurtleNeckDetector/Core/CalibrationManager.swift \
   TurtleNeckDetector/Core/CameraManager.swift \
   TurtleNeckDetector/Core/MediaPipeClient.swift \

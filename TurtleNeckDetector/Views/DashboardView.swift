@@ -19,7 +19,7 @@ struct DashboardView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
+            VStack(spacing: DS.Space.xl) {
                 header
 
                 summaryCards
@@ -35,7 +35,7 @@ struct DashboardView: View {
 
                 complianceCard
             }
-            .padding(20)
+            .padding(DS.Space.xxl)
         }
         .frame(minWidth: 600, minHeight: 480)
         .background(Color(nsColor: .windowBackgroundColor))
@@ -56,7 +56,7 @@ struct DashboardView: View {
     private var header: some View {
         HStack {
             Text("Posture Dashboard")
-                .font(.title2.weight(.semibold))
+                .font(DS.Font.titleLg)
 
             Spacer()
 
@@ -70,41 +70,41 @@ struct DashboardView: View {
     // MARK: - Summary
 
     private var summaryCards: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: DS.Space.lg) {
             summaryCard(title: "Monitored") {
                 Text("\(Int(todaySummary.monitoredMinutes.rounded())) min")
-                    .font(.title3.weight(.semibold))
+                    .font(DS.Font.title)
             }
 
             summaryCard(title: "Good Posture") {
                 HStack(spacing: 10) {
                     CircularPercentView(percent: todaySummary.goodPosturePercent)
                     Text("\(Int(todaySummary.goodPosturePercent.rounded()))%")
-                        .font(.title3.weight(.semibold))
+                        .font(DS.Font.title)
                 }
             }
 
             summaryCard(title: "Average Score") {
                 Text(String(format: "%.0f", todaySummary.averageScore))
-                    .font(.title3.weight(.semibold))
+                    .font(DS.Font.title)
             }
 
             summaryCard(title: "Slouch Alerts") {
                 Text("\(todaySummary.slouchAlerts)")
-                    .font(.title3.weight(.semibold))
+                    .font(DS.Font.title)
             }
         }
     }
 
     private func summaryCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: DS.Space.md) {
             Text(title)
-                .font(.caption)
+                .font(DS.Font.sysCaption)
                 .foregroundColor(.secondary)
             content()
             Spacer(minLength: 0)
         }
-        .padding(14)
+        .padding(14) // DS: one-off
         .frame(maxWidth: .infinity, minHeight: 90, alignment: .topLeading)
         .background(cardBackground)
     }
@@ -112,9 +112,9 @@ struct DashboardView: View {
     // MARK: - Charts
 
     private var scoreTrendCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DS.Space.lg) {
             Text("Score Trend")
-                .font(.headline)
+                .font(DS.Font.headline)
 
             Chart {
                 if selectedRange == .day {
@@ -175,7 +175,7 @@ struct DashboardView: View {
 
                 RuleMark(y: .value("Good Threshold", 80))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    .foregroundStyle(Color.green.opacity(0.9))
+                    .foregroundStyle(DS.Severity.good.opacity(0.9))
             }
             .chartYScale(domain: 0...100)
             .chartXAxis {
@@ -210,10 +210,10 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Compliance")
-                    .font(.headline)
+                    .font(DS.Font.headline)
                 Spacer()
                 Text("\(Int(latestCompliancePercent.rounded()))% today")
-                    .font(.subheadline.weight(.semibold))
+                    .font(DS.Font.subheadBold)
                     .foregroundStyle(.secondary)
             }
 
@@ -223,7 +223,7 @@ struct DashboardView: View {
                 dailyComplianceChart
             }
         }
-        .padding(14)
+        .padding(14) // DS: one-off
         .background(cardBackground)
     }
 
@@ -249,11 +249,11 @@ struct DashboardView: View {
 
             RuleMark(y: .value("Goal", 0.8))
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [6, 4]))
-                .foregroundStyle(Color.mint.opacity(0.9))
+                .foregroundStyle(DS.Palette.mint.opacity(0.9))
         }
         .chartForegroundStyleScale([
-            "Good": Color.green,
-            "Bad": Color.orange
+            "Good": DS.Severity.good,
+            "Bad": DS.Severity.moderate
         ])
         .chartYScale(domain: 0...1)
         .chartYAxis {
@@ -294,11 +294,11 @@ struct DashboardView: View {
 
             RuleMark(y: .value("Goal", 0.8))
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [6, 4]))
-                .foregroundStyle(Color.mint.opacity(0.9))
+                .foregroundStyle(DS.Palette.mint.opacity(0.9))
         }
         .chartForegroundStyleScale([
-            "Good": Color.green,
-            "Bad": Color.orange
+            "Good": DS.Severity.good,
+            "Bad": DS.Severity.moderate
         ])
         .chartXScale(domain: hourlyChartDomain)
         .chartYScale(domain: 0...1)
@@ -365,10 +365,10 @@ struct DashboardView: View {
     }
 
     private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
             .fill(Color.black.opacity(0.28))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: DS.Radius.xxl, style: .continuous)
                     .stroke(Color.white.opacity(0.08), lineWidth: 1)
             )
     }

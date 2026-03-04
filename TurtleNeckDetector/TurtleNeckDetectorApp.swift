@@ -12,10 +12,10 @@ struct TurtleNeckDetectorApp: App {
             Group {
                 if hasCompletedOnboarding {
                     MenuBarView(engine: engine)
-                        .frame(width: 340, height: 640)
+                        .frame(width: 340, height: 520)
                 } else {
                     OnboardingView(engine: engine)
-                        .frame(width: 340, height: 640)
+                        .frame(width: 340)
                 }
             }
         } label: {

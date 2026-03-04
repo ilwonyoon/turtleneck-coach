@@ -31,29 +31,44 @@ struct OnboardingView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.horizontal, DS.Space.xl)
+        .padding(.vertical, DS.Space.lg)
     }
 
     private var welcomeStep: some View {
-        VStack(spacing: 16) {
-            Spacer(minLength: 16)
+        VStack(spacing: DS.Space.xl) {
+            Spacer(minLength: DS.Space.xl)
 
             Image(systemName: "tortoise.fill")
-                .font(.system(size: 56))
+                .font(DS.Font.display)
                 .symbolRenderingMode(.palette)
-                .foregroundStyle(.green)
+                .foregroundStyle(DS.Palette.green)
 
             Text("PT Turtle")
-                .font(.title3.weight(.semibold))
+                .font(DS.Font.title)
 
-            Text("Monitors your posture while you work. No images stored.")
-                .font(.subheadline.weight(.medium))
+            Text("Monitors your posture while you work.\nNo images are stored or sent anywhere.")
+                .font(DS.Font.subhead)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
 
-            Spacer(minLength: 16)
+            VStack(alignment: .leading, spacing: 10) {
+                featureRow(icon: "camera.fill", color: .blue,
+                           title: "Camera Access",
+                           detail: "Analyzes head and shoulder position in real time to calculate your posture angle.")
+                featureRow(icon: "bell.fill", color: .orange,
+                           title: "Notifications",
+                           detail: "Gentle alerts when your posture drifts so you can correct before it becomes a habit.")
+                featureRow(icon: "lock.shield.fill", color: .green,
+                           title: "Private by Design",
+                           detail: "All processing happens on your Mac. Nothing leaves your device.")
+            }
+            .padding(DS.Space.lg)
+            .background(DS.Surface.card)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
+
+            Spacer(minLength: DS.Space.xl)
 
             if cameraDenied {
                 cameraDeniedBanner
@@ -63,7 +78,7 @@ struct OnboardingView: View {
                 requestPermissionsAndStart()
             } label: {
                 Text(isRequestingPermissions ? "Requesting Access..." : "Get Started")
-                    .font(.subheadline.weight(.medium))
+                    .font(DS.Font.subhead)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
             }
@@ -76,27 +91,27 @@ struct OnboardingView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(DS.Palette.orange)
                 Text("Camera access is required to monitor posture.")
-                    .font(.subheadline.weight(.medium))
+                    .font(DS.Font.subhead)
                     .foregroundStyle(.primary)
             }
 
             if let cameraSettingsURL {
                 Link("Open System Settings", destination: cameraSettingsURL)
-                    .font(.subheadline.weight(.medium))
+                    .font(DS.Font.subhead)
             }
         }
-        .padding(12)
+        .padding(DS.Space.lg)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(DS.Surface.card)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
     }
 
     private var calibrateStep: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 14) { // DS: one-off
             Text("Sit up straight")
-                .font(.title3.weight(.semibold))
+                .font(DS.Font.title)
 
             CameraPreviewView(
                 frame: engine.currentFrame,
@@ -104,9 +119,9 @@ struct OnboardingView: View {
             )
             .frame(maxWidth: .infinity)
             .aspectRatio(cameraAspectRatio, contentMode: .fit)
-            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
             .overlay(
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: DS.Radius.md)
                     .strokeBorder(Color(.separatorColor), lineWidth: 1)
             )
 
@@ -115,38 +130,38 @@ struct OnboardingView: View {
                     progress: engine.calibrationProgress,
                     message: engine.calibrationMessage
                 )
-                .background(.thickMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .background(DS.Surface.overlay)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
             } else if engine.calibrationSuccess == false {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Calibration did not complete.")
-                        .font(.subheadline.weight(.medium))
+                        .font(DS.Font.subhead)
                     Text("Keep your head centered and hold still.")
-                        .font(.subheadline.weight(.medium))
+                        .font(DS.Font.subhead)
                         .foregroundStyle(.secondary)
                 }
-                .padding(12)
+                .padding(DS.Space.lg)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .background(DS.Surface.card)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
 
                 Button("Retry") {
                     engine.startCalibration()
                 }
-                .font(.subheadline.weight(.medium))
+                .font(DS.Font.subhead)
                 .buttonStyle(.borderedProminent)
             } else {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Starting calibration...")
-                        .font(.subheadline.weight(.medium))
+                        .font(DS.Font.subhead)
                     Text("Face the camera and hold still.")
-                        .font(.subheadline.weight(.medium))
+                        .font(DS.Font.subhead)
                         .foregroundStyle(.secondary)
                 }
-                .padding(12)
+                .padding(DS.Space.lg)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .background(DS.Surface.card)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.xl))
             }
 
             Spacer(minLength: 0)
@@ -165,59 +180,114 @@ struct OnboardingView: View {
     }
 
     private var scoreZonesStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Your Score Zones")
-                .font(.title3.weight(.semibold))
+        VStack(spacing: 0) {
+            // Success badge
+            Image(systemName: "checkmark.circle.fill")
+                .font(DS.Font.heroIcon)
+                .foregroundStyle(DS.Palette.green)
+                .padding(.top, DS.Space.xl)
 
-            VStack(spacing: 14) {
-                scoreZoneRow(
+            Text("Calibration Complete")
+                .font(DS.Font.title)
+                .padding(.top, 10)
+
+            Text("Here's how your score works:")
+                .font(DS.Font.sysSubhead)
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+
+            // Score zone cards
+            VStack(spacing: 8) {
+                scoreZoneCard(
                     color: .green,
+                    icon: "face.smiling",
                     title: "Great",
-                    description: "Score 75-100. You're in great posture."
+                    range: "75–100",
+                    detail: "You're in great posture."
                 )
-                scoreZoneRow(
+                scoreZoneCard(
                     color: .yellow,
+                    icon: "exclamationmark.triangle",
                     title: "Adjust",
-                    description: "Score 50-74. Chin may be drifting forward."
+                    range: "50–74",
+                    detail: "Chin may be drifting forward."
                 )
-                scoreZoneRow(
+                scoreZoneCard(
                     color: .orange,
+                    icon: "arrow.up.circle",
                     title: "Reset",
-                    description: "Score below 50. Time to sit up and reset."
+                    range: "Below 50",
+                    detail: "Time to sit up and reset."
                 )
             }
-            .padding(12)
-            .frame(maxWidth: .infinity)
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .padding(.top, DS.Space.xl)
 
-            Spacer(minLength: 0)
-
-            Button("Start Monitoring") {
+            // CTA button
+            Button {
                 hasCompletedOnboarding = true
+            } label: {
+                Text("Start Monitoring")
+                    .font(DS.Font.subhead)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
             }
-            .font(.subheadline.weight(.medium))
-            .frame(maxWidth: .infinity)
             .buttonStyle(.borderedProminent)
+            .padding(.top, DS.Space.xxl)
         }
     }
 
-    private func scoreZoneRow(color: Color, title: String, description: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Circle()
-                .fill(color)
-                .frame(width: 10, height: 10)
-                .padding(.top, 4)
+    private func scoreZoneCard(color: Color, icon: String, title: String, range: String, detail: String) -> some View {
+        HStack(spacing: DS.Space.lg) {
+            RoundedRectangle(cornerRadius: DS.Radius.sm)
+                .fill(color.opacity(0.8))
+                .frame(width: DS.Size.colorAccentBar)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.subheadline.weight(.medium))
-                Text(description)
-                    .font(.subheadline.weight(.medium))
+            Image(systemName: icon)
+                .font(DS.Font.icon)
+                .foregroundStyle(color)
+                .frame(width: DS.Size.iconFrame)
+
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 6) {
+                    Text(title)
+                        .font(DS.Font.subheadBold)
+                    Text(range)
+                        .font(DS.Font.sysCaption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 1)
+                        .background(.quaternary.opacity(0.5))
+                        .clipShape(Capsule())
+                }
+                Text(detail)
+                    .font(DS.Font.sysCaption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer()
+        }
+        .padding(.horizontal, DS.Space.lg)
+        .padding(.vertical, 10) // DS: one-off
+        .background(DS.Surface.card)
+        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+    }
+
+    private func featureRow(icon: String, color: Color, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 10) { // DS: one-off
+            Image(systemName: icon)
+                .font(DS.Font.callout)
+                .foregroundStyle(color)
+                .frame(width: DS.Size.featureIconFrame, alignment: .center)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(DS.Font.subhead)
+                Text(detail)
+                    .font(DS.Font.sysCaption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 

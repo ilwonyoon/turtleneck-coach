@@ -21,11 +21,12 @@ struct CameraPreviewView: View {
                         .fill(Color.black)
                     Text("Starting camera...")
                         .foregroundColor(.gray)
-                        .font(.caption)
+                        .font(DS.Font.sysCaption)
                 }
 
                 // Skeleton overlay
                 if let joints {
+                    // DS: one-off rendering constants below are overlay-specific.
                     SkeletonOverlay(joints: joints)
                 }
             }

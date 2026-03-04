@@ -189,7 +189,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .padding(20)
+        .padding(DS.Space.xxl)
         .frame(minWidth: 540, minHeight: 460)
     }
 }
