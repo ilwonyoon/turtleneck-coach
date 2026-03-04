@@ -17,6 +17,7 @@ struct MediaPipeResult: Codable {
     let rightEye: [Double]
     let cvaAngle: Double
     let confidence: Double
+    let yawLowConfidence: Bool?
     let frameNumber: Int?
     /// All 478 face landmarks as flat array [x0,y0,z0,x1,y1,z1,...] (3D with depth)
     let faceLandmarks: [Double]?
@@ -35,6 +36,7 @@ struct MediaPipeResult: Codable {
         case rightEye = "right_eye"
         case cvaAngle = "cva_angle"
         case confidence
+        case yawLowConfidence = "yaw_low_confidence"
         case frameNumber = "frame_number"
         case faceLandmarks = "face_landmarks"
     }
@@ -50,6 +52,7 @@ final class MediaPipeClient: @unchecked Sendable {
     private var pythonProcess: Process?
     private let queue = DispatchQueue(label: "mediapipe.client", qos: .userInitiated)
     private var _isConnected = false
+    private var lastReliableCVA: CGFloat?
 
     var isConnected: Bool { _isConnected }
 
@@ -225,6 +228,7 @@ final class MediaPipeClient: @unchecked Sendable {
     /// Disconnect from the server.
     func disconnect() {
         _isConnected = false
+        lastReliableCVA = nil
         if socketFD >= 0 {
             close(socketFD)
             socketFD = -1
@@ -407,11 +411,26 @@ final class MediaPipeClient: @unchecked Sendable {
         let eyeShR = dist(rEye, rSh)
         let shMid = CGPoint(x: (lSh.x + rSh.x) / 2, y: (lSh.y + rSh.y) / 2)
         let shWidth = dist(lSh, rSh)
-        let headFwdRatio = shWidth > 0 ? dist(nosePos, shMid) / shWidth : 0
+        let yawDegrees = abs(CGFloat(result.headYaw))
+        let yawLowConfidence = result.yawLowConfidence ?? (yawDegrees > 45)
+        let yawFactor = sagittalYawFactor(yawDegrees: yawDegrees)
+        let horizontalDist = abs(nosePos.x - shMid.x)
+        let sagittalForward = horizontalDist * yawFactor
+        let headFwdRatio = shWidth > 0 ? sagittalForward / shWidth : 0
 
         let tiltDx = rEar.x - lEar.x
         let tiltDy = rEar.y - lEar.y
         let headTilt = tiltDx != 0 ? atan2(tiltDy, tiltDx) * 180 / .pi : 0
+        var neckEarAngle = CGFloat(result.cvaAngle)
+        if yawLowConfidence {
+            if let lastReliableCVA {
+                neckEarAngle = lastReliableCVA
+            }
+        } else {
+            lastReliableCVA = neckEarAngle
+        }
+
+        let effectiveConfidence = yawLowConfidence ? min(result.confidence, 0.2) : result.confidence
 
         return PostureMetrics(
             earShoulderDistanceLeft: earShL,
@@ -420,11 +439,16 @@ final class MediaPipeClient: @unchecked Sendable {
             eyeShoulderDistanceRight: eyeShR,
             headForwardRatio: headFwdRatio,
             headTiltAngle: headTilt,
-            neckEarAngle: CGFloat(result.cvaAngle),
+            neckEarAngle: neckEarAngle,
             shoulderEvenness: abs(lSh.y - rSh.y),
-            earsVisible: result.confidence > 0.3,
-            landmarksDetected: result.confidence > 0.1
+            earsVisible: effectiveConfidence > 0.3,
+            landmarksDetected: effectiveConfidence > 0.1
         )
+    }
+
+    private func sagittalYawFactor(yawDegrees: CGFloat) -> CGFloat {
+        let clampedRadians = min(abs(yawDegrees) * .pi / 180, .pi / 2)
+        return max(0.0, cos(clampedRadians))
     }
 
     private func dist(_ a: CGPoint, _ b: CGPoint) -> CGFloat {

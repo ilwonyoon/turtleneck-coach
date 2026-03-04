@@ -1,48 +1,159 @@
 import SwiftUI
 
-/// Settings panel for camera position and monitoring interval.
 struct SettingsView: View {
     @ObservedObject var engine: PostureEngine
 
+    @AppStorage(NotificationService.notificationsEnabledKey)
+    private var notificationsEnabled = true
+
+    @AppStorage(NotificationService.cooldownSecondsKey)
+    private var cooldownSeconds = 60.0
+
+    @AppStorage(NotificationService.minSeverityKey)
+    private var minSeverityRawValue = Severity.moderate.rawValue
+
+    private var minSeverityBinding: Binding<Severity> {
+        Binding(
+            get: { Severity(rawValue: minSeverityRawValue) ?? .moderate },
+            set: { minSeverityRawValue = $0.rawValue }
+        )
+    }
+
+    private var baselineText: String {
+        guard let baseline = engine.calibrationData?.neckEarAngle else { return "Not calibrated" }
+        return "CVA \(Int(baseline.rounded()))°"
+    }
+
+    private var calibrationStatusText: String {
+        if engine.isCalibrating {
+            return "\(Int(engine.calibrationProgress * 100))% complete"
+        }
+        return engine.calibrationData == nil ? "No baseline saved" : "Ready"
+    }
+
+    private let valueColumnWidth: CGFloat = 220
+    private let menuWidth: CGFloat = 170
+    private let stepperValueWidth: CGFloat = 72
+
+    @ViewBuilder
+    private func valueColumn<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 8) {
+            Spacer(minLength: 0)
+            content()
+        }
+        .frame(width: valueColumnWidth, alignment: .trailing)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Settings")
-                .font(.headline)
-
-            // Camera position
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Camera Position")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-
-                Picker("Camera", selection: $engine.cameraPosition) {
-                    ForEach(CameraPosition.allCases, id: \.self) { pos in
-                        Text(pos.rawValue.capitalized).tag(pos)
+        Form {
+            Section {
+                LabeledContent("Camera Position") {
+                    valueColumn {
+                        Picker("", selection: $engine.cameraPosition) {
+                            ForEach(CameraPosition.allCases, id: \.self) { position in
+                                Text(position.rawValue.capitalized).tag(position)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: menuWidth, alignment: .trailing)
                     }
                 }
-                .pickerStyle(.segmented)
+            } header: {
+                Text("Camera")
+            } footer: {
+                Text("Choose where your camera is placed for posture analysis.")
             }
 
-            // Monitoring interval
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Check Interval: \(Int(engine.monitoringInterval))s")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+            Section {
+                LabeledContent("Enable Notifications") {
+                    valueColumn {
+                        Toggle("", isOn: $notificationsEnabled)
+                            .labelsHidden()
+                    }
+                }
 
-                Slider(value: $engine.monitoringInterval, in: 2...10, step: 1)
+                LabeledContent("Cooldown") {
+                    valueColumn {
+                        HStack(spacing: 8) {
+                            Text("\(Int(cooldownSeconds)) sec")
+                                .monospacedDigit()
+                                .frame(width: stepperValueWidth, alignment: .trailing)
+
+                            Stepper("", value: $cooldownSeconds, in: 30...300, step: 30)
+                                .labelsHidden()
+                        }
+                    }
+                }
+                .disabled(!notificationsEnabled)
+
+                LabeledContent("Minimum Severity") {
+                    valueColumn {
+                        Picker("", selection: minSeverityBinding) {
+                            Text("Mild").tag(Severity.mild)
+                            Text("Moderate").tag(Severity.moderate)
+                            Text("Severe").tag(Severity.severe)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: menuWidth, alignment: .trailing)
+                    }
+                }
+                .disabled(!notificationsEnabled)
+            } header: {
+                Text("Notifications")
+            } footer: {
+                Text("Alerts are delivered through macOS Notification Center.")
             }
 
-            Divider()
+            Section {
+                LabeledContent("Baseline") {
+                    valueColumn {
+                        Text(baselineText)
+                            .monospacedDigit()
+                            .foregroundStyle(engine.calibrationData == nil ? .secondary : .primary)
+                    }
+                }
 
-            // Reset calibration
-            Button(role: .destructive) {
-                engine.resetCalibration()
-            } label: {
-                Label("Reset Calibration", systemImage: "arrow.counterclockwise")
-                    .font(.subheadline)
+                LabeledContent("Status") {
+                    valueColumn {
+                        Text(calibrationStatusText)
+                            .monospacedDigit()
+                            .foregroundStyle(engine.isCalibrating ? .secondary : .primary)
+                    }
+                }
+
+                if engine.isCalibrating {
+                    LabeledContent("Progress") {
+                        valueColumn {
+                            ProgressView(value: engine.calibrationProgress)
+                                .frame(width: menuWidth)
+                        }
+                    }
+                }
+
+                LabeledContent("Actions") {
+                    HStack(spacing: 8) {
+                        Button(engine.calibrationData == nil ? "Start Calibration" : "Recalibrate") {
+                            engine.startCalibration()
+                        }
+                        .disabled(engine.isCalibrating)
+
+                        Button("Reset Baseline", role: .destructive) {
+                            engine.resetCalibration()
+                        }
+                        .disabled(engine.calibrationData == nil && !engine.isCalibrating)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
+            } header: {
+                Text("Calibration")
+            } footer: {
+                Text("Calibration data is stored locally on this Mac.")
             }
-            .disabled(engine.calibrationData == nil)
         }
-        .padding(12)
+        .formStyle(.grouped)
+        .padding(20)
+        .frame(minWidth: 540, minHeight: 460)
     }
 }

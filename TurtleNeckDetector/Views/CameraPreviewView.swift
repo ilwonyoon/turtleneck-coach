@@ -12,7 +12,7 @@ struct CameraPreviewView: View {
                 if let frame {
                     Image(decorative: frame, scale: 1.0)
                         .resizable()
-                        .aspectRatio(contentMode: .fill)
+                        .aspectRatio(contentMode: .fit)
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                         .scaleEffect(x: -1, y: 1)  // Mirror horizontally for selfie view

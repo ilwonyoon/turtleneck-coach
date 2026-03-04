@@ -20,7 +20,6 @@ final class PostureEngine: ObservableObject {
             UserDefaults.standard.set(cameraPosition.rawValue, forKey: "cameraPosition")
         }
     }
-    @Published var monitoringInterval: TimeInterval = 3.0
     @Published var goodPostureStart: Date?
     @Published var lastError: String?
     @Published var currentFrame: CGImage?
@@ -54,23 +53,10 @@ final class PostureEngine: ObservableObject {
         return Date().timeIntervalSince(start)
     }
 
-    enum IconState {
-        case idle, good, mild, moderate, severe
-    }
-
-    var menuBarIconState: IconState {
-        guard isMonitoring, calibrationData != nil else { return .idle }
-        switch postureState.severity {
-        case .good: return .good
-        case .mild: return .mild
-        case .moderate: return .moderate
-        case .severe: return .severe
-        }
-    }
-
     // MARK: - Camera (public for session access if needed)
 
     let camera = CameraManager()
+    let dataStore = PostureDataStore()
 
     // MARK: - Private
 
@@ -89,10 +75,21 @@ final class PostureEngine: ObservableObject {
 
     // Menu bar held severity — only changes after sustained threshold
     @Published private(set) var menuBarSeverity: Severity = .good
+    @Published private(set) var menuBarIsIdle = true
     private var pendingSeverity: Severity?
     private var pendingSeverityStart: Date?
+    private var pendingTransitionStepCount = 0
+    private var lastSuccessfulDetectionAt: Date?
+    private let noDetectionIdleTimeout: TimeInterval = 10.0
+    private let worsenInitialHold: TimeInterval = 1.5
+    private let worsenFollowUpHold: TimeInterval = 0.8
+    private let improveInitialHold: TimeInterval = 4.0
+    private let improveFollowUpHold: TimeInterval = 1.5
+    private let cvaBoundaryBuffer: CGFloat = 2.0
+    private let cvaTransitionCrossover: CGFloat = 3.0
 
     var menuBarStatusText: String {
+        guard !menuBarIsIdle else { return "—" }
         switch menuBarSeverity {
         case .good: return "Good"
         case .mild: return "Mild"
@@ -102,6 +99,7 @@ final class PostureEngine: ObservableObject {
     }
 
     var menuBarStatusColor: String {
+        guard !menuBarIsIdle else { return "gray" }
         switch menuBarSeverity {
         case .good: return "green"
         case .mild: return "yellow"
@@ -119,6 +117,20 @@ final class PostureEngine: ObservableObject {
     // Throttle UI updates to ~15fps to avoid overwhelming SwiftUI
     private var lastUIUpdate: Date = .distantPast
     private let uiUpdateInterval: TimeInterval = 1.0 / 15.0
+
+    // Session tracking + persistence
+    private let periodicSessionSaveInterval: TimeInterval = 300
+    private var sessionSaveTimer: Timer?
+    private var activeSessionID: UUID?
+    private var sessionStartDate: Date?
+    private var sessionLastTick: Date?
+    private var sessionTotalSeconds: TimeInterval = 0
+    private var sessionGoodPostureSeconds: TimeInterval = 0
+    private var sessionScoreSum: Double = 0
+    private var sessionScoreSampleCount = 0
+    private var sessionCVASum: Double = 0
+    private var sessionCVASampleCount = 0
+    private var sessionSlouchEventCount = 0
 
     // MARK: - Init
 
@@ -185,6 +197,8 @@ final class PostureEngine: ObservableObject {
         guard !isMonitoring else { return }
         isMonitoring = true
         lastError = nil
+        resetMenuBarForIdle()
+        startSessionTracking()
         engineLog("startMonitoring called")
 
         Task {
@@ -211,14 +225,18 @@ final class PostureEngine: ObservableObject {
             } catch CameraManager.CameraError.notAuthorized {
                 lastError = "Camera access denied. Enable in System Settings > Privacy."
                 isMonitoring = false
+                resetSessionTracking()
             } catch {
                 lastError = "Camera error: \(error.localizedDescription)"
                 isMonitoring = false
+                resetSessionTracking()
             }
         }
     }
 
     func stopMonitoring() {
+        persistSessionSnapshot(endDate: Date())
+        resetSessionTracking()
         isMonitoring = false
         analysisTimer?.invalidate()
         analysisTimer = nil
@@ -229,6 +247,7 @@ final class PostureEngine: ObservableObject {
         currentJoints = nil
         bodyDetected = false
         smoothedCVA = nil
+        resetMenuBarForIdle()
     }
 
     func toggleMonitoring() {
@@ -239,13 +258,15 @@ final class PostureEngine: ObservableObject {
         }
     }
 
+    func currentSessionSnapshot() -> SessionRecord? {
+        buildSessionRecord(endDate: Date())
+    }
+
     private func scheduleAnalysis() {
         analysisTimer?.invalidate()
         guard isMonitoring else { return }
 
-        // Always analyze frequently for responsive skeleton/score updates
-        // Face detection is lightweight enough for ~3fps analysis
-        let interval: TimeInterval = isCalibrating ? 0.2 : 0.33
+        let interval = isCalibrating ? 0.2 : 0.33
         analysisTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.analyzeLatestFrame()
@@ -258,8 +279,12 @@ final class PostureEngine: ObservableObject {
     // MARK: - Analyze
 
     private func analyzeLatestFrame() {
+        let now = Date()
+        updateSessionTrackingClock(now: now)
+
         guard let image = grabPendingFrame() else {
             if Int.random(in: 0..<30) == 0 { engineLog("no pending frame") }
+            updateMenuBarForNoDetection(at: now)
             return
         }
         if Int.random(in: 0..<10) == 0 { engineLog("analyzing frame \(image.width)x\(image.height)") }
@@ -296,11 +321,14 @@ final class PostureEngine: ObservableObject {
         guard let result = detectionResult else {
             bodyDetected = false
             currentJoints = nil
+            updateMenuBarForNoDetection(at: now)
             return
         }
 
         bodyDetected = true
         currentJoints = result.joints
+        lastSuccessfulDetectionAt = now
+        menuBarIsIdle = false
         if let mesh = result.joints.faceMesh {
             engineLog("faceMesh present: \(mesh.landmarks.count) landmarks, \(mesh.depthValues.count) depths")
         } else {
@@ -364,6 +392,7 @@ final class PostureEngine: ObservableObject {
         // Normal monitoring
         if let baseline = calibrationData {
             // Full evaluation against calibrated baseline
+            let previousSeverity = postureState.severity
             let newState = PostureAnalyzer.evaluate(
                 metrics: metrics,
                 baseline: baseline,
@@ -371,6 +400,7 @@ final class PostureEngine: ObservableObject {
                 cameraPosition: cameraPosition
             )
             postureState = newState
+            trackSlouchTransition(from: previousSeverity, to: newState.severity)
 
             // Track good posture duration — based on severity, not isTurtleNeck
             if newState.severity == .good {
@@ -393,6 +423,7 @@ final class PostureEngine: ObservableObject {
         } else {
             // No calibration yet - still show live CVA and severity from detection
             let severity = PostureAnalyzer.classifySeverity(metrics.neckEarAngle)
+            let previousSeverity = postureState.severity
             postureState = PostureState(
                 badPostureStart: nil,
                 isTurtleNeck: false,
@@ -402,12 +433,13 @@ final class PostureEngine: ObservableObject {
                 currentCVA: metrics.neckEarAngle,
                 baselineCVA: 0
             )
+            trackSlouchTransition(from: previousSeverity, to: severity)
         }
 
         // Record score for rolling average (works with or without calibration)
         let score = PostureAnalyzer.cvaToScore(postureState.currentCVA)
-        let now2 = Date()
-        scoreHistory.append((date: now2, score: score))
+        scoreHistory.append((date: now, score: score))
+        recordSessionSample(score: score, cva: postureState.currentCVA)
         // Debug: log smoothed CVA, score, and severity every 3rd frame
         if Int.random(in: 0..<3) == 0 {
             let source = usingMediaPipe ? "MP" : "Vision"
@@ -415,42 +447,259 @@ final class PostureEngine: ObservableObject {
                 source, rawCVA, smoothed, score, postureState.severity.rawValue, menuBarSeverity.rawValue, lastMediaPipeHeadPitch))
         }
         // Prune entries older than 2 minutes
-        let pruneDate = now2.addingTimeInterval(-120)
+        let pruneDate = now.addingTimeInterval(-120)
         scoreHistory.removeAll { $0.date < pruneDate }
 
         // Update menu bar held severity with hold timer
-        updateMenuBarSeverity(newSeverity: postureState.severity, now: now2)
+        updateMenuBarSeverity(newSeverity: postureState.severity, currentCVA: postureState.currentCVA, now: now)
 
         lastError = nil
     }
 
+    // MARK: - Session Tracking
+
+    private func startSessionTracking() {
+        resetSessionTracking()
+        let now = Date()
+        activeSessionID = UUID()
+        sessionStartDate = now
+        sessionLastTick = now
+        sessionTotalSeconds = 0
+        sessionGoodPostureSeconds = 0
+        sessionScoreSum = 0
+        sessionScoreSampleCount = 0
+        sessionCVASum = 0
+        sessionCVASampleCount = 0
+        sessionSlouchEventCount = 0
+
+        sessionSaveTimer = Timer.scheduledTimer(withTimeInterval: periodicSessionSaveInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.persistSessionSnapshot(endDate: Date())
+            }
+        }
+    }
+
+    private func resetSessionTracking() {
+        sessionSaveTimer?.invalidate()
+        sessionSaveTimer = nil
+        activeSessionID = nil
+        sessionStartDate = nil
+        sessionLastTick = nil
+        sessionTotalSeconds = 0
+        sessionGoodPostureSeconds = 0
+        sessionScoreSum = 0
+        sessionScoreSampleCount = 0
+        sessionCVASum = 0
+        sessionCVASampleCount = 0
+        sessionSlouchEventCount = 0
+    }
+
+    private func updateSessionTrackingClock(now: Date) {
+        guard activeSessionID != nil else { return }
+        guard let lastTick = sessionLastTick else {
+            sessionLastTick = now
+            return
+        }
+
+        let delta = max(0, now.timeIntervalSince(lastTick))
+        sessionTotalSeconds += delta
+        if shouldCountAsGoodPosture {
+            sessionGoodPostureSeconds += delta
+        }
+        sessionLastTick = now
+    }
+
+    private var shouldCountAsGoodPosture: Bool {
+        calibrationData != nil &&
+        !isCalibrating &&
+        bodyDetected &&
+        postureState.severity == .good
+    }
+
+    private func recordSessionSample(score: Int, cva: CGFloat) {
+        guard activeSessionID != nil else { return }
+        sessionScoreSum += Double(score)
+        sessionScoreSampleCount += 1
+        sessionCVASum += Double(cva)
+        sessionCVASampleCount += 1
+    }
+
+    private func trackSlouchTransition(from previous: Severity, to current: Severity) {
+        guard activeSessionID != nil else { return }
+        guard previous != current else { return }
+        if current == .moderate || current == .severe {
+            sessionSlouchEventCount += 1
+        }
+    }
+
+    private func persistSessionSnapshot(endDate: Date) {
+        updateSessionTrackingClock(now: endDate)
+        guard let record = buildSessionRecord(endDate: endDate) else { return }
+        dataStore.saveSession(record)
+    }
+
+    private func buildSessionRecord(endDate: Date) -> SessionRecord? {
+        guard let id = activeSessionID, let startDate = sessionStartDate else { return nil }
+
+        let wallClockDuration = max(0, endDate.timeIntervalSince(startDate))
+        let duration = max(sessionTotalSeconds, wallClockDuration)
+        guard duration > 0 else { return nil }
+
+        let averageScore = sessionScoreSampleCount > 0
+            ? sessionScoreSum / Double(sessionScoreSampleCount)
+            : Double(postureScore)
+
+        let averageCVA = sessionCVASampleCount > 0
+            ? sessionCVASum / Double(sessionCVASampleCount)
+            : Double(postureState.currentCVA)
+
+        let clampedGoodSeconds = min(duration, max(0, sessionGoodPostureSeconds))
+        let goodPosturePercent = duration > 0 ? (clampedGoodSeconds / duration) * 100 : 0
+
+        return SessionRecord(
+            id: id,
+            startDate: startDate,
+            endDate: endDate,
+            duration: duration,
+            averageScore: max(0, min(100, averageScore)),
+            goodPosturePercent: max(0, min(100, goodPosturePercent)),
+            averageCVA: max(0, averageCVA),
+            slouchEventCount: max(0, sessionSlouchEventCount)
+        )
+    }
+
     // MARK: - Menu Bar Severity Hold Timer
 
-    /// Updates the held menu bar severity with asymmetric hold times:
-    /// - Worsening (good→bad): 3 seconds hold
-    /// - Improving (bad→good): 10 seconds hold
-    private func updateMenuBarSeverity(newSeverity: Severity, now: Date) {
+    /// Updates the held menu bar severity with asymmetric and stepped hold times:
+    /// - Worsening: first change in ~1.5s, then shorter follow-up steps
+    /// - Improving: first change in ~4.0s, then eased follow-up steps
+    private func updateMenuBarSeverity(newSeverity: Severity, currentCVA: CGFloat, now: Date) {
+        menuBarIsIdle = false
+
         guard newSeverity != menuBarSeverity else {
             // Current severity matches — clear any pending change
             pendingSeverity = nil
             pendingSeverityStart = nil
+            pendingTransitionStepCount = 0
+            return
+        }
+
+        guard shouldStartTransition(from: menuBarSeverity, toward: newSeverity, cva: currentCVA) else {
+            pendingSeverity = nil
+            pendingSeverityStart = nil
+            pendingTransitionStepCount = 0
+            return
+        }
+
+        guard pendingSeverity == newSeverity else {
+            // New pending target — keep elapsed time if direction didn't reverse.
+            if let existingPending = pendingSeverity {
+                let existingDirectionIsWorsening = existingPending > menuBarSeverity
+                let newDirectionIsWorsening = newSeverity > menuBarSeverity
+                if existingDirectionIsWorsening == newDirectionIsWorsening {
+                    pendingSeverity = newSeverity
+                    if pendingSeverityStart == nil {
+                        pendingSeverityStart = now
+                    }
+                    return
+                }
+            }
+
+            pendingSeverity = newSeverity
+            pendingSeverityStart = now
+            pendingTransitionStepCount = 0
+            return
+        }
+
+        guard let start = pendingSeverityStart else {
+            pendingSeverityStart = now
             return
         }
 
         let isWorsening = newSeverity > menuBarSeverity
-        let holdTime: TimeInterval = isWorsening ? 3.0 : 10.0
+        let holdTime = holdDuration(isWorsening: isWorsening, stepCount: pendingTransitionStepCount)
+        guard now.timeIntervalSince(start) >= holdTime else { return }
 
-        if pendingSeverity == newSeverity, let start = pendingSeverityStart {
-            // Same pending severity — check if hold time elapsed
-            if now.timeIntervalSince(start) >= holdTime {
-                menuBarSeverity = newSeverity
-                pendingSeverity = nil
-                pendingSeverityStart = nil
-            }
+        let steppedSeverity = nextSeverityStep(from: menuBarSeverity, toward: newSeverity)
+        menuBarSeverity = steppedSeverity
+
+        if steppedSeverity == newSeverity {
+            pendingSeverity = nil
+            pendingSeverityStart = nil
+            pendingTransitionStepCount = 0
         } else {
-            // New pending severity — start the timer
-            pendingSeverity = newSeverity
             pendingSeverityStart = now
+            pendingTransitionStepCount += 1
+        }
+    }
+
+    private func updateMenuBarForNoDetection(at now: Date) {
+        guard let lastSuccessfulDetectionAt else { return }
+        guard now.timeIntervalSince(lastSuccessfulDetectionAt) >= noDetectionIdleTimeout else { return }
+        resetMenuBarForIdle()
+    }
+
+    private func resetMenuBarForIdle() {
+        menuBarSeverity = .good
+        menuBarIsIdle = true
+        pendingSeverity = nil
+        pendingSeverityStart = nil
+        pendingTransitionStepCount = 0
+        lastSuccessfulDetectionAt = nil
+    }
+
+    private func holdDuration(isWorsening: Bool, stepCount: Int) -> TimeInterval {
+        if isWorsening {
+            return stepCount == 0 ? worsenInitialHold : worsenFollowUpHold
+        }
+        return stepCount == 0 ? improveInitialHold : improveFollowUpHold
+    }
+
+    private func shouldStartTransition(from current: Severity, toward target: Severity, cva: CGFloat) -> Bool {
+        guard let threshold = transitionThreshold(from: current, toward: target) else { return true }
+        if abs(cva - threshold) <= cvaBoundaryBuffer { return false }
+        if target > current {
+            return cva <= threshold - cvaTransitionCrossover
+        }
+        return cva >= threshold + cvaTransitionCrossover
+    }
+
+    private func transitionThreshold(from current: Severity, toward target: Severity) -> CGFloat? {
+        guard current != target else { return nil }
+
+        if target > current {
+            switch current {
+            case .good: return PostureAnalyzer.cvaGood
+            case .mild: return PostureAnalyzer.cvaMild
+            case .moderate: return PostureAnalyzer.cvaModerate
+            case .severe: return nil
+            }
+        }
+
+        switch current {
+        case .good: return nil
+        case .mild: return PostureAnalyzer.cvaGood
+        case .moderate: return PostureAnalyzer.cvaMild
+        case .severe: return PostureAnalyzer.cvaModerate
+        }
+    }
+
+    private func nextSeverityStep(from current: Severity, toward target: Severity) -> Severity {
+        guard current != target else { return current }
+        if target > current {
+            switch current {
+            case .good: return .mild
+            case .mild: return .moderate
+            case .moderate: return .severe
+            case .severe: return .severe
+            }
+        }
+
+        switch current {
+        case .good: return .good
+        case .mild: return .good
+        case .moderate: return .mild
+        case .severe: return .moderate
         }
     }
 

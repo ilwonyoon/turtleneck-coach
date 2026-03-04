@@ -101,6 +101,15 @@ POSE_NOSE = 0
 POSE_LEFT_EYE = 2
 POSE_RIGHT_EYE = 5
 
+MAX_RELIABLE_YAW_DEG = 45.0
+
+
+def sagittal_yaw_factor(head_yaw: float) -> float:
+    """Return cos(yaw) factor for sagittal-plane projection."""
+    yaw_radians = math.radians(abs(head_yaw))
+    yaw_radians = min(yaw_radians, math.pi / 2)
+    return max(0.0, math.cos(yaw_radians))
+
 
 def get_head_pose(face_landmarks, image_width: int, image_height: int):
     """Compute head pitch/yaw/roll directly from 3D face mesh landmarks.
@@ -154,13 +163,16 @@ def get_head_pose(face_landmarks, image_width: int, image_height: int):
     }
 
 
-def compute_geometric_cva(ear_mid, shoulder_mid):
+def compute_geometric_cva(ear_mid, shoulder_mid, head_yaw: float = 0.0):
     """Compute CVA from ear-to-shoulder geometry (2D projected angle)."""
-    dx = abs(ear_mid[0] - shoulder_mid[0])
+    horizontal_dist = abs(ear_mid[0] - shoulder_mid[0])
     dy = shoulder_mid[1] - ear_mid[1]  # positive = ear above shoulder (good)
     if dy <= 1:
         return 10.0
-    angle = math.degrees(math.atan2(dy, dx))
+
+    # Project horizontal displacement onto sagittal plane to compensate yaw perspective.
+    sagittal_forward = horizontal_dist * sagittal_yaw_factor(head_yaw)
+    angle = math.degrees(math.atan2(dy, max(1e-6, sagittal_forward)))
     return max(10.0, min(90.0, angle))
 
 
@@ -182,35 +194,21 @@ def is_front_facing(ear_left, ear_right, shoulder_left, shoulder_right):
 
 
 def compute_combined_cva(geometric_cva: float, head_pitch: float,
-                         head_yaw: float = 0.0,
                          front_facing: bool = True) -> float:
     """Combine geometric CVA and head pitch into a single CVA estimate.
 
     head_pitch: normalized forward tilt (0 = straight, 20 = moderate forward).
-    head_yaw: horizontal rotation in degrees (0 = facing camera).
     Maps to CVA-like scale: tilt 0 -> CVA ~60, tilt 15 -> CVA ~38, tilt 30 -> CVA ~15.
 
     For front-facing cameras, geometric CVA is unreliable (always ~80-90)
     so we rely on head_pitch exclusively.
 
-    Yaw penalty: turning head sideways is NOT good posture — penalize CVA.
-    Smooth quadratic ramp from 5° to 30° (no hard threshold).
     """
     # 3D-based pitch: magnitude indicates forward/backward tilt
     # Sign depends on camera angle, so use absolute value
     # Dead zone: < 5° is normal upright posture variation
     effective_tilt = max(0.0, abs(head_pitch) - 5.0)
     pitch_based_cva = max(15.0, min(65.0, 62.0 - effective_tilt * 2.5))
-
-    # Yaw penalty: turning head sideways should lower CVA (worse posture)
-    # Smooth quadratic ramp: 0 at 5°, gradual increase, full effect at 30°+
-    # Avoids discrete jumps from hard threshold at 10°
-    abs_yaw = abs(head_yaw)
-    yaw_factor = max(0.0, (abs_yaw - 5.0) / 25.0)  # 0 at 5°, 1 at 30°
-    yaw_factor = min(1.0, yaw_factor * yaw_factor)   # quadratic for smoothness
-    yaw_penalty = yaw_factor * 20.0  # max 20° CVA drop
-    if yaw_penalty > 0.01:
-        pitch_based_cva = max(15.0, pitch_based_cva - yaw_penalty)
 
     if front_facing:
         return pitch_based_cva
@@ -258,6 +256,7 @@ class PoseServer:
         self.last_valid_yaw = 0.0
         self.face_lost_frames = 0
         self.max_face_hold_frames = 3  # hold ~1s at 3fps
+        self.last_good_cva: float | None = None
 
     def process_frame(self, jpeg_data: bytes) -> dict:
         """Process a JPEG frame and return pose analysis results."""
@@ -293,6 +292,7 @@ class PoseServer:
             "confidence": 0.0,
             "frame_number": self.frame_count,
             "face_landmarks": [],  # all 478 face landmarks as flat [x0,y0,z0,x1,y1,z1,...]
+            "yaw_low_confidence": False,
         }
 
         has_face = len(face_result.face_landmarks) > 0
@@ -380,24 +380,40 @@ class PoseServer:
             # --- CVA calculation ---
             ear_mid_px = [ear_mid[0] * w, ear_mid[1] * h]
             sh_mid_px = [sh_mid[0] * w, sh_mid[1] * h]
-            geometric_cva = compute_geometric_cva(ear_mid_px, sh_mid_px)
+            geometric_cva = compute_geometric_cva(ear_mid_px, sh_mid_px, head_yaw=head_yaw)
 
             front = is_front_facing(l_ear, r_ear, l_sh, r_sh)
 
             if has_face and head_pitch != 0.0:
-                cva = compute_combined_cva(geometric_cva, head_pitch,
-                                           head_yaw=head_yaw, front_facing=front)
+                cva = compute_combined_cva(geometric_cva, head_pitch, front_facing=front)
             else:
                 cva = geometric_cva
 
+            yaw_low_confidence = abs(head_yaw) > MAX_RELIABLE_YAW_DEG
+            response["yaw_low_confidence"] = yaw_low_confidence
+            if yaw_low_confidence:
+                response["confidence"] = round(min(response["confidence"], 0.2), 3)
+                if self.last_good_cva is not None:
+                    cva = self.last_good_cva
+
             cva = self.filter_cva(cva, now)
             response["cva_angle"] = round(cva, 2)
+            if not yaw_low_confidence:
+                self.last_good_cva = cva
         elif has_face:
             # Face only, no pose — use pitch-based CVA estimate
             pitch_cva = max(15.0, min(70.0, 65.0 - head_pitch * 1.33))
+            yaw_low_confidence = abs(head_yaw) > MAX_RELIABLE_YAW_DEG
+            response["yaw_low_confidence"] = yaw_low_confidence
+            if yaw_low_confidence and self.last_good_cva is not None:
+                pitch_cva = self.last_good_cva
             pitch_cva = self.filter_cva(pitch_cva, now)
             response["cva_angle"] = round(pitch_cva, 2)
-            response["confidence"] = 0.5
+            if yaw_low_confidence:
+                response["confidence"] = 0.2
+            else:
+                response["confidence"] = 0.5
+                self.last_good_cva = pitch_cva
 
         return response
 

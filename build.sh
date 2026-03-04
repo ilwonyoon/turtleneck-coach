@@ -40,6 +40,7 @@ swiftc \
   TurtleNeckDetector/Core/CameraManager.swift \
   TurtleNeckDetector/Core/MediaPipeClient.swift \
   TurtleNeckDetector/Core/PostureAnalyzer.swift \
+  TurtleNeckDetector/Core/PostureDataStore.swift \
   TurtleNeckDetector/Core/PostureEngine.swift \
   TurtleNeckDetector/Core/VisionPoseDetector.swift \
   TurtleNeckDetector/Models/CalibrationData.swift \
@@ -51,12 +52,15 @@ swiftc \
   TurtleNeckDetector/TurtleNeckDetectorApp.swift \
   TurtleNeckDetector/Views/CalibrationView.swift \
   TurtleNeckDetector/Views/CameraPreviewView.swift \
+  TurtleNeckDetector/Views/DashboardView.swift \
+  TurtleNeckDetector/Views/DashboardWindowController.swift \
   TurtleNeckDetector/Views/MenuBarView.swift \
   TurtleNeckDetector/Views/PostureScoreView.swift \
   TurtleNeckDetector/Views/SettingsView.swift \
+  TurtleNeckDetector/Views/SettingsWindowController.swift \
   -o TurtleNeckDetector.app/Contents/MacOS/TurtleNeckDetector \
   -target arm64-apple-macos14 \
-  -framework SwiftUI -framework Vision -framework AVFoundation -framework UserNotifications -framework AppKit -framework Network \
+  -framework SwiftUI -framework Vision -framework AVFoundation -framework UserNotifications -framework AppKit -framework Network -framework Charts \
   -parse-as-library
 
 echo "Signing..."

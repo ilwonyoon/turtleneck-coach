@@ -139,6 +139,7 @@ struct DetectionResult {
 final class VisionPoseDetector {
 
     private static let earVisibilityThreshold: Float = 0.5
+    private static let maxReliableYawDegrees: CGFloat = 45
 
     init() {
         // Write startup marker to confirm logging works
@@ -157,6 +158,7 @@ final class VisionPoseDetector {
     private var recentFaceHeight: [CGFloat] = []
     private var recentPitch: [CGFloat] = []
     private let smoothingWindow = 5
+    private var lastReliableCVA: CGFloat?
     private var debugCounter = 0
     private func log(_ msg: String) {
         let line = "\(Date()): \(msg)\n"
@@ -181,12 +183,18 @@ final class VisionPoseDetector {
 
         let handler = VNImageRequestHandler(cgImage: image, options: [:])
         try handler.perform([body2DReq, faceReq])
+        let faceObservation = faceReq.results?.first
 
         // Priority 1: 2D body pose (stable neckEarAngle from ear-neck geometry)
         let bodyResults = body2DReq.results ?? []
         if debugCounter % 10 == 0 { log("[BODY] results=\(bodyResults.count)") }
         if let bodyObs = bodyResults.first,
-           let bodyResult = try? extractBodyResult(from: bodyObs, imageWidth: image.width, imageHeight: image.height) {
+           let bodyResult = try? extractBodyResult(
+            from: bodyObs,
+            imageWidth: image.width,
+            imageHeight: image.height,
+            faceYawRadians: yawRadians(from: faceObservation)
+           ) {
             if debugCounter % 10 == 0 { log("[PATH] 2D body pose → CVA=\(String(format: "%.1f", bodyResult.metrics.neckEarAngle))") }
             debugCounter += 1
             // Clear face smoothing buffers so stale face data doesn't pollute
@@ -198,7 +206,7 @@ final class VisionPoseDetector {
         }
 
         // Priority 2: Face landmarks fallback
-        if let faceObs = faceReq.results?.first {
+        if let faceObs = faceObservation {
             if let quality = faceObs.faceCaptureQuality, quality < 0.3 {
                 if debugCounter % 10 == 0 { log("[PATH] Face rejected (quality=\(String(format: "%.2f", quality)))") }
                 debugCounter += 1
@@ -229,13 +237,16 @@ final class VisionPoseDetector {
         recentFaceY.removeAll()
         recentFaceHeight.removeAll()
         recentPitch.removeAll()
+        lastReliableCVA = nil
     }
 
     // MARK: - 2D Body Pose Detection
 
     private func extractBodyResult(
         from observation: VNHumanBodyPoseObservation,
-        imageWidth: Int, imageHeight: Int
+        imageWidth: Int,
+        imageHeight: Int,
+        faceYawRadians: CGFloat?
     ) throws -> DetectionResult? {
         let w = CGFloat(imageWidth)
         let h = CGFloat(imageHeight)
@@ -263,6 +274,10 @@ final class VisionPoseDetector {
 
         let earsVisible = lEarP.confidence > Self.earVisibilityThreshold
             && rEarP.confidence > Self.earVisibilityThreshold
+        let yawDegrees = abs((faceYawRadians ?? 0) * 180 / .pi)
+        let yawReliable = faceYawRadians == nil || yawDegrees <= Self.maxReliableYawDegrees
+        let yawFactor = sagittalYawFactor(yawRadians: faceYawRadians)
+        let confidenceScale: Float = yawReliable ? 1.0 : 0.25
 
         // Pixel coords (top-left origin)
         let nose = CGPoint(x: noseP.location.x * w, y: (1 - noseP.location.y) * h)
@@ -283,8 +298,8 @@ final class VisionPoseDetector {
             rightEye: CGPoint(x: rEyeP.location.x, y: 1 - rEyeP.location.y),
             leftShoulder: CGPoint(x: lShP.location.x, y: 1 - lShP.location.y),
             rightShoulder: CGPoint(x: rShP.location.x, y: 1 - rShP.location.y),
-            leftEarConfidence: lEarP.confidence,
-            rightEarConfidence: rEarP.confidence
+            leftEarConfidence: lEarP.confidence * confidenceScale,
+            rightEarConfidence: rEarP.confidence * confidenceScale
         )
 
         let earShL = dist(lEar, lSh), earShR = dist(rEar, rSh)
@@ -301,11 +316,20 @@ final class VisionPoseDetector {
         let earMidX = (lEar.x + rEar.x) / 2
         let vertical = neck.y - earMidY
         let horizontal = abs(earMidX - neck.x)
-        let neckEarAngle: CGFloat = vertical > 1 ? min(90, max(10, atan2(vertical, horizontal) * 180 / .pi)) : 10
+        let sagittalForward = horizontal * yawFactor
+        var neckEarAngle: CGFloat = vertical > 1 ? min(90, max(10, atan2(vertical, max(1e-6, sagittalForward)) * 180 / .pi)) : 10
+
+        if !yawReliable {
+            if let lastReliableCVA {
+                neckEarAngle = lastReliableCVA
+            }
+        } else {
+            lastReliableCVA = neckEarAngle
+        }
 
         if debugCounter % 5 == 0 {
-            log(String(format: "[BODY-CVA] earMid=(%.1f,%.1f) neck=(%.1f,%.1f) vert=%.1f horiz=%.1f → CVA=%.1f earConf=%.2f/%.2f",
-                earMidX, earMidY, neck.x, neck.y, vertical, horizontal, neckEarAngle,
+            log(String(format: "[BODY-CVA] earMid=(%.1f,%.1f) neck=(%.1f,%.1f) vert=%.1f horiz=%.1f sag=%.1f yaw=%.1f° → CVA=%.1f earConf=%.2f/%.2f",
+                earMidX, earMidY, neck.x, neck.y, vertical, horizontal, sagittalForward, yawDegrees, neckEarAngle,
                 lEarP.confidence, rEarP.confidence))
         }
 
@@ -331,7 +355,11 @@ final class VisionPoseDetector {
         let faceYNorm = bbox.origin.y + bbox.height / 2   // center Y in Vision coords
         let faceHeightNorm = bbox.height
         let pitch = CGFloat(face.pitch?.floatValue ?? 0)   // radians
+        let yaw = CGFloat(face.yaw?.floatValue ?? 0)
         let roll = CGFloat(face.roll?.floatValue ?? 0)
+        let yawDegrees = abs(yaw * 180 / .pi)
+        let yawReliable = yawDegrees <= Self.maxReliableYawDegrees
+        let yawFactor = sagittalYawFactor(yawRadians: yaw)
 
         // Use raw per-frame values — no smoothing buffer.
         // PostureEngine's EMA already handles smoothing; double-smoothing here
@@ -421,7 +449,7 @@ final class VisionPoseDetector {
             // (within 0.06 Y), gently nudge baseline toward current readings.
             // This handles systematic offset between body-pose-time and face-only-time.
             let yDiff = abs(smoothY - baseY)
-            if yDiff < 0.06 {
+            if yDiff < 0.06 && yawReliable {
                 calibratedFaceY = baseY * 0.95 + smoothY * 0.05
                 calibratedFaceHeight = baseH * 0.95 + smoothHeight * 0.05
                 if smoothPitch != 0 {
@@ -434,13 +462,13 @@ final class VisionPoseDetector {
 
             // Signal 1: Face Y drop (head moves forward & down)
             // Dead zone: 0.04 absorbs natural face bbox variance
-            let yDrop = adjBaseY - smoothY  // positive = dropped
+            let yDrop = (adjBaseY - smoothY) * yawFactor  // positive = dropped
             let yContrib = yDrop > 0.04 ? (yDrop - 0.04) * 4.0 : 0.0
             forwardScore += yContrib
 
             // Signal 2: Face getting bigger (leaning toward camera)
             // Dead zone: ignore < 8% size change
-            let sizeIncrease = (smoothHeight - adjBaseH) / adjBaseH
+            let sizeIncrease = ((smoothHeight - adjBaseH) / adjBaseH) * yawFactor
             let sizeContrib = sizeIncrease > 0.08 ? (sizeIncrease - 0.08) * 3.0 : 0.0
             forwardScore += sizeContrib
 
@@ -450,7 +478,7 @@ final class VisionPoseDetector {
             forwardScore += pitchContrib
 
             // Signal 4: Face Y rising while pitch drops = chin-poke posture
-            let yRise = smoothY - adjBaseY
+            let yRise = (smoothY - adjBaseY) * yawFactor
             if yRise > 0.04 && smoothPitch < adjBaseP - 0.08 {
                 forwardScore += yRise * 3.0
             }
@@ -472,7 +500,7 @@ final class VisionPoseDetector {
         //   0.20 → 51° (mild, score ~72)
         //   0.40 → 37° (moderate, score ~46)
         //   0.60+→ 20° (severe, score ~14)
-        let estimatedCVA: CGFloat
+        var estimatedCVA: CGFloat
         if forwardScore < 0.02 {
             estimatedCVA = 65.0
         } else {
@@ -480,7 +508,16 @@ final class VisionPoseDetector {
             estimatedCVA = max(20, min(65, 65.0 - drop))
         }
 
+        if !yawReliable {
+            if let lastReliableCVA {
+                estimatedCVA = lastReliableCVA
+            }
+        } else {
+            lastReliableCVA = estimatedCVA
+        }
+
         // Normalized joints for skeleton
+        let faceConfidence: Float = yawReliable ? 0.5 : 0.1
         let joints = DetectedJoints(
             nose: CGPoint(x: nosePos.x / w, y: nosePos.y / h),
             neck: CGPoint(x: neckPos.x / w, y: neckPos.y / h),
@@ -490,8 +527,8 @@ final class VisionPoseDetector {
             rightEye: CGPoint(x: rightEyeCenter.x / w, y: rightEyeCenter.y / h),
             leftShoulder: CGPoint(x: leftShoulderPos.x / w, y: leftShoulderPos.y / h),
             rightShoulder: CGPoint(x: rightShoulderPos.x / w, y: rightShoulderPos.y / h),
-            leftEarConfidence: 0.5,
-            rightEarConfidence: 0.5
+            leftEarConfidence: faceConfidence,
+            rightEarConfidence: faceConfidence
         )
 
         // Compute metrics
@@ -512,6 +549,18 @@ final class VisionPoseDetector {
         )
 
         return DetectionResult(metrics: metrics, joints: joints)
+    }
+
+    private func yawRadians(from faceObservation: VNFaceObservation?) -> CGFloat? {
+        guard let faceObservation else { return nil }
+        guard let yawValue = faceObservation.yaw?.doubleValue else { return nil }
+        return CGFloat(yawValue)
+    }
+
+    private func sagittalYawFactor(yawRadians: CGFloat?) -> CGFloat {
+        guard let yawRadians else { return 1.0 }
+        let clamped = min(abs(yawRadians), .pi / 2)
+        return max(0.0, cos(clamped))
     }
 
     private func dist(_ a: CGPoint, _ b: CGPoint) -> CGFloat {

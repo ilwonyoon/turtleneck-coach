@@ -53,5 +53,6 @@ struct PostureScoreView: View {
 
             Spacer()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

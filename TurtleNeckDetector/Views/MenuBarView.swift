@@ -3,7 +3,8 @@ import SwiftUI
 /// Main popover content shown from the menu bar icon.
 struct MenuBarView: View {
     @ObservedObject var engine: PostureEngine
-    @State private var showSettings = false
+    // Settings now opens in separate window via SettingsWindowController
+    @State private var showDashboard = false
     @State private var refreshTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var showCalibrationToast = false
     @State private var lastCalibrationSuccess: Bool?
@@ -17,6 +18,11 @@ struct MenuBarView: View {
         case .moderate: return .orange
         case .severe: return .red
         }
+    }
+
+    private var cameraAspectRatio: CGFloat {
+        guard let frame = engine.currentFrame else { return 4.0 / 3.0 }
+        return CGFloat(frame.width) / CGFloat(frame.height)
     }
 
     var body: some View {
@@ -39,33 +45,28 @@ struct MenuBarView: View {
                     // LIVE VIEW section
                     if engine.isMonitoring {
                         section("LIVE VIEW") {
-                            ZStack {
-                                CameraPreviewView(
-                                    frame: engine.currentFrame,
-                                    joints: engine.currentJoints
-                                )
-                                .frame(height: 200)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .strokeBorder(Color(.separatorColor), lineWidth: 1)
-                                )
-                                .overlay(cvaOverlay, alignment: .topTrailing)
-
-                                // Body detection status
+                            CameraPreviewView(
+                                frame: engine.currentFrame,
+                                joints: engine.currentJoints
+                            )
+                            .frame(maxWidth: .infinity)
+                            .aspectRatio(cameraAspectRatio, contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .strokeBorder(Color(.separatorColor), lineWidth: 1)
+                            )
+                            .overlay(cvaOverlay, alignment: .topTrailing)
+                            .overlay(alignment: .bottom) {
                                 if engine.currentFrame != nil && !engine.bodyDetected {
-                                    VStack {
-                                        Spacer()
-                                        Text("No body detected")
-                                            .font(.caption.weight(.medium))
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 10)
-                                            .padding(.vertical, 5)
-                                            .background(.ultraThinMaterial)
-                                            .clipShape(Capsule())
-                                            .padding(.bottom, 8)
-                                    }
-                                    .frame(height: 200)
+                                    Text("No body detected")
+                                        .font(.caption.weight(.medium))
+                                        .foregroundColor(.white)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(.ultraThinMaterial)
+                                        .clipShape(Capsule())
+                                        .padding(.bottom, 8)
                                 }
                             }
                         }
@@ -95,12 +96,17 @@ struct MenuBarView: View {
                             Divider()
                             badgesRow
                         }
+                        .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(12)
                         .background(.thickMaterial)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                     } else {
                         section(nil) {
                             statusCard
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(12)
+                                .background(.regularMaterial)
+                                .clipShape(RoundedRectangle(cornerRadius: 12))
                         }
                     }
 
@@ -123,7 +129,7 @@ struct MenuBarView: View {
         .onReceive(refreshTimer) { _ in
             engine.objectWillChange.send()
         }
-        .onChange(of: engine.calibrationSuccess) { newValue in
+        .onChange(of: engine.calibrationSuccess) { _, newValue in
             guard let success = newValue else { return }
             lastCalibrationSuccess = success
             withAnimation(.easeInOut(duration: 0.3)) {
@@ -135,6 +141,12 @@ struct MenuBarView: View {
                     showCalibrationToast = false
                 }
                 engine.calibrationSuccess = nil
+            }
+        }
+        .onChange(of: showDashboard) { _, show in
+            if show {
+                DashboardWindowController.shared.show(engine: engine)
+                showDashboard = false
             }
         }
     }
@@ -151,10 +163,9 @@ struct MenuBarView: View {
                     .tracking(0.5)
             }
             content()
-                .padding(12)
-                .background(.regularMaterial)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Header
@@ -165,16 +176,19 @@ struct MenuBarView: View {
                 .font(.title3.weight(.semibold))
             Spacer()
             Button {
-                showSettings.toggle()
+                showDashboard = true
+            } label: {
+                Image(systemName: "chart.xyaxis.line")
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(.plain)
+            Button {
+                SettingsWindowController.shared.show(engine: engine)
             } label: {
                 Image(systemName: "gear")
                     .foregroundColor(.secondary)
             }
             .buttonStyle(.plain)
-            .popover(isPresented: $showSettings) {
-                SettingsView(engine: engine)
-                    .frame(width: 260)
-            }
         }
     }
 

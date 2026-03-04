@@ -48,7 +48,7 @@ struct TurtleNeckDetectorApp: App {
     private var menuBarLabel: some View {
         HStack(spacing: 4) {
             Image(systemName: "tortoise.fill")
-            if engine.isMonitoring && engine.bodyDetected {
+            if engine.isMonitoring {
                 Text(engine.menuBarStatusText)
                     .font(.system(size: 11, weight: .medium, design: .rounded))
                     .foregroundColor(menuBarTextColor)
@@ -57,6 +57,7 @@ struct TurtleNeckDetectorApp: App {
     }
 
     private var menuBarTextColor: Color {
+        if engine.menuBarIsIdle { return .secondary }
         switch engine.menuBarSeverity {
         case .good: return .green
         case .mild: return .yellow
