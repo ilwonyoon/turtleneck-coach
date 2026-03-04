@@ -5,28 +5,18 @@ import UserNotifications
 @main
 struct TurtleNeckDetectorApp: App {
     @StateObject private var engine = PostureEngine()
-    /// Tracks whether all permissions have been resolved (granted or denied).
-    @State private var permissionsReady = false
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 
     var body: some Scene {
         MenuBarExtra {
             Group {
-                if permissionsReady {
+                if hasCompletedOnboarding {
                     MenuBarView(engine: engine)
                         .frame(width: 340, height: 640)
                 } else {
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("Requesting permissions...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .frame(width: 340, height: 120)
+                    OnboardingView(engine: engine)
+                        .frame(width: 340, height: 640)
                 }
-            }
-            .task {
-                await requestAllPermissions()
-                permissionsReady = true
             }
         } label: {
             menuBarLabel
@@ -34,14 +24,12 @@ struct TurtleNeckDetectorApp: App {
         .menuBarExtraStyle(.window)
     }
 
-    /// Request camera + notification permissions upfront before showing UI.
-    /// Once resolved (granted or denied), the popover content appears.
-    /// Subsequent launches skip the dialog since macOS remembers the choice.
-    private func requestAllPermissions() async {
-        // Camera permission — only shows dialog if .notDetermined
-        _ = await AVCaptureDevice.requestAccess(for: .video)
-        // Notification permission — only shows dialog if not yet decided
+    /// Request camera + notification permissions.
+    /// Returns true when camera access is granted.
+    static func requestAllPermissions() async -> Bool {
+        let cameraGranted = await AVCaptureDevice.requestAccess(for: .video)
         _ = try? await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound])
+        return cameraGranted
     }
 
     @ViewBuilder

@@ -106,6 +106,27 @@ final class PostureEngine: ObservableObject {
     private let cvaBoundaryBuffer: CGFloat = 2.0
     private let cvaTransitionCrossover: CGFloat = 3.0
 
+    // MARK: - Notification Suppression State
+    private var sustainedBadStart: Date? = nil
+    private let sustainedBadThreshold: TimeInterval = 25.0
+
+    private var previousSmoothedCVA: CGFloat? = nil
+    private var motionSuppressed = false
+    private var lowDeltaFrameCount = 0
+    private let motionDeltaThreshold: CGFloat = 5.0
+    private let motionClearFrames = 3
+
+    private var previousFaceSize: CGFloat? = nil
+    private var scaleChangeHoldUntil: Date? = nil
+    private let scaleChangeThreshold: CGFloat = 0.15
+    private let scaleChangeHoldDuration: TimeInterval = 5.0
+
+    private var recentNosePositions: [(date: Date, position: CGPoint)] = []
+    private var jitterHoldUntil: Date? = nil
+    private let jitterWindowSeconds: TimeInterval = 3.0
+    private let jitterVarianceThreshold: CGFloat = 0.0008
+    private let jitterHoldDuration: TimeInterval = 3.0
+
     var menuBarStatusText: String {
         guard !menuBarIsIdle else { return "—" }
         switch menuBarSeverity {
@@ -269,6 +290,7 @@ final class PostureEngine: ObservableObject {
         currentJoints = nil
         bodyDetected = false
         smoothedCVA = nil
+        resetSuppressionState()
         resetMenuBarForIdle()
     }
 
@@ -402,6 +424,7 @@ final class PostureEngine: ObservableObject {
                     // Store face baseline so face-based CVA estimation works (Vision fallback)
                     poseDetector.calibrateFaceBaseline()
                     notificationService.resetCooldown()
+                    resetSuppressionState()
                     postureState = .initial
                     goodPostureStart = Date()
                 }
@@ -437,16 +460,26 @@ final class PostureEngine: ObservableObject {
                 goodPostureStart = nil
             }
 
-            // Send notification based on held severity (menuBarSeverity)
-            // so alerts match what the user sees in the menu bar.
+            // Send notification based on held severity with suppression gate
             let held = menuBarSeverity
             if held == .correction || held == .bad {
-                let msg = NotificationService.message(for: held)
-                notificationService.notify(
-                    title: "PT Turtle",
-                    message: msg,
-                    severity: held
-                )
+                let shouldSuppress =
+                    checkSustainedDurationGate()
+                    || checkMotionSuppression(currentCVA: smoothed)
+                    || checkScaleChangeSuppression(currentFaceSize: metrics.faceSizeNormalized)
+                    || checkLandmarkJitterSuppression(nosePosition: result.joints.nose)
+                    || checkWristProximitySuppression(joints: result.joints)
+
+                if !shouldSuppress {
+                    let msg = NotificationService.message(for: held)
+                    notificationService.notify(
+                        title: "PT Turtle",
+                        message: msg,
+                        severity: held
+                    )
+                }
+            } else {
+                sustainedBadStart = nil
             }
         } else {
             // No calibration yet - still show live CVA and severity from detection
@@ -486,6 +519,115 @@ final class PostureEngine: ObservableObject {
         updateMenuBarSeverity(newSeverity: postureState.severity, currentCVA: postureState.currentCVA, now: now)
 
         lastError = nil
+    }
+
+    // MARK: - Notification Suppression
+
+    private func checkSustainedDurationGate() -> Bool {
+        // Returns true if should SUPPRESS (bad posture not sustained long enough)
+        guard let start = sustainedBadStart else {
+            sustainedBadStart = Date()
+            return true  // just started, suppress
+        }
+        return Date().timeIntervalSince(start) < sustainedBadThreshold
+    }
+
+    private func checkMotionSuppression(currentCVA: CGFloat) -> Bool {
+        guard let prev = previousSmoothedCVA else {
+            previousSmoothedCVA = currentCVA
+            return false
+        }
+        let delta = abs(currentCVA - prev)
+        previousSmoothedCVA = currentCVA
+
+        if delta > motionDeltaThreshold {
+            motionSuppressed = true
+            lowDeltaFrameCount = 0
+            return true
+        }
+
+        if motionSuppressed {
+            lowDeltaFrameCount += 1
+            if lowDeltaFrameCount >= motionClearFrames {
+                motionSuppressed = false
+                lowDeltaFrameCount = 0
+            }
+            return motionSuppressed
+        }
+        return false
+    }
+
+    private func checkScaleChangeSuppression(currentFaceSize: CGFloat) -> Bool {
+        let now = Date()
+        defer { previousFaceSize = currentFaceSize }
+
+        if let holdUntil = scaleChangeHoldUntil, now < holdUntil {
+            return true
+        }
+
+        guard let prev = previousFaceSize, prev > 0 else { return false }
+        let change = abs(currentFaceSize - prev) / prev
+        if change > scaleChangeThreshold {
+            scaleChangeHoldUntil = now.addingTimeInterval(scaleChangeHoldDuration)
+            return true
+        }
+        return false
+    }
+
+    private func checkLandmarkJitterSuppression(nosePosition: CGPoint) -> Bool {
+        let now = Date()
+
+        if let holdUntil = jitterHoldUntil, now < holdUntil {
+            return true
+        }
+
+        recentNosePositions.append((date: now, position: nosePosition))
+        let cutoff = now.addingTimeInterval(-jitterWindowSeconds)
+        recentNosePositions.removeAll { $0.date < cutoff }
+
+        guard recentNosePositions.count >= 5 else { return false }
+
+        let avgX = recentNosePositions.reduce(0.0) { $0 + $1.position.x } / CGFloat(recentNosePositions.count)
+        let avgY = recentNosePositions.reduce(0.0) { $0 + $1.position.y } / CGFloat(recentNosePositions.count)
+        let variance = recentNosePositions.reduce(0.0) { sum, entry in
+            let dx = entry.position.x - avgX
+            let dy = entry.position.y - avgY
+            return sum + dx * dx + dy * dy
+        } / CGFloat(recentNosePositions.count)
+
+        if variance > jitterVarianceThreshold {
+            jitterHoldUntil = now.addingTimeInterval(jitterHoldDuration)
+            return true
+        }
+        return false
+    }
+
+    private func checkWristProximitySuppression(joints: DetectedJoints) -> Bool {
+        let nose = joints.nose
+        let wristProximityThreshold: CGFloat = 0.12
+
+        if let lw = joints.leftWrist {
+            let dx = lw.x - nose.x
+            let dy = lw.y - nose.y
+            if sqrt(dx * dx + dy * dy) < wristProximityThreshold { return true }
+        }
+        if let rw = joints.rightWrist {
+            let dx = rw.x - nose.x
+            let dy = rw.y - nose.y
+            if sqrt(dx * dx + dy * dy) < wristProximityThreshold { return true }
+        }
+        return false
+    }
+
+    private func resetSuppressionState() {
+        sustainedBadStart = nil
+        previousSmoothedCVA = nil
+        motionSuppressed = false
+        lowDeltaFrameCount = 0
+        previousFaceSize = nil
+        scaleChangeHoldUntil = nil
+        recentNosePositions.removeAll()
+        jitterHoldUntil = nil
     }
 
     // MARK: - Session Tracking

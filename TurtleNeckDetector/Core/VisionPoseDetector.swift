@@ -106,16 +106,26 @@ struct DetectedJoints {
     let leftEarConfidence: Float
     let rightEarConfidence: Float
 
+    var leftWrist: CGPoint? = nil
+    var rightWrist: CGPoint? = nil
+
     // Optional face mesh data from MediaPipe (nil when using Vision fallback)
     var faceMesh: FaceMeshData? = nil
 
     var allPoints: [(name: String, point: CGPoint)] {
-        [
+        var points: [(name: String, point: CGPoint)] = [
             ("nose", nose), ("neck", neck),
             ("leftEar", leftEar), ("rightEar", rightEar),
             ("leftEye", leftEye), ("rightEye", rightEye),
             ("leftShoulder", leftShoulder), ("rightShoulder", rightShoulder),
         ]
+        if let leftWrist {
+            points.append(("leftWrist", leftWrist))
+        }
+        if let rightWrist {
+            points.append(("rightWrist", rightWrist))
+        }
+        return points
     }
 
     static let connections: [(String, String)] = [
@@ -270,6 +280,8 @@ final class VisionPoseDetector {
             if debugCounter % 10 == 0 { log("[BODY] extractBodyResult: missing joints") }
             return nil
         }
+        let lWristP = try? observation.recognizedPoint(.leftWrist)
+        let rWristP = try? observation.recognizedPoint(.rightWrist)
 
         guard neckP.confidence > 0.1, lShP.confidence > 0.1, rShP.confidence > 0.1 else {
             if debugCounter % 10 == 0 {
@@ -307,7 +319,9 @@ final class VisionPoseDetector {
             leftShoulder: CGPoint(x: lShP.location.x, y: 1 - lShP.location.y),
             rightShoulder: CGPoint(x: rShP.location.x, y: 1 - rShP.location.y),
             leftEarConfidence: lEarP.confidence * confidenceScale,
-            rightEarConfidence: rEarP.confidence * confidenceScale
+            rightEarConfidence: rEarP.confidence * confidenceScale,
+            leftWrist: lWristP.map { CGPoint(x: $0.location.x, y: 1 - $0.location.y) },
+            rightWrist: rWristP.map { CGPoint(x: $0.location.x, y: 1 - $0.location.y) }
         )
 
         let earShL = dist(lEar, lSh), earShR = dist(rEar, rSh)

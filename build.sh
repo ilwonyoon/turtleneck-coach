@@ -65,6 +65,7 @@ swiftc \
   TurtleNeckDetector/Views/PostureScoreView.swift \
   TurtleNeckDetector/Views/SettingsView.swift \
   TurtleNeckDetector/Views/SettingsWindowController.swift \
+  TurtleNeckDetector/Views/OnboardingView.swift \
   -o TurtleNeckDetector.app/Contents/MacOS/TurtleNeckDetector \
   -target arm64-apple-macos14 \
   -framework SwiftUI -framework Vision -framework AVFoundation -framework UserNotifications -framework AppKit -framework Network -framework Charts \
