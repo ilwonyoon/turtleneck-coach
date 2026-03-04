@@ -20,6 +20,8 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Turtle Neck Detector uses the camera to analyze your posture. Images are processed on-device and never stored.</string>
 	<key>NSDocumentsFolderUsageDescription</key>

@@ -83,11 +83,20 @@ else
   <string>1.0.0</string>
   <key>LSUIElement</key>
   <true/>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>NSCameraUsageDescription</key>
   <string>Turtle Neck Detector uses the camera to analyze your posture. Images are processed on-device and never stored.</string>
 </dict>
 </plist>
 PLIST
+fi
+
+ICON_SOURCE="${PROJECT_ROOT}/TurtleNeckDetector/Resources/AppIcon.icns"
+if [[ -f "${ICON_SOURCE}" ]]; then
+  cp "${ICON_SOURCE}" "${RESOURCES_DIR}/AppIcon.icns"
+else
+  echo "warning: AppIcon.icns not found at ${ICON_SOURCE}" >&2
 fi
 
 echo "[2/6] Bundling runtime resources..."
