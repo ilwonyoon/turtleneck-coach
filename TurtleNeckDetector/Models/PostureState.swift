@@ -2,11 +2,20 @@ import Foundation
 
 /// Posture severity classification.
 /// Raw values keep legacy strings for backward compatibility with saved settings.
-enum Severity: String, Comparable {
+enum Severity: String, CaseIterable, Comparable {
     case good = "good"
     case correction = "mild"
     case bad = "moderate"
     case away = "severe"
+
+    var displayName: String {
+        switch self {
+        case .good: return "Great"
+        case .correction: return "Adjust"
+        case .bad: return "Reset"
+        case .away: return "Break"
+        }
+    }
 
     private var order: Int {
         switch self {

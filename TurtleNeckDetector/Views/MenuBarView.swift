@@ -9,15 +9,10 @@ struct MenuBarView: View {
     @State private var showCalibrationToast = false
     @State private var lastCalibrationSuccess: Bool?
 
-    /// Single accent color derived from severity — the ONLY color used semantically.
+    /// Single accent color derived from held severity — synced with menu bar.
     private var accentColor: Color {
-        guard engine.isMonitoring, engine.calibrationData != nil else { return .gray }
-        switch engine.postureState.severity {
-        case .good: return .green
-        case .correction: return .yellow
-        case .bad: return .orange
-        case .away: return .red
-        }
+        guard engine.isMonitoring, engine.calibrationData != nil, !engine.menuBarIsIdle else { return .gray }
+        return engine.menuBarSeverityColor
     }
 
     private var cameraAspectRatio: CGFloat {
@@ -264,16 +259,16 @@ struct MenuBarView: View {
             return absYaw > 30 ? "Head turned away" : "Head slightly turned"
         }
 
-        switch engine.postureState.severity {
+        switch engine.menuBarSeverity {
         case .good:
             let msg = FeedbackEngine.goodMessage(forDuration: engine.goodPostureDuration)
             return msg.main
         case .correction:
-            return "Quick posture check"
+            return "Tuck your chin"
         case .bad:
-            return "Posture needs a reset"
+            return "Reset your posture"
         case .away:
-            return "Away from working posture"
+            return "Away"
         }
     }
 
@@ -282,12 +277,12 @@ struct MenuBarView: View {
         guard engine.calibrationData != nil else { return "Sit tall and hit Calibrate." }
         if engine.isCalibrating { return "Hold still. Almost there." }
 
-        switch engine.postureState.severity {
+        switch engine.menuBarSeverity {
         case .good:
             let msg = FeedbackEngine.goodMessage(forDuration: engine.goodPostureDuration)
             return msg.sub
         case .correction, .bad, .away:
-            return FeedbackEngine.severityTip(for: engine.postureState.severity, headYaw: engine.currentHeadYaw)
+            return FeedbackEngine.severityTip(for: engine.menuBarSeverity, headYaw: engine.currentHeadYaw)
         }
     }
 

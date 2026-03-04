@@ -11,14 +11,14 @@ struct FeedbackEngine {
 
     // Good posture messages by duration threshold (seconds)
     private static let goodMessages: [(after: TimeInterval, main: String, sub: String)] = [
-        (0,    "Looking good.",           "Nice and tall. Keep it here."),
-        (30,   "30 seconds strong.",      "Your neck says thank you."),
-        (60,   "One minute, solid.",      "This is building a habit."),
-        (120,  "Two minutes straight.",   "Consistency beats perfection."),
-        (300,  "Five minutes in.",        "Nice run. Stretch your neck soon."),
-        (600,  "Ten solid minutes.",      "Stand up and move for 30 seconds."),
-        (1200, "Twenty minutes. Respect.", "Walk to the kitchen. Get water."),
-        (1800, "Half hour. Impressive.",  "Time to stand. Roll your shoulders back."),
+        (0,    "Good posture",  "Keep it here."),
+        (30,   "30s streak",    "Nice work."),
+        (60,   "1 min solid",   "Building the habit."),
+        (120,  "2 min straight","Consistency wins."),
+        (300,  "5 min in",      "Stretch your neck soon."),
+        (600,  "10 min",        "Stand up. Move for 30 sec."),
+        (1200, "20 min!",       "Go grab some water."),
+        (1800, "30 min",        "Roll your shoulders back."),
     ]
 
     private static let warningTips = [
@@ -68,11 +68,11 @@ struct FeedbackEngine {
 
         switch severity {
         case .correction:
-            return "Small drift. Bring your chin back and stack ears over shoulders."
+            return "Ears over shoulders."
         case .bad:
-            return "Let's reset posture: sit back, chest open, chin gently in."
+            return "Sit back. Open chest. Chin in."
         case .away:
-            return "Need a break? Stand up, move for 30 seconds, then reset."
+            return "Tracking resumes when you're back."
         case .good:
             return "Right where you should be."
         }

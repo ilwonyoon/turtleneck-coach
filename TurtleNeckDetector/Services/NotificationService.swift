@@ -10,7 +10,7 @@ final class NotificationService {
     private let userDefaults: UserDefaults
     private var notificationsEnabled: Bool = true
     private var cooldownSeconds: Double = 60
-    private var minSeverity: Severity = .bad
+    private var minSeverity: Severity = .correction
     private var lastNotificationTime: Date = .distantPast
 
     init(userDefaults: UserDefaults = .standard) {
@@ -18,7 +18,7 @@ final class NotificationService {
         userDefaults.register(defaults: [
             Self.notificationsEnabledKey: true,
             Self.cooldownSecondsKey: 60.0,
-            Self.minSeverityKey: Severity.bad.rawValue
+            Self.minSeverityKey: Severity.correction.rawValue
         ])
         loadSettingsFromUserDefaults()
     }
@@ -31,7 +31,7 @@ final class NotificationService {
            let savedSeverity = Severity(rawValue: rawValue) {
             minSeverity = savedSeverity
         } else {
-            minSeverity = .bad
+            minSeverity = .correction
         }
     }
 
@@ -49,6 +49,10 @@ final class NotificationService {
         loadSettingsFromUserDefaults()
 
         guard notificationsEnabled else {
+            return false
+        }
+
+        guard severity != .good, severity != .away else {
             return false
         }
 
@@ -81,13 +85,13 @@ final class NotificationService {
     static func message(for severity: Severity) -> String {
         switch severity {
         case .correction:
-            return "Quick check: your head is drifting forward. Chin back and sit tall."
+            return "Head's drifting. Tuck your chin."
         case .bad:
-            return "Posture reset time: sit back, open your chest, and bring your chin in."
+            return "Posture's gone. Sit up, reset."
         case .away:
-            return "Need a break? Stand up, move a bit, then come back and reset."
+            return ""
         case .good:
-            return "Looking good. Keep going."
+            return ""
         }
     }
 

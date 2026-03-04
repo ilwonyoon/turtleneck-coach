@@ -159,6 +159,7 @@ final class VisionPoseDetector {
     private var recentPitch: [CGFloat] = []
     private let smoothingWindow = 5
     private var lastReliableCVA: CGFloat?
+    private var lastFaceFallbackCVA: CGFloat?
     private var debugCounter = 0
     private func log(_ msg: String) {
         let line = "\(Date()): \(msg)\n"
@@ -202,6 +203,8 @@ final class VisionPoseDetector {
             recentFaceY.removeAll()
             recentFaceHeight.removeAll()
             recentPitch.removeAll()
+            // Reset face fallback slew limiter when not using fallback path.
+            lastFaceFallbackCVA = nil
             return bodyResult
         }
 
@@ -227,6 +230,7 @@ final class VisionPoseDetector {
             calibratedFaceHeight = recentFaceHeight.reduce(0, +) / CGFloat(recentFaceHeight.count)
             calibratedPitch = recentPitch.reduce(0, +) / CGFloat(recentPitch.count)
         }
+        lastFaceFallbackCVA = nil
     }
 
     /// Clear face calibration baseline (called when user resets calibration).
@@ -238,6 +242,7 @@ final class VisionPoseDetector {
         recentFaceHeight.removeAll()
         recentPitch.removeAll()
         lastReliableCVA = nil
+        lastFaceFallbackCVA = nil
     }
 
     // MARK: - 2D Body Pose Detection
@@ -474,7 +479,7 @@ final class VisionPoseDetector {
 
             // Signal 3: Pitch change (head tilting forward)
             let pitchChange = adjBaseP - smoothPitch
-            let pitchContrib = pitchChange > 0.08 ? (pitchChange - 0.08) * 3.0 : 0.0
+            let pitchContrib = pitchChange > 0.08 ? (pitchChange - 0.08) * 1.5 : 0.0
             forwardScore += pitchContrib
 
             // Signal 4: Face Y rising while pitch drops = chin-poke posture
@@ -515,6 +520,15 @@ final class VisionPoseDetector {
         } else {
             lastReliableCVA = estimatedCVA
         }
+
+        // Face fallback only: limit per-frame CVA jump to filter expression-driven spikes.
+        let maxDelta: CGFloat = 3.0
+        if let previous = lastFaceFallbackCVA {
+            let delta = estimatedCVA - previous
+            let clampedDelta = max(-maxDelta, min(maxDelta, delta))
+            estimatedCVA = previous + clampedDelta
+        }
+        lastFaceFallbackCVA = estimatedCVA
 
         // Normalized joints for skeleton
         let faceConfidence: Float = yawReliable ? 0.5 : 0.1

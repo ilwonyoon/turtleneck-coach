@@ -100,6 +100,10 @@ final class PostureEngine: ObservableObject {
 
     var menuBarIconColor: Color {
         guard !menuBarIsIdle else { return .secondary }
+        return menuBarSeverityColor
+    }
+
+    var menuBarSeverityColor: Color {
         switch menuBarSeverity {
         case .good: return .green
         case .correction: return .yellow

@@ -48,28 +48,13 @@ struct TurtleNeckDetectorApp: App {
     private var menuBarLabel: some View {
         HStack(spacing: 4) {
             Image(systemName: "tortoise.fill")
-                .foregroundColor(engine.menuBarIconColor)
+                .symbolRenderingMode(.palette)
+                .foregroundStyle(engine.menuBarIconColor)
             if engine.isMonitoring {
-                if engine.menuBarIsIdle {
-                    Text("--")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(engine.menuBarIconColor)
-                        .monospacedDigit()
-                } else {
-                    Text(menuBarScoreText)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(engine.menuBarIconColor)
-                        .monospacedDigit()
-                    Text(engine.menuBarStatusText)
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
-                        .foregroundColor(engine.menuBarIconColor)
-                }
+                Text(engine.menuBarStatusText)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundStyle(engine.menuBarIconColor)
             }
         }
-    }
-
-    private var menuBarScoreText: String {
-        let score = engine.averageScore ?? engine.postureScore
-        return "\(score)"
     }
 }

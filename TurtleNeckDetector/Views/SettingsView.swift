@@ -10,11 +10,11 @@ struct SettingsView: View {
     private var cooldownSeconds = 60.0
 
     @AppStorage(NotificationService.minSeverityKey)
-    private var minSeverityRawValue = Severity.bad.rawValue
+    private var minSeverityRawValue = Severity.correction.rawValue
 
     private var minSeverityBinding: Binding<Severity> {
         Binding(
-            get: { Severity(rawValue: minSeverityRawValue) ?? .bad },
+            get: { Severity(rawValue: minSeverityRawValue) ?? .correction },
             set: { minSeverityRawValue = $0.rawValue }
         )
     }
@@ -69,6 +69,7 @@ struct SettingsView: View {
                 LabeledContent("Enable Notifications") {
                     valueColumn {
                         Toggle("", isOn: $notificationsEnabled)
+                            .toggleStyle(.switch)
                             .labelsHidden()
                     }
                 }
@@ -90,9 +91,9 @@ struct SettingsView: View {
                 LabeledContent("Minimum Severity") {
                     valueColumn {
                         Picker("", selection: minSeverityBinding) {
-                            Text("Correction").tag(Severity.correction)
-                            Text("Bad Posture").tag(Severity.bad)
-                            Text("Away / Break").tag(Severity.away)
+                            ForEach(Severity.allCases, id: \.self) { severity in
+                                Text(severity.displayName).tag(severity)
+                            }
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)

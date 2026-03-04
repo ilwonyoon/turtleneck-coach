@@ -125,6 +125,7 @@ struct DashboardView: View {
                                 y: .value("Score", score)
                             )
                             .interpolationMethod(.catmullRom)
+                            .alignsMarkStylesWithPlotArea()
                             .foregroundStyle(scoreAreaGradient)
 
                             LineMark(
@@ -144,6 +145,7 @@ struct DashboardView: View {
                                 y: .value("Score", score)
                             )
                             .interpolationMethod(.catmullRom)
+                            .alignsMarkStylesWithPlotArea()
                             .foregroundStyle(scoreAreaGradient)
 
                             LineMark(
@@ -274,18 +276,17 @@ struct DashboardView: View {
     private var hourlyComplianceChart: some View {
         Chart {
             ForEach(hourlyComplianceBins) { bin in
-                if bin.totalMinutes > 0 {
+                let ratio = complianceRatio(goodMinutes: bin.goodMinutes, badMinutes: bin.badMinutes, totalMinutes: bin.totalMinutes)
+                if ratio.good > 0 || ratio.bad > 0 {
                     BarMark(
                         x: .value("Hour", bin.hourStart, unit: .hour),
-                        y: .value("Minutes", bin.goodMinutes),
-                        stacking: .normalized
+                        y: .value("Ratio", ratio.good)
                     )
                     .foregroundStyle(by: .value("Posture", "Good"))
 
                     BarMark(
                         x: .value("Hour", bin.hourStart, unit: .hour),
-                        y: .value("Minutes", bin.badMinutes),
-                        stacking: .normalized
+                        y: .value("Ratio", ratio.bad)
                     )
                     .foregroundStyle(by: .value("Posture", "Bad"))
                 }
@@ -299,6 +300,7 @@ struct DashboardView: View {
             "Good": Color.green,
             "Bad": Color.orange
         ])
+        .chartXScale(domain: hourlyChartDomain)
         .chartYScale(domain: 0...1)
         .chartYAxis {
             AxisMarks(values: .stride(by: 0.2)) { _ in
@@ -327,13 +329,31 @@ struct DashboardView: View {
 
     private var scoreAreaGradient: LinearGradient {
         LinearGradient(
-            colors: [
-                Color.cyan.opacity(0.3),
-                Color.cyan.opacity(0.0)
+            stops: [
+                .init(color: Color.green.opacity(0.30), location: 0.0),
+                .init(color: Color.green.opacity(0.0), location: 1.0)
             ],
             startPoint: .top,
             endPoint: .bottom
         )
+    }
+
+    private var hourlyChartDomain: ClosedRange<Date> {
+        let reference = chartHours.first?.hourStart ?? Date()
+        let dayStart = calendar.startOfDay(for: reference)
+        let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(60 * 60 * 24)
+        return dayStart...dayEnd
+    }
+
+    private func complianceRatio(goodMinutes: Double, badMinutes: Double, totalMinutes: Double) -> (good: Double, bad: Double) {
+        let safeGood = goodMinutes.isFinite ? max(0, goodMinutes) : 0
+        let safeBad = badMinutes.isFinite ? max(0, badMinutes) : 0
+        let safeTotal = totalMinutes.isFinite ? max(0, totalMinutes) : 0
+        let denominator = max(safeTotal, safeGood + safeBad)
+        guard denominator > 0 else { return (0, 0) }
+
+        let goodRatio = min(1, max(0, safeGood / denominator))
+        return (goodRatio, max(0, 1 - goodRatio))
     }
 
     private var hourlyScorePoints: [ChartHour] {
