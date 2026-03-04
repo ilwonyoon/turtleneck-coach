@@ -14,9 +14,9 @@ struct MenuBarView: View {
         guard engine.isMonitoring, engine.calibrationData != nil else { return .gray }
         switch engine.postureState.severity {
         case .good: return .green
-        case .mild: return .yellow
-        case .moderate: return .orange
-        case .severe: return .red
+        case .correction: return .yellow
+        case .bad: return .orange
+        case .away: return .red
         }
     }
 
@@ -268,12 +268,12 @@ struct MenuBarView: View {
         case .good:
             let msg = FeedbackEngine.goodMessage(forDuration: engine.goodPostureDuration)
             return msg.main
-        case .mild:
-            return "Head drifting forward"
-        case .moderate:
-            return "Neck under strain"
-        case .severe:
-            return "Time to reset"
+        case .correction:
+            return "Quick posture check"
+        case .bad:
+            return "Posture needs a reset"
+        case .away:
+            return "Away from working posture"
         }
     }
 
@@ -286,7 +286,7 @@ struct MenuBarView: View {
         case .good:
             let msg = FeedbackEngine.goodMessage(forDuration: engine.goodPostureDuration)
             return msg.sub
-        case .mild, .moderate, .severe:
+        case .correction, .bad, .away:
             return FeedbackEngine.severityTip(for: engine.postureState.severity, headYaw: engine.currentHeadYaw)
         }
     }

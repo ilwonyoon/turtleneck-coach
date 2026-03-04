@@ -81,30 +81,30 @@ final class PostureEngine: ObservableObject {
     private var pendingTransitionStepCount = 0
     private var lastSuccessfulDetectionAt: Date?
     private let noDetectionIdleTimeout: TimeInterval = 10.0
-    private let worsenInitialHold: TimeInterval = 1.5
-    private let worsenFollowUpHold: TimeInterval = 0.8
-    private let improveInitialHold: TimeInterval = 4.0
-    private let improveFollowUpHold: TimeInterval = 1.5
+    private let worsenInitialHold: TimeInterval = 1.0
+    private let worsenFollowUpHold: TimeInterval = 0.5
+    private let improveInitialHold: TimeInterval = 2.0
+    private let improveFollowUpHold: TimeInterval = 1.0
     private let cvaBoundaryBuffer: CGFloat = 2.0
     private let cvaTransitionCrossover: CGFloat = 3.0
 
     var menuBarStatusText: String {
         guard !menuBarIsIdle else { return "—" }
         switch menuBarSeverity {
-        case .good: return "Good"
-        case .mild: return "Mild"
-        case .moderate: return "Poor"
-        case .severe: return "Bad"
+        case .good: return "Great"
+        case .correction: return "Adjust"
+        case .bad: return "Reset"
+        case .away: return "Break"
         }
     }
 
-    var menuBarStatusColor: String {
-        guard !menuBarIsIdle else { return "gray" }
+    var menuBarIconColor: Color {
+        guard !menuBarIsIdle else { return .secondary }
         switch menuBarSeverity {
-        case .good: return "green"
-        case .mild: return "yellow"
-        case .moderate: return "orange"
-        case .severe: return "red"
+        case .good: return .green
+        case .correction: return .yellow
+        case .bad: return .orange
+        case .away: return .red
         }
     }
 
@@ -527,7 +527,7 @@ final class PostureEngine: ObservableObject {
     private func trackSlouchTransition(from previous: Severity, to current: Severity) {
         guard activeSessionID != nil else { return }
         guard previous != current else { return }
-        if current == .moderate || current == .severe {
+        if current == .bad || current == .away {
             sessionSlouchEventCount += 1
         }
     }
@@ -670,17 +670,17 @@ final class PostureEngine: ObservableObject {
         if target > current {
             switch current {
             case .good: return PostureAnalyzer.cvaGood
-            case .mild: return PostureAnalyzer.cvaMild
-            case .moderate: return PostureAnalyzer.cvaModerate
-            case .severe: return nil
+            case .correction: return PostureAnalyzer.cvaCorrection
+            case .bad: return PostureAnalyzer.cvaBad
+            case .away: return nil
             }
         }
 
         switch current {
         case .good: return nil
-        case .mild: return PostureAnalyzer.cvaGood
-        case .moderate: return PostureAnalyzer.cvaMild
-        case .severe: return PostureAnalyzer.cvaModerate
+        case .correction: return PostureAnalyzer.cvaGood
+        case .bad: return PostureAnalyzer.cvaCorrection
+        case .away: return PostureAnalyzer.cvaBad
         }
     }
 
@@ -688,18 +688,18 @@ final class PostureEngine: ObservableObject {
         guard current != target else { return current }
         if target > current {
             switch current {
-            case .good: return .mild
-            case .mild: return .moderate
-            case .moderate: return .severe
-            case .severe: return .severe
+            case .good: return .correction
+            case .correction: return .bad
+            case .bad: return .away
+            case .away: return .away
             }
         }
 
         switch current {
         case .good: return .good
-        case .mild: return .good
-        case .moderate: return .mild
-        case .severe: return .moderate
+        case .correction: return .good
+        case .bad: return .correction
+        case .away: return .bad
         }
     }
 

@@ -10,11 +10,11 @@ struct SettingsView: View {
     private var cooldownSeconds = 60.0
 
     @AppStorage(NotificationService.minSeverityKey)
-    private var minSeverityRawValue = Severity.moderate.rawValue
+    private var minSeverityRawValue = Severity.bad.rawValue
 
     private var minSeverityBinding: Binding<Severity> {
         Binding(
-            get: { Severity(rawValue: minSeverityRawValue) ?? .moderate },
+            get: { Severity(rawValue: minSeverityRawValue) ?? .bad },
             set: { minSeverityRawValue = $0.rawValue }
         )
     }
@@ -90,9 +90,9 @@ struct SettingsView: View {
                 LabeledContent("Minimum Severity") {
                     valueColumn {
                         Picker("", selection: minSeverityBinding) {
-                            Text("Mild").tag(Severity.mild)
-                            Text("Moderate").tag(Severity.moderate)
-                            Text("Severe").tag(Severity.severe)
+                            Text("Correction").tag(Severity.correction)
+                            Text("Bad Posture").tag(Severity.bad)
+                            Text("Away / Break").tag(Severity.away)
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)

@@ -30,3 +30,4 @@ pose_landmarker_lite.task
 
 # Debug logs
 /tmp/turtle_*.log
+.cache/

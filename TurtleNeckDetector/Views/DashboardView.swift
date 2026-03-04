@@ -9,9 +9,9 @@ struct DashboardView: View {
         NSApp.keyWindow?.close()
     }
 
-    @State private var selectedRange: DashboardRange = .week
+    @State private var selectedRange: DashboardRange = .day
     @State private var chartDays: [ChartDay] = []
-    @State private var rangeSessions: [SessionRecord] = []
+    @State private var chartHours: [ChartHour] = []
     @State private var todaySummary = TodaySummary.empty
     @State private var refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
 
@@ -117,47 +117,85 @@ struct DashboardView: View {
                 .font(.headline)
 
             Chart {
-                ForEach(chartDays) { day in
-                    if let score = day.averageScore {
-                        LineMark(
-                            x: .value("Date", day.date, unit: .day),
-                            y: .value("Score", score)
-                        )
-                        .interpolationMethod(.catmullRom)
-                        .foregroundStyle(by: .value("Series", "Daily Score"))
+                if selectedRange == .day {
+                    ForEach(hourlyScorePoints) { point in
+                        if let score = point.averageScore {
+                            AreaMark(
+                                x: .value("Hour", point.hourStart, unit: .hour),
+                                y: .value("Score", score)
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(scoreAreaGradient)
 
-                        PointMark(
-                            x: .value("Date", day.date, unit: .day),
-                            y: .value("Score", score)
-                        )
-                        .foregroundStyle(by: .value("Series", "Daily Score"))
+                            LineMark(
+                                x: .value("Hour", point.hourStart, unit: .hour),
+                                y: .value("Score", score)
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .lineStyle(StrokeStyle(lineWidth: 2.5))
+                            .foregroundStyle(scoreLineGradient)
+                        }
+                    }
+                } else {
+                    ForEach(chartDays) { day in
+                        if let score = day.averageScore {
+                            AreaMark(
+                                x: .value("Date", day.date, unit: .day),
+                                y: .value("Score", score)
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .foregroundStyle(scoreAreaGradient)
+
+                            LineMark(
+                                x: .value("Date", day.date, unit: .day),
+                                y: .value("Score", score)
+                            )
+                            .interpolationMethod(.catmullRom)
+                            .lineStyle(StrokeStyle(lineWidth: 2.5))
+                            .foregroundStyle(scoreLineGradient)
+                        }
                     }
 
-                    if let movingAverage = day.movingAverage {
-                        LineMark(
-                            x: .value("Date", day.date, unit: .day),
-                            y: .value("Score", movingAverage)
-                        )
-                        .interpolationMethod(.catmullRom)
-                        .lineStyle(StrokeStyle(lineWidth: 2, dash: [6, 4]))
-                        .foregroundStyle(by: .value("Series", "7-Day Average"))
+                    if selectedRange == .week {
+                        ForEach(chartDays) { day in
+                            if let movingAverage = day.movingAverage {
+                                LineMark(
+                                    x: .value("Date", day.date, unit: .day),
+                                    y: .value("Score", movingAverage)
+                                )
+                                .interpolationMethod(.catmullRom)
+                                .lineStyle(StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                                .foregroundStyle(Color.white.opacity(0.7))
+                            }
+                        }
                     }
                 }
 
-                RuleMark(y: .value("Good Threshold", 70))
+                RuleMark(y: .value("Good Threshold", 80))
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
-                    .foregroundStyle(Color.green.opacity(0.8))
+                    .foregroundStyle(Color.green.opacity(0.9))
             }
             .chartYScale(domain: 0...100)
-            .chartForegroundStyleScale([
-                "Daily Score": Color.cyan,
-                "7-Day Average": Color.white.opacity(0.7)
-            ])
             .chartXAxis {
-                AxisMarks(values: .stride(by: .day, count: selectedRange.axisStride)) { _ in
-                    AxisGridLine()
-                    AxisTick()
-                    AxisValueLabel(format: selectedRange.axisDateFormat)
+                switch selectedRange {
+                case .day:
+                    AxisMarks(values: .stride(by: .hour, count: 2)) { _ in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .abbreviated)))
+                    }
+                case .week:
+                    AxisMarks(values: .stride(by: .day)) { _ in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel(format: .dateTime.weekday(.abbreviated))
+                    }
+                case .month:
+                    AxisMarks(values: .stride(by: .day, count: 5)) { _ in
+                        AxisGridLine()
+                        AxisTick()
+                        AxisValueLabel(format: .dateTime.month(.abbreviated).day())
+                    }
                 }
             }
             .frame(height: 220)
@@ -235,7 +273,7 @@ struct DashboardView: View {
 
     private var hourlyComplianceChart: some View {
         Chart {
-            ForEach(hourBins) { bin in
+            ForEach(hourlyComplianceBins) { bin in
                 if bin.totalMinutes > 0 {
                     BarMark(
                         x: .value("Hour", bin.hourStart, unit: .hour),
@@ -279,6 +317,33 @@ struct DashboardView: View {
         .frame(height: 220)
     }
 
+    private var scoreLineGradient: LinearGradient {
+        LinearGradient(
+            colors: [.red, .orange, .green],
+            startPoint: .bottom,
+            endPoint: .top
+        )
+    }
+
+    private var scoreAreaGradient: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color.cyan.opacity(0.3),
+                Color.cyan.opacity(0.0)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+    }
+
+    private var hourlyScorePoints: [ChartHour] {
+        chartHours.filter { $0.totalMinutes > 0 && $0.averageScore != nil }
+    }
+
+    private var hourlyComplianceBins: [ChartHour] {
+        chartHours.filter { $0.totalMinutes > 0 }
+    }
+
     private var cardBackground: some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
             .fill(Color.black.opacity(0.28))
@@ -305,18 +370,10 @@ struct DashboardView: View {
         sessions.sort { $0.startDate < $1.startDate }
 
         todaySummary = summarizeToday(from: sessions)
+        let hourlyAggregates = engine.dataStore.loadHourlyAggregates(for: todayStart, sessions: sessions)
+        chartHours = makeChartHours(for: todayStart, using: hourlyAggregates)
 
         let range = selectedRange.dateRange(referenceDate: now, calendar: calendar)
-        var sessionsForRange = engine.dataStore.loadSessions(range: range)
-        if let liveSession = engine.currentSessionSnapshot(),
-           liveSession.startDate <= range.upperBound,
-           liveSession.endDate >= range.lowerBound,
-           !sessionsForRange.contains(where: { $0.id == liveSession.id }) {
-            sessionsForRange.append(liveSession)
-        }
-        sessionsForRange.sort { $0.startDate < $1.startDate }
-        rangeSessions = sessionsForRange
-
         let storedAggregates = engine.dataStore.loadDailyAggregates(range: range)
         chartDays = makeChartDays(
             for: range,
@@ -326,13 +383,7 @@ struct DashboardView: View {
     }
 
     private var latestCompliancePercent: Double {
-        guard let lastDay = chartDays.last, lastDay.totalMinutes > 0 else { return 0 }
-        return min(100, max(0, (lastDay.goodMinutes / lastDay.totalMinutes) * 100))
-    }
-
-    private var hourBins: [HourBin] {
-        let targetDay = chartDays.last?.date ?? calendar.startOfDay(for: Date())
-        return makeHourBins(for: targetDay, sessions: rangeSessions)
+        min(100, max(0, todaySummary.goodPosturePercent))
     }
 
     private func makeChartDays(
@@ -376,6 +427,25 @@ struct DashboardView: View {
         return chartDays
     }
 
+    private func makeChartHours(for day: Date, using aggregates: [HourlyAggregate]) -> [ChartHour] {
+        let dayStart = calendar.startOfDay(for: day)
+
+        return aggregates.compactMap { aggregate in
+            guard let hourStart = calendar.date(byAdding: .hour, value: aggregate.hour, to: dayStart) else {
+                return nil
+            }
+
+            return ChartHour(
+                hourStart: hourStart,
+                averageScore: aggregate.averageScore,
+                goodMinutes: max(0, aggregate.goodMinutes),
+                badMinutes: max(0, aggregate.badMinutes),
+                totalMinutes: max(0, aggregate.totalMinutes)
+            )
+        }
+        .sorted { $0.hourStart < $1.hourStart }
+    }
+
     private func summarizeToday(from sessions: [SessionRecord]) -> TodaySummary {
         let totalDuration = sessions.reduce(0) { partial, session in
             partial + max(0, session.duration)
@@ -404,29 +474,43 @@ struct DashboardView: View {
     }
 
     private func aggregate(forDay day: Date, sessions: [SessionRecord]) -> DailyAggregate? {
-        let daySessions = sessions.filter { calendar.isDate($0.startDate, inSameDayAs: day) }
-        guard !daySessions.isEmpty else { return nil }
+        let dayStart = calendar.startOfDay(for: day)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return nil }
 
-        let totalDuration = daySessions.reduce(0) { $0 + max(0, $1.duration) }
+        var totalDuration = 0.0
+        var weightedScore = 0.0
+        var weightedGood = 0.0
+        var sessionCount = 0
+
+        for session in sessions {
+            let overlapStart = max(session.startDate, dayStart)
+            let overlapEnd = min(session.endDate, dayEnd)
+            let overlapDuration = max(0, overlapEnd.timeIntervalSince(overlapStart))
+            guard overlapDuration > 0 else { continue }
+
+            totalDuration += overlapDuration
+            weightedScore += session.averageScore * overlapDuration
+            weightedGood += session.goodPosturePercent * overlapDuration
+            sessionCount += 1
+        }
+
+        guard sessionCount > 0 else { return nil }
         guard totalDuration > 0 else {
             return DailyAggregate(
-                date: day,
+                date: dayStart,
                 totalMonitoredMinutes: 0,
                 averageScore: 0,
                 goodPosturePercent: 0,
-                sessionCount: daySessions.count
+                sessionCount: sessionCount
             )
         }
 
-        let weightedScore = daySessions.reduce(0.0) { $0 + ($1.averageScore * max(0, $1.duration)) }
-        let weightedGood = daySessions.reduce(0.0) { $0 + ($1.goodPosturePercent * max(0, $1.duration)) }
-
         return DailyAggregate(
-            date: day,
+            date: dayStart,
             totalMonitoredMinutes: totalDuration / 60,
             averageScore: weightedScore / totalDuration,
             goodPosturePercent: weightedGood / totalDuration,
-            sessionCount: daySessions.count
+            sessionCount: sessionCount
         )
     }
 
@@ -444,50 +528,6 @@ struct DashboardView: View {
         return dates
     }
 
-    private func makeHourBins(for day: Date, sessions: [SessionRecord]) -> [HourBin] {
-        let dayStart = calendar.startOfDay(for: day)
-        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return [] }
-
-        var goodMinutesByHour = Array(repeating: 0.0, count: 24)
-        var badMinutesByHour = Array(repeating: 0.0, count: 24)
-
-        for session in sessions {
-            let sessionStart = max(session.startDate, dayStart)
-            let sessionEnd = min(session.endDate, dayEnd)
-            guard sessionEnd > sessionStart else { continue }
-
-            let clampedGoodPercent = min(100, max(0, session.goodPosturePercent))
-
-            for hourIndex in 0..<24 {
-                guard let hourStart = calendar.date(byAdding: .hour, value: hourIndex, to: dayStart),
-                      let hourEnd = calendar.date(byAdding: .hour, value: 1, to: hourStart) else {
-                    continue
-                }
-
-                let overlapStart = max(sessionStart, hourStart)
-                let overlapEnd = min(sessionEnd, hourEnd)
-                let overlapSeconds = overlapEnd.timeIntervalSince(overlapStart)
-                guard overlapSeconds > 0 else { continue }
-
-                let overlapMinutes = overlapSeconds / 60
-                let goodMinutes = overlapMinutes * (clampedGoodPercent / 100)
-                goodMinutesByHour[hourIndex] += goodMinutes
-                badMinutesByHour[hourIndex] += max(0, overlapMinutes - goodMinutes)
-            }
-        }
-
-        return (0..<24).compactMap { hourIndex in
-            guard let hourStart = calendar.date(byAdding: .hour, value: hourIndex, to: dayStart) else {
-                return nil
-            }
-
-            return HourBin(
-                hourStart: hourStart,
-                goodMinutes: max(0, goodMinutesByHour[hourIndex]),
-                badMinutes: max(0, badMinutesByHour[hourIndex])
-            )
-        }
-    }
 }
 
 private struct CircularPercentView: View {
@@ -542,9 +582,9 @@ private enum DashboardRange: String, CaseIterable, Identifiable {
     var axisDateFormat: Date.FormatStyle {
         switch self {
         case .day:
-            return .dateTime.month().day()
+            return .dateTime.hour(.defaultDigits(amPM: .abbreviated))
         case .week:
-            return .dateTime.weekday(.narrow)
+            return .dateTime.weekday(.abbreviated)
         case .month:
             return .dateTime.month(.abbreviated).day()
         }
@@ -569,16 +609,14 @@ private struct ChartDay: Identifiable {
     let badMinutes: Double
 }
 
-private struct HourBin: Identifiable {
+private struct ChartHour: Identifiable {
     var id: Date { hourStart }
 
     let hourStart: Date
+    let averageScore: Double?
     let goodMinutes: Double
     let badMinutes: Double
-
-    var totalMinutes: Double {
-        goodMinutes + badMinutes
-    }
+    let totalMinutes: Double
 }
 
 private struct TodaySummary {

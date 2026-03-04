@@ -139,7 +139,7 @@ struct DetectionResult {
 final class VisionPoseDetector {
 
     private static let earVisibilityThreshold: Float = 0.5
-    private static let maxReliableYawDegrees: CGFloat = 45
+    private static let maxReliableYawDegrees: CGFloat = 15
 
     init() {
         // Write startup marker to confirm logging works

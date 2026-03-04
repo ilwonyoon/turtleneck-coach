@@ -67,12 +67,12 @@ struct FeedbackEngine {
         }
 
         switch severity {
-        case .mild:
-            return "Head's drifting forward. Tuck your chin back."
-        case .moderate:
-            return "Your neck is working hard right now. Sit back. Chin in."
-        case .severe:
-            return "Time to reset. Stand up and roll your neck gently."
+        case .correction:
+            return "Small drift. Bring your chin back and stack ears over shoulders."
+        case .bad:
+            return "Let's reset posture: sit back, chest open, chin gently in."
+        case .away:
+            return "Need a break? Stand up, move for 30 seconds, then reset."
         case .good:
             return "Right where you should be."
         }

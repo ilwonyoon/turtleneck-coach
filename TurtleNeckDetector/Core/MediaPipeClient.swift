@@ -412,7 +412,7 @@ final class MediaPipeClient: @unchecked Sendable {
         let shMid = CGPoint(x: (lSh.x + rSh.x) / 2, y: (lSh.y + rSh.y) / 2)
         let shWidth = dist(lSh, rSh)
         let yawDegrees = abs(CGFloat(result.headYaw))
-        let yawLowConfidence = result.yawLowConfidence ?? (yawDegrees > 45)
+        let yawLowConfidence = result.yawLowConfidence ?? (yawDegrees > 15)
         let yawFactor = sagittalYawFactor(yawDegrees: yawDegrees)
         let horizontalDist = abs(nosePos.x - shMid.x)
         let sagittalForward = horizontalDist * yawFactor

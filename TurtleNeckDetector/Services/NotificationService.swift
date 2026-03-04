@@ -10,7 +10,7 @@ final class NotificationService {
     private let userDefaults: UserDefaults
     private var notificationsEnabled: Bool = true
     private var cooldownSeconds: Double = 60
-    private var minSeverity: Severity = .moderate
+    private var minSeverity: Severity = .bad
     private var lastNotificationTime: Date = .distantPast
 
     init(userDefaults: UserDefaults = .standard) {
@@ -18,7 +18,7 @@ final class NotificationService {
         userDefaults.register(defaults: [
             Self.notificationsEnabledKey: true,
             Self.cooldownSecondsKey: 60.0,
-            Self.minSeverityKey: Severity.moderate.rawValue
+            Self.minSeverityKey: Severity.bad.rawValue
         ])
         loadSettingsFromUserDefaults()
     }
@@ -31,7 +31,7 @@ final class NotificationService {
            let savedSeverity = Severity(rawValue: rawValue) {
             minSeverity = savedSeverity
         } else {
-            minSeverity = .moderate
+            minSeverity = .bad
         }
     }
 
@@ -80,12 +80,12 @@ final class NotificationService {
     /// PT Turtle notification messages by severity.
     static func message(for severity: Severity) -> String {
         switch severity {
-        case .mild:
-            return "Your head is drifting forward. Quick reset: chin back, sit tall."
-        case .moderate:
-            return "Your neck is doing extra work. Sit back and bring your chin in."
-        case .severe:
-            return "Time for a break. Stand up, roll your shoulders, stretch your neck."
+        case .correction:
+            return "Quick check: your head is drifting forward. Chin back and sit tall."
+        case .bad:
+            return "Posture reset time: sit back, open your chest, and bring your chin in."
+        case .away:
+            return "Need a break? Stand up, move a bit, then come back and reset."
         case .good:
             return "Looking good. Keep going."
         }

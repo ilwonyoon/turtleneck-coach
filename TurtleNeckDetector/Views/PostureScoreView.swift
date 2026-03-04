@@ -7,10 +7,10 @@ struct PostureScoreView: View {
     let accentColor: Color
 
     private var scoreLabel: String {
-        if score >= 75 { return "Solid form" }
-        if score >= 50 { return "Room to improve" }
-        if score >= 25 { return "Needs a reset" }
-        return "Stand up and stretch"
+        if score >= 80 { return "Strong posture" }
+        if score >= 60 { return "Quick adjustment" }
+        if score >= 40 { return "Time to reset" }
+        return "Take a short break"
     }
 
     var body: some View {

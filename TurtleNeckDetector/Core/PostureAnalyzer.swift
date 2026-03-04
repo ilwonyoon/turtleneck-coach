@@ -11,11 +11,17 @@ struct PostureAnalyzer {
     static let sideViewEarThreshold: CGFloat = 0.15
     static let sustainedDurationSec: TimeInterval = 5.0
 
-    // CVA severity thresholds (tightened for MediaPipe accuracy)
-    // Normal: ≥52°, Mild FHP: 42-52°, Moderate FHP: 32-42°, Severe FHP: <32°
-    static let cvaGood: CGFloat = 52.0
-    static let cvaMild: CGFloat = 42.0
-    static let cvaModerate: CGFloat = 32.0
+    // Score severity thresholds:
+    // 80+ good, 60-79 correction, 40-59 bad, <40 away.
+    static let scoreGoodThreshold = 80
+    static let scoreCorrectionThreshold = 60
+    static let scoreBadThreshold = 40
+
+    // CVA boundaries used for menu bar transition hysteresis.
+    // Derived from the score mapping curve (CVA 20-65° -> score 5-98).
+    static let cvaGood: CGFloat = cvaForScoreThreshold(scoreGoodThreshold)
+    static let cvaCorrection: CGFloat = cvaForScoreThreshold(scoreCorrectionThreshold)
+    static let cvaBad: CGFloat = cvaForScoreThreshold(scoreBadThreshold)
 
     /// Evaluate current posture metrics against calibration baseline.
     /// Returns a new PostureState (immutable pattern - creates new state each call).
@@ -111,10 +117,11 @@ struct PostureAnalyzer {
     // MARK: - Severity Classification
 
     static func classifySeverity(_ cva: CGFloat) -> Severity {
-        if cva >= cvaGood { return .good }
-        if cva >= cvaMild { return .mild }
-        if cva >= cvaModerate { return .moderate }
-        return .severe
+        let score = cvaToScore(cva)
+        if score >= scoreGoodThreshold { return .good }
+        if score >= scoreCorrectionThreshold { return .correction }
+        if score >= scoreBadThreshold { return .bad }
+        return .away
     }
 
     // MARK: - Center View Evaluation
@@ -193,17 +200,19 @@ struct PostureAnalyzer {
         return Int(round(5 + (cva - 20) * (93.0 / 45.0)))
     }
 
-    /// Map posture score to emoji.
-    /// Port of scoreToEmoji() from web_app.py JS.
+    /// Map posture score to emoji using the 4-zone posture model.
     static func scoreToEmoji(_ score: Int) -> String {
-        if score >= 80 { return "\u{1F929}" }  // star-struck
-        if score >= 60 { return "\u{1F60A}" }  // smiling
-        if score >= 40 { return "\u{1F610}" }  // neutral
-        if score >= 20 { return "\u{1F615}" }  // confused
-        return "\u{1F62C}"                      // grimacing
+        if score >= scoreGoodThreshold { return "\u{1F929}" }  // star-struck
+        if score >= scoreCorrectionThreshold { return "\u{1F642}" }  // slightly smiling
+        if score >= scoreBadThreshold { return "\u{1F610}" }  // neutral
+        return "\u{2615}\u{FE0F}"  // hot beverage (break)
     }
 
     // MARK: - Helpers
+
+    private static func cvaForScoreThreshold(_ score: Int) -> CGFloat {
+        20 + (CGFloat(score) - 5) * (45.0 / 93.0)
+    }
 
     private static func relativeChange(baseline: CGFloat, current: CGFloat) -> CGFloat {
         guard baseline != 0 else { return 0 }

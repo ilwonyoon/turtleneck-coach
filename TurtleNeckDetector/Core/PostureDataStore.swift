@@ -22,6 +22,17 @@ struct DailyAggregate: Codable, Identifiable, Hashable {
     let sessionCount: Int
 }
 
+struct HourlyAggregate: Codable, Identifiable, Hashable {
+    var id: Int { hour }
+
+    /// Local hour bucket in 24-hour format.
+    let hour: Int
+    let averageScore: Double?
+    let goodMinutes: Double
+    let badMinutes: Double
+    let totalMinutes: Double
+}
+
 final class PostureDataStore {
     private let fileManager: FileManager
     private var calendar: Calendar
@@ -115,6 +126,13 @@ final class PostureDataStore {
         }
     }
 
+    func loadHourlyAggregates(for date: Date, sessions overrideSessions: [SessionRecord]? = nil) -> [HourlyAggregate] {
+        ioQueue.sync {
+            let sessions = overrideSessions ?? loadSessionsFromDisk()
+            return computeHourlyAggregates(for: date, from: sessions)
+        }
+    }
+
     func computeDailyAggregate(for date: Date) -> DailyAggregate? {
         ioQueue.sync {
             computeDailyAggregate(for: date, from: loadSessionsFromDisk())
@@ -148,6 +166,66 @@ final class PostureDataStore {
             goodPosturePercent: clampToPercent(goodPosturePercent),
             sessionCount: daySessions.count
         )
+    }
+
+    private func computeHourlyAggregates(for date: Date, from sessions: [SessionRecord]) -> [HourlyAggregate] {
+        let dayStart = normalizedDay(date)
+        guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return [] }
+
+        var totalSecondsByHour = Array(repeating: 0.0, count: 24)
+        var goodSecondsByHour = Array(repeating: 0.0, count: 24)
+        var weightedScoreSecondsByHour = Array(repeating: 0.0, count: 24)
+
+        for session in sessions {
+            let sessionStart = max(session.startDate, dayStart)
+            let sessionEnd = min(session.endDate, dayEnd)
+            guard sessionEnd > sessionStart else { continue }
+
+            let clampedScore = clampToPercent(session.averageScore)
+            let clampedGoodRatio = clampToPercent(session.goodPosturePercent) / 100.0
+
+            var cursor = sessionStart
+            while cursor < sessionEnd {
+                guard let hourInterval = calendar.dateInterval(of: .hour, for: cursor) else { break }
+                let hourStart = max(hourInterval.start, dayStart)
+                let hourEnd = min(hourInterval.end, dayEnd)
+                let segmentEnd = min(sessionEnd, hourEnd)
+                let overlapSeconds = segmentEnd.timeIntervalSince(cursor)
+                guard overlapSeconds > 0 else {
+                    cursor = segmentEnd
+                    continue
+                }
+
+                let hour = calendar.component(.hour, from: hourStart)
+                guard (0..<24).contains(hour) else {
+                    cursor = segmentEnd
+                    continue
+                }
+
+                totalSecondsByHour[hour] += overlapSeconds
+                goodSecondsByHour[hour] += overlapSeconds * clampedGoodRatio
+                weightedScoreSecondsByHour[hour] += clampedScore * overlapSeconds
+                cursor = segmentEnd
+            }
+        }
+
+        return (0..<24).map { hour in
+            let totalSeconds = max(0, totalSecondsByHour[hour])
+            let totalMinutes = totalSeconds / 60.0
+            let goodMinutes = max(0, goodSecondsByHour[hour] / 60.0)
+            let badMinutes = max(0, totalMinutes - goodMinutes)
+            let averageScore: Double? = totalSeconds > 0
+                ? clampToPercent(weightedScoreSecondsByHour[hour] / totalSeconds)
+                : nil
+
+            return HourlyAggregate(
+                hour: hour,
+                averageScore: averageScore,
+                goodMinutes: goodMinutes,
+                badMinutes: badMinutes,
+                totalMinutes: totalMinutes
+            )
+        }
     }
 
     private func pruneOldSessions(from sessions: [SessionRecord]) -> [SessionRecord] {

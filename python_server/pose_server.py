@@ -101,7 +101,7 @@ POSE_NOSE = 0
 POSE_LEFT_EYE = 2
 POSE_RIGHT_EYE = 5
 
-MAX_RELIABLE_YAW_DEG = 45.0
+MAX_RELIABLE_YAW_DEG = 15.0
 
 
 def sagittal_yaw_factor(head_yaw: float) -> float:

@@ -1,19 +1,19 @@
 import Foundation
 
 /// Posture severity classification.
-/// Maps to approximate CVA thresholds from detector.py.
+/// Raw values keep legacy strings for backward compatibility with saved settings.
 enum Severity: String, Comparable {
     case good = "good"
-    case mild = "mild"
-    case moderate = "moderate"
-    case severe = "severe"
+    case correction = "mild"
+    case bad = "moderate"
+    case away = "severe"
 
     private var order: Int {
         switch self {
         case .good: return 0
-        case .mild: return 1
-        case .moderate: return 2
-        case .severe: return 3
+        case .correction: return 1
+        case .bad: return 2
+        case .away: return 3
         }
     }
 
