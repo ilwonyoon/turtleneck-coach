@@ -1,5 +1,38 @@
 import Foundation
 
+enum SensitivityMode: String, CaseIterable {
+    case relaxed
+    case balanced
+    case strict
+
+    static let storageKey = "sensitivityMode"
+    static let defaultMode: SensitivityMode = .balanced
+
+    var displayName: String {
+        switch self {
+        case .relaxed: return "Relaxed"
+        case .balanced: return "Balanced"
+        case .strict: return "Strict"
+        }
+    }
+
+    var goodThreshold: Int {
+        switch self {
+        case .relaxed: return 70
+        case .balanced: return 75
+        case .strict: return 82
+        }
+    }
+
+    var correctionThreshold: Int {
+        goodThreshold - 20
+    }
+
+    var badThreshold: Int {
+        goodThreshold - 40
+    }
+}
+
 /// Posture evaluation engine.
 /// Port of Python detector.py - evaluates posture against calibration baseline.
 struct PostureAnalyzer {
@@ -11,17 +44,37 @@ struct PostureAnalyzer {
     static let sideViewEarThreshold: CGFloat = 0.15
     static let sustainedDurationSec: TimeInterval = 5.0
 
-    // Score severity thresholds:
-    // 80+ good, 60-79 correction, 40-59 bad, <40 away.
-    static let scoreGoodThreshold = 80
-    static let scoreCorrectionThreshold = 60
-    static let scoreBadThreshold = 40
+    static var currentSensitivityMode: SensitivityMode {
+        let rawValue = UserDefaults.standard.string(forKey: SensitivityMode.storageKey)
+        return SensitivityMode(rawValue: rawValue ?? "") ?? .balanced
+    }
+
+    // Score severity thresholds based on sensitivity mode.
+    static var scoreGoodThreshold: Int {
+        currentSensitivityMode.goodThreshold
+    }
+
+    static var scoreCorrectionThreshold: Int {
+        currentSensitivityMode.correctionThreshold
+    }
+
+    static var scoreBadThreshold: Int {
+        currentSensitivityMode.badThreshold
+    }
 
     // CVA boundaries used for menu bar transition hysteresis.
     // Derived from the score mapping curve (CVA 20-65° -> score 5-98).
-    static let cvaGood: CGFloat = cvaForScoreThreshold(scoreGoodThreshold)
-    static let cvaCorrection: CGFloat = cvaForScoreThreshold(scoreCorrectionThreshold)
-    static let cvaBad: CGFloat = cvaForScoreThreshold(scoreBadThreshold)
+    static var cvaGood: CGFloat {
+        cvaGood(for: currentSensitivityMode)
+    }
+
+    static var cvaCorrection: CGFloat {
+        cvaCorrection(for: currentSensitivityMode)
+    }
+
+    static var cvaBad: CGFloat {
+        cvaBad(for: currentSensitivityMode)
+    }
 
     /// Evaluate current posture metrics against calibration baseline.
     /// Returns a new PostureState (immutable pattern - creates new state each call).
@@ -29,7 +82,8 @@ struct PostureAnalyzer {
         metrics: PostureMetrics,
         baseline: CalibrationData,
         previousState: PostureState,
-        cameraPosition: CameraPosition
+        cameraPosition: CameraPosition,
+        sensitivityMode: SensitivityMode = currentSensitivityMode
     ) -> PostureState {
         guard metrics.landmarksDetected else {
             return PostureState(
@@ -43,7 +97,7 @@ struct PostureAnalyzer {
             )
         }
 
-        let severity = classifySeverity(metrics.neckEarAngle)
+        let severity = classifySeverity(metrics.neckEarAngle, mode: sensitivityMode)
         let useFallback = !metrics.earsVisible
 
         // When using face fallback, shoulder positions are estimated from face bbox
@@ -116,11 +170,14 @@ struct PostureAnalyzer {
 
     // MARK: - Severity Classification
 
-    static func classifySeverity(_ cva: CGFloat) -> Severity {
+    static func classifySeverity(
+        _ cva: CGFloat,
+        mode: SensitivityMode = currentSensitivityMode
+    ) -> Severity {
         let score = cvaToScore(cva)
-        if score >= scoreGoodThreshold { return .good }
-        if score >= scoreCorrectionThreshold { return .correction }
-        if score >= scoreBadThreshold { return .bad }
+        if score >= mode.goodThreshold { return .good }
+        if score >= mode.correctionThreshold { return .correction }
+        if score >= mode.badThreshold { return .bad }
         return .away
     }
 
@@ -201,11 +258,26 @@ struct PostureAnalyzer {
     }
 
     /// Map posture score to emoji using the 4-zone posture model.
-    static func scoreToEmoji(_ score: Int) -> String {
-        if score >= scoreGoodThreshold { return "\u{1F929}" }  // star-struck
-        if score >= scoreCorrectionThreshold { return "\u{1F642}" }  // slightly smiling
-        if score >= scoreBadThreshold { return "\u{1F610}" }  // neutral
+    static func scoreToEmoji(
+        _ score: Int,
+        mode: SensitivityMode = currentSensitivityMode
+    ) -> String {
+        if score >= mode.goodThreshold { return "\u{1F929}" }  // star-struck
+        if score >= mode.correctionThreshold { return "\u{1F642}" }  // slightly smiling
+        if score >= mode.badThreshold { return "\u{1F610}" }  // neutral
         return "\u{2615}\u{FE0F}"  // hot beverage (break)
+    }
+
+    static func cvaGood(for mode: SensitivityMode) -> CGFloat {
+        cvaForScoreThreshold(mode.goodThreshold)
+    }
+
+    static func cvaCorrection(for mode: SensitivityMode) -> CGFloat {
+        cvaForScoreThreshold(mode.correctionThreshold)
+    }
+
+    static func cvaBad(for mode: SensitivityMode) -> CGFloat {
+        cvaForScoreThreshold(mode.badThreshold)
     }
 
     // MARK: - Helpers

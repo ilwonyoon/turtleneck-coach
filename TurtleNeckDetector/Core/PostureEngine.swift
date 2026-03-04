@@ -25,6 +25,8 @@ final class PostureEngine: ObservableObject {
     @Published var currentFrame: CGImage?
     @Published var currentJoints: DetectedJoints?
     @Published var bodyDetected = false
+    @AppStorage(SensitivityMode.storageKey)
+    private var sensitivityModeRawValue = SensitivityMode.defaultMode.rawValue
 
     // Score history for 1-minute average
     private var scoreHistory: [(date: Date, score: Int)] = []
@@ -35,8 +37,24 @@ final class PostureEngine: ObservableObject {
         PostureAnalyzer.cvaToScore(postureState.currentCVA)
     }
 
+    private var sensitivityMode: SensitivityMode {
+        let rawValue = UserDefaults.standard.string(forKey: SensitivityMode.storageKey) ?? sensitivityModeRawValue
+        return SensitivityMode(rawValue: rawValue) ?? .balanced
+    }
+
     var postureEmoji: String {
-        PostureAnalyzer.scoreToEmoji(postureScore)
+        PostureAnalyzer.scoreToEmoji(postureScore, mode: sensitivityMode)
+    }
+
+    /// Live score color mapped directly from the current posture score.
+    /// Unlike `menuBarSeverityColor`, this should not be delayed by hold timers.
+    var postureScoreColor: Color {
+        let score = postureScore
+        let mode = sensitivityMode
+        if score >= mode.goodThreshold { return .green }
+        if score >= mode.correctionThreshold { return .yellow }
+        if score >= mode.badThreshold { return .orange }
+        return .red
     }
 
     /// 1-minute rolling average score for menu bar display.
@@ -401,7 +419,8 @@ final class PostureEngine: ObservableObject {
                 metrics: metrics,
                 baseline: baseline,
                 previousState: postureState,
-                cameraPosition: cameraPosition
+                cameraPosition: cameraPosition,
+                sensitivityMode: sensitivityMode
             )
             postureState = newState
             trackSlouchTransition(from: previousSeverity, to: newState.severity)
@@ -415,18 +434,23 @@ final class PostureEngine: ObservableObject {
                 goodPostureStart = nil
             }
 
-            // Send notification if sustained bad posture
-            if newState.isTurtleNeck {
-                let msg = NotificationService.message(for: newState.severity)
+            // Send notification based on held severity (menuBarSeverity)
+            // so alerts match what the user sees in the menu bar.
+            let held = menuBarSeverity
+            if held == .correction || held == .bad {
+                let msg = NotificationService.message(for: held)
                 notificationService.notify(
                     title: "PT Turtle",
                     message: msg,
-                    severity: newState.severity
+                    severity: held
                 )
             }
         } else {
             // No calibration yet - still show live CVA and severity from detection
-            let severity = PostureAnalyzer.classifySeverity(metrics.neckEarAngle)
+            let severity = PostureAnalyzer.classifySeverity(
+                metrics.neckEarAngle,
+                mode: sensitivityMode
+            )
             let previousSeverity = postureState.severity
             postureState = PostureState(
                 badPostureStart: nil,
@@ -673,18 +697,18 @@ final class PostureEngine: ObservableObject {
 
         if target > current {
             switch current {
-            case .good: return PostureAnalyzer.cvaGood
-            case .correction: return PostureAnalyzer.cvaCorrection
-            case .bad: return PostureAnalyzer.cvaBad
+            case .good: return PostureAnalyzer.cvaGood(for: sensitivityMode)
+            case .correction: return PostureAnalyzer.cvaCorrection(for: sensitivityMode)
+            case .bad: return PostureAnalyzer.cvaBad(for: sensitivityMode)
             case .away: return nil
             }
         }
 
         switch current {
         case .good: return nil
-        case .correction: return PostureAnalyzer.cvaGood
-        case .bad: return PostureAnalyzer.cvaCorrection
-        case .away: return PostureAnalyzer.cvaBad
+        case .correction: return PostureAnalyzer.cvaGood(for: sensitivityMode)
+        case .bad: return PostureAnalyzer.cvaCorrection(for: sensitivityMode)
+        case .away: return PostureAnalyzer.cvaBad(for: sensitivityMode)
         }
     }
 

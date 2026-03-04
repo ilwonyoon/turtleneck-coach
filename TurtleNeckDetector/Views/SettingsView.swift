@@ -6,11 +6,28 @@ struct SettingsView: View {
     @AppStorage(NotificationService.notificationsEnabledKey)
     private var notificationsEnabled = true
 
-    @AppStorage(NotificationService.cooldownSecondsKey)
-    private var cooldownSeconds = 60.0
+    @AppStorage(SensitivityMode.storageKey)
+    private var sensitivityModeRawValue = SensitivityMode.defaultMode.rawValue
+
+    @AppStorage(NotificationService.notificationFrequencyKey)
+    private var notificationFrequencyRawValue = NotificationFrequency.defaultFrequency.rawValue
 
     @AppStorage(NotificationService.minSeverityKey)
     private var minSeverityRawValue = Severity.correction.rawValue
+
+    private var sensitivityModeBinding: Binding<SensitivityMode> {
+        Binding(
+            get: { SensitivityMode(rawValue: sensitivityModeRawValue) ?? .balanced },
+            set: { sensitivityModeRawValue = $0.rawValue }
+        )
+    }
+
+    private var notificationFrequencyBinding: Binding<NotificationFrequency> {
+        Binding(
+            get: { NotificationFrequency(rawValue: notificationFrequencyRawValue) ?? .normal },
+            set: { notificationFrequencyRawValue = $0.rawValue }
+        )
+    }
 
     private var minSeverityBinding: Binding<Severity> {
         Binding(
@@ -33,7 +50,6 @@ struct SettingsView: View {
 
     private let valueColumnWidth: CGFloat = 220
     private let menuWidth: CGFloat = 170
-    private let stepperValueWidth: CGFloat = 72
 
     @ViewBuilder
     private func valueColumn<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -66,6 +82,25 @@ struct SettingsView: View {
             }
 
             Section {
+                LabeledContent("Sensitivity") {
+                    valueColumn {
+                        Picker("", selection: sensitivityModeBinding) {
+                            ForEach(SensitivityMode.allCases, id: \.self) { mode in
+                                Text(mode.displayName).tag(mode)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: menuWidth, alignment: .trailing)
+                    }
+                }
+            } header: {
+                Text("Sensitivity")
+            } footer: {
+                Text("How strict the posture scoring is. Relaxed suits casual use; Strict is for focused work sessions.")
+            }
+
+            Section {
                 LabeledContent("Enable Notifications") {
                     valueColumn {
                         Toggle("", isOn: $notificationsEnabled)
@@ -74,16 +109,16 @@ struct SettingsView: View {
                     }
                 }
 
-                LabeledContent("Cooldown") {
+                LabeledContent("Frequency") {
                     valueColumn {
-                        HStack(spacing: 8) {
-                            Text("\(Int(cooldownSeconds)) sec")
-                                .monospacedDigit()
-                                .frame(width: stepperValueWidth, alignment: .trailing)
-
-                            Stepper("", value: $cooldownSeconds, in: 30...300, step: 30)
-                                .labelsHidden()
+                        Picker("", selection: notificationFrequencyBinding) {
+                            ForEach(NotificationFrequency.allCases, id: \.self) { frequency in
+                                Text(frequency.displayName).tag(frequency)
+                            }
                         }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: menuWidth, alignment: .trailing)
                     }
                 }
                 .disabled(!notificationsEnabled)
@@ -104,7 +139,7 @@ struct SettingsView: View {
             } header: {
                 Text("Notifications")
             } footer: {
-                Text("Alerts are delivered through macOS Notification Center.")
+                Text("Often: every 30s · Normal: every 2.5min · Rarely: every 5min. Delivered via macOS Notification Center.")
             }
 
             Section {

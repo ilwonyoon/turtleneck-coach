@@ -81,7 +81,7 @@ struct MenuBarView: View {
                             PostureScoreView(
                                 score: engine.postureScore,
                                 emoji: engine.postureEmoji,
-                                accentColor: accentColor
+                                scoreColor: engine.postureScoreColor
                             )
                             .animation(.easeInOut(duration: 0.8), value: engine.postureScore)
 

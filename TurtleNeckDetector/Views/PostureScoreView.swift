@@ -4,7 +4,7 @@ import SwiftUI
 struct PostureScoreView: View {
     let score: Int
     let emoji: String
-    let accentColor: Color
+    let scoreColor: Color
 
     private var scoreLabel: String {
         if score >= 80 { return "Strong posture" }
@@ -19,12 +19,12 @@ struct PostureScoreView: View {
             ZStack {
                 // Background ring track
                 Circle()
-                    .stroke(accentColor.opacity(0.2), lineWidth: 6)
+                    .stroke(scoreColor.opacity(0.2), lineWidth: 6)
 
                 // Filled ring
                 Circle()
                     .trim(from: 0, to: CGFloat(score) / 100.0)
-                    .stroke(accentColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    .stroke(scoreColor, style: StrokeStyle(lineWidth: 6, lineCap: .round))
                     .rotationEffect(.degrees(-90))
                     .animation(.easeInOut(duration: 0.8), value: score)
 
@@ -39,7 +39,7 @@ struct PostureScoreView: View {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Text("\(score)")
                         .font(.system(size: 32, weight: .bold, design: .rounded))
-                        .foregroundColor(accentColor)
+                        .foregroundColor(scoreColor)
                         .contentTransition(.numericText())
                         .animation(.easeInOut(duration: 0.8), value: score)
                     Text("/ 100")

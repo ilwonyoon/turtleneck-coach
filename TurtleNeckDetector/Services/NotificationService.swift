@@ -1,15 +1,40 @@
 import UserNotifications
 import Foundation
 
+enum NotificationFrequency: String, CaseIterable {
+    case often
+    case normal
+    case rarely
+
+    static let storageKey = "notificationFrequency"
+    static let defaultFrequency: NotificationFrequency = .normal
+
+    var displayName: String {
+        switch self {
+        case .often: return "Often"
+        case .normal: return "Normal"
+        case .rarely: return "Rarely"
+        }
+    }
+
+    var cooldownSeconds: TimeInterval {
+        switch self {
+        case .often: return 30
+        case .normal: return 150
+        case .rarely: return 300
+        }
+    }
+}
+
 /// Manages macOS native notifications with cooldown.
 final class NotificationService {
     static let notificationsEnabledKey = "notificationsEnabled"
-    static let cooldownSecondsKey = "cooldownSeconds"
+    static let notificationFrequencyKey = NotificationFrequency.storageKey
     static let minSeverityKey = "minSeverity"
 
     private let userDefaults: UserDefaults
     private var notificationsEnabled: Bool = true
-    private var cooldownSeconds: Double = 60
+    private var notificationFrequency: NotificationFrequency = .normal
     private var minSeverity: Severity = .correction
     private var lastNotificationTime: Date = .distantPast
 
@@ -17,7 +42,7 @@ final class NotificationService {
         self.userDefaults = userDefaults
         userDefaults.register(defaults: [
             Self.notificationsEnabledKey: true,
-            Self.cooldownSecondsKey: 60.0,
+            Self.notificationFrequencyKey: NotificationFrequency.defaultFrequency.rawValue,
             Self.minSeverityKey: Severity.correction.rawValue
         ])
         loadSettingsFromUserDefaults()
@@ -25,7 +50,8 @@ final class NotificationService {
 
     private func loadSettingsFromUserDefaults() {
         notificationsEnabled = userDefaults.bool(forKey: Self.notificationsEnabledKey)
-        cooldownSeconds = userDefaults.double(forKey: Self.cooldownSecondsKey)
+        let frequencyRawValue = userDefaults.string(forKey: Self.notificationFrequencyKey) ?? ""
+        notificationFrequency = NotificationFrequency(rawValue: frequencyRawValue) ?? .normal
 
         if let rawValue = userDefaults.string(forKey: Self.minSeverityKey),
            let savedSeverity = Severity(rawValue: rawValue) {
@@ -61,7 +87,7 @@ final class NotificationService {
         }
 
         let now = Date()
-        guard now.timeIntervalSince(lastNotificationTime) >= cooldownSeconds else {
+        guard now.timeIntervalSince(lastNotificationTime) >= notificationFrequency.cooldownSeconds else {
             return false
         }
 
