@@ -467,7 +467,8 @@ final class PostureEngine: ObservableObject {
             shoulderEvenness: result.metrics.shoulderEvenness,
             earsVisible: result.metrics.earsVisible,
             landmarksDetected: result.metrics.landmarksDetected,
-            forwardDepth: result.metrics.forwardDepth
+            forwardDepth: result.metrics.forwardDepth,
+            irisGazeOffset: result.metrics.irisGazeOffset
         )
 
         // Calibration mode

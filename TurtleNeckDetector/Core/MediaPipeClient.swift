@@ -18,6 +18,7 @@ struct MediaPipeResult: Codable {
     let cvaAngle: Double
     let confidence: Double
     let forwardDepth: Double?
+    let irisGazeOffset: Double?
     let yawLowConfidence: Bool?
     let frameNumber: Int?
     /// All 478 face landmarks as flat array [x0,y0,z0,x1,y1,z1,...] (3D with depth)
@@ -38,6 +39,7 @@ struct MediaPipeResult: Codable {
         case cvaAngle = "cva_angle"
         case confidence
         case forwardDepth = "forward_depth"
+        case irisGazeOffset = "iris_gaze_offset"
         case yawLowConfidence = "yaw_low_confidence"
         case frameNumber = "frame_number"
         case faceLandmarks = "face_landmarks"
@@ -451,7 +453,8 @@ final class MediaPipeClient: @unchecked Sendable {
             shoulderEvenness: abs(lSh.y - rSh.y),
             earsVisible: effectiveConfidence > 0.3,
             landmarksDetected: effectiveConfidence > 0.1,
-            forwardDepth: CGFloat(result.forwardDepth ?? 0)
+            forwardDepth: CGFloat(result.forwardDepth ?? 0),
+            irisGazeOffset: CGFloat(result.irisGazeOffset ?? 0)
         )
     }
 

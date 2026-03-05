@@ -108,17 +108,20 @@ struct PostureAnalyzer {
             cvaDrop: cvaDrop,
             yawDegrees: abs(yawDegrees),
             forwardDepth: metrics.forwardDepth,
-            baselineForwardDepth: baseline.forwardDepth
+            baselineForwardDepth: baseline.forwardDepth,
+            irisGazeOffset: metrics.irisGazeOffset,
+            baselineIrisGaze: baseline.irisGazeOffset
         )
 
         // Debug: log classifier inputs every ~3s
         let pitchDelta = metrics.headPitch - baseline.headPitch
         let fsc = baseline.baselineFaceSize > 0 ? (metrics.faceSizeNormalized - baseline.baselineFaceSize) / baseline.baselineFaceSize : 0
-        let debugLine = String(format: "[CLASSIFY] pitch=%.2f base=%.2f Δ=%.3f faceSize=%.4f base=%.4f Δ=%.1f%% cvaDrop=%.1f yaw=%.1f fwdZ=%.4f baseZ=%.4f → %@",
+        let debugLine = String(format: "[CLASSIFY] pitch=%.2f base=%.2f Δ=%.3f faceSize=%.4f base=%.4f Δ=%.1f%% cvaDrop=%.1f yaw=%.1f fwdZ=%.4f baseZ=%.4f iris=%.3f baseIris=%.3f → %@",
             metrics.headPitch, baseline.headPitch, pitchDelta,
             metrics.faceSizeNormalized, baseline.baselineFaceSize, fsc * 100,
             cvaDrop, abs(yawDegrees),
             metrics.forwardDepth, baseline.forwardDepth,
+            metrics.irisGazeOffset, baseline.irisGazeOffset,
             classification.rawValue)
         if let data = (debugLine + "\n").data(using: .utf8) {
             let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")

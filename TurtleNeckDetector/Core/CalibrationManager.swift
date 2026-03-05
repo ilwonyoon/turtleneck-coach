@@ -22,6 +22,7 @@ final class CalibrationManager {
         headPitchSamples = []
         faceSizeSamples = []
         forwardDepthSamples = []
+        irisGazeSamples = []
         isCalibrating = true
     }
 
@@ -31,6 +32,8 @@ final class CalibrationManager {
     private var faceSizeSamples: [CGFloat] = []
     // Forward depth samples (Z-depth nose vs shoulders)
     private var forwardDepthSamples: [CGFloat] = []
+    // Iris gaze offset samples
+    private var irisGazeSamples: [CGFloat] = []
 
     /// Add a sample during calibration. Returns CalibrationResult when enough samples collected.
     func addSample(_ metrics: PostureMetrics, headPitch: CGFloat = 0) -> CalibrationResult? {
@@ -40,15 +43,17 @@ final class CalibrationManager {
         headPitchSamples.append(headPitch)
         faceSizeSamples.append(metrics.faceSizeNormalized)
         forwardDepthSamples.append(metrics.forwardDepth)
+        irisGazeSamples.append(metrics.irisGazeOffset)
 
         guard samples.count >= Self.requiredSamples else { return nil }
 
         isCalibrating = false
-        let result = collectCalibration(samples: samples, headPitchSamples: headPitchSamples, faceSizeSamples: faceSizeSamples, forwardDepthSamples: forwardDepthSamples)
+        let result = collectCalibration(samples: samples, headPitchSamples: headPitchSamples, faceSizeSamples: faceSizeSamples, forwardDepthSamples: forwardDepthSamples, irisGazeSamples: irisGazeSamples)
         samples = []
         headPitchSamples = []
         faceSizeSamples = []
         forwardDepthSamples = []
+        irisGazeSamples = []
 
         if result.isValid, let data = result.data {
             save(data)
@@ -64,6 +69,7 @@ final class CalibrationManager {
         headPitchSamples = []
         faceSizeSamples = []
         forwardDepthSamples = []
+        irisGazeSamples = []
     }
 
     /// Load saved calibration from UserDefaults.
@@ -94,7 +100,8 @@ final class CalibrationManager {
         samples: [PostureMetrics],
         headPitchSamples: [CGFloat] = [],
         faceSizeSamples: [CGFloat] = [],
-        forwardDepthSamples: [CGFloat] = []
+        forwardDepthSamples: [CGFloat] = [],
+        irisGazeSamples: [CGFloat] = []
     ) -> CalibrationResult {
         let valid = samples.filter { $0.landmarksDetected }
         guard !valid.isEmpty else {
@@ -133,6 +140,13 @@ final class CalibrationManager {
             avgForwardDepth = 0
         }
 
+        let avgIrisGaze: CGFloat
+        if !irisGazeSamples.isEmpty {
+            avgIrisGaze = irisGazeSamples.reduce(0, +) / CGFloat(irisGazeSamples.count)
+        } else {
+            avgIrisGaze = 0
+        }
+
         let data = CalibrationData(
             earShoulderDistanceLeft: valid.map(\.earShoulderDistanceLeft).reduce(0, +) / n,
             earShoulderDistanceRight: valid.map(\.earShoulderDistanceRight).reduce(0, +) / n,
@@ -145,7 +159,8 @@ final class CalibrationManager {
             earsWereVisible: earsMostlyVisible,
             headPitch: avgHeadPitch,
             baselineFaceSize: avgFaceSize,
-            forwardDepth: avgForwardDepth
+            forwardDepth: avgForwardDepth,
+            irisGazeOffset: avgIrisGaze
         )
 
         if avgCVA < Self.minCalibrationCVA {

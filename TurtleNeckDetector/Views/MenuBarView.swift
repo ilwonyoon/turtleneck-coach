@@ -526,6 +526,15 @@ struct MenuBarView: View {
                     .font(DS.Font.mono)
                     .frame(width: 45)
             }
+            HStack(spacing: DS.Space.xs) {
+                Text("Iris gate")
+                    .font(DS.Font.micro)
+                    .frame(width: 65, alignment: .leading)
+                Slider(value: $tuning.irisGazeThreshold, in: 0.05...0.6, step: 0.05)
+                Text(String(format: "%.2f", tuning.irisGazeThreshold))
+                    .font(DS.Font.mono)
+                    .frame(width: 45)
+            }
         }
         .padding(DS.Space.sm)
         .background(DS.Surface.card)

@@ -243,6 +243,7 @@ class PoseServer:
         self.filter_roll = OneEuroFilter(freq=30, min_cutoff=1.0, beta=0.007)
         self.filter_cva = OneEuroFilter(freq=30, min_cutoff=0.8, beta=0.005)
         self.depth_filter = OneEuroFilter(freq=15.0, min_cutoff=0.5, beta=0.01)
+        self.iris_gaze_filter = OneEuroFilter(freq=15.0, min_cutoff=0.3, beta=0.05)
         self.frame_count = 0
 
         # Hold-on-loss: keep last valid face data during brief detection drops
@@ -284,6 +285,7 @@ class PoseServer:
             "right_eye": [0.0, 0.0],
             "cva_angle": 0.0,
             "forward_depth": 0.0,
+            "iris_gaze_offset": 0.0,
             "confidence": 0.0,
             "frame_number": self.frame_count,
             "face_landmarks": [],  # all 478 face landmarks as flat [x0,y0,z0,x1,y1,z1,...]
@@ -323,6 +325,36 @@ class PoseServer:
                 face_landmarks_flat.append(round(lm.y, 4))
                 face_landmarks_flat.append(round(lm.z, 4))
             response["face_landmarks"] = face_landmarks_flat
+
+            # Iris gaze vertical offset: iris center vs eye socket center
+            # Positive = looking down, ~0 = looking at screen
+            left_upper_lid = face_lms[159]
+            left_lower_lid = face_lms[145]
+            left_iris = face_lms[468]
+            left_eye_center_y = (left_upper_lid.y + left_lower_lid.y) / 2
+            left_eye_height = abs(left_lower_lid.y - left_upper_lid.y)
+
+            right_upper_lid = face_lms[386]
+            right_lower_lid = face_lms[374]
+            right_iris = face_lms[473]
+            right_eye_center_y = (right_upper_lid.y + right_lower_lid.y) / 2
+            right_eye_height = abs(right_lower_lid.y - right_upper_lid.y)
+
+            avg_eye_height = (left_eye_height + right_eye_height) / 2
+            if avg_eye_height > 0.001:
+                left_offset = (left_iris.y - left_eye_center_y) / avg_eye_height
+                right_offset = (right_iris.y - right_eye_center_y) / avg_eye_height
+                iris_gaze_offset = round((left_offset + right_offset) / 2, 4)
+            else:
+                iris_gaze_offset = 0.0
+
+            response["iris_gaze_offset"] = round(self.iris_gaze_filter(iris_gaze_offset), 4)
+
+            # Debug iris values every 30 frames
+            if self.frame_count % 30 == 0:
+                print(f"  [IRIS] L_lid=({left_upper_lid.y:.4f},{left_lower_lid.y:.4f}) iris={left_iris.y:.4f} "
+                      f"eye_h={left_eye_height:.4f} offset_L={left_offset:.4f} offset_R={right_offset:.4f} "
+                      f"avg={iris_gaze_offset:.4f} filtered={response['iris_gaze_offset']}", flush=True)
         else:
             # Hold-on-loss: use last valid pitch/yaw during brief face detection drops
             if self.face_lost_frames < self.max_face_hold_frames:

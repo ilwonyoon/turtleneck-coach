@@ -364,7 +364,8 @@ final class VisionPoseDetector {
             faceSizeNormalized: faceSizeNormalized,
             shoulderEvenness: abs(lSh.y - rSh.y),
             earsVisible: earsVisible, landmarksDetected: true,
-            forwardDepth: 0
+            forwardDepth: 0,
+            irisGazeOffset: 0
         )
         return DetectionResult(metrics: metrics, joints: joints)
     }
@@ -583,7 +584,8 @@ final class VisionPoseDetector {
             faceSizeNormalized: faceHeightNorm,
             shoulderEvenness: 0,
             earsVisible: false, landmarksDetected: true,  // false = use CVA-based deviation in PostureAnalyzer
-            forwardDepth: 0
+            forwardDepth: 0,
+            irisGazeOffset: 0
         )
 
         return DetectionResult(metrics: metrics, joints: joints)

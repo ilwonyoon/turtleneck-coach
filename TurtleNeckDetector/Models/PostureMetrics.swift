@@ -16,6 +16,7 @@ struct PostureMetrics {
     let earsVisible: Bool
     let landmarksDetected: Bool
     let forwardDepth: CGFloat  // Z-depth: nose forward of shoulders (0 if unavailable)
+    let irisGazeOffset: CGFloat  // iris vertical offset: positive = looking down, ~0 = screen level
 
     static let empty = PostureMetrics(
         earShoulderDistanceLeft: 0,
@@ -30,6 +31,7 @@ struct PostureMetrics {
         shoulderEvenness: 0,
         earsVisible: false,
         landmarksDetected: false,
-        forwardDepth: 0
+        forwardDepth: 0,
+        irisGazeOffset: 0
     )
 }
