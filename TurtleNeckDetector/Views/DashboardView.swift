@@ -59,10 +59,10 @@ struct DashboardView: View {
     // MARK: - Summary
 
     private var summaryCards: some View {
-        HStack(spacing: DS.Space.md) {
+        HStack(spacing: DS.Space.lg) {
             summaryCard(title: "Bad Posture Time") {
                 Text(formattedDuration(minutes: todaySummary.badPostureMinutes))
-                    .font(DS.Font.titleBold)
+                    .font(DS.Font.scoreLg)
                     .foregroundStyle(DS.Severity.moderate)
             }
 
@@ -70,18 +70,18 @@ struct DashboardView: View {
                 HStack(spacing: 10) {
                     CircularPercentView(percent: todaySummary.goodPosturePercent)
                     Text("\(Int(todaySummary.goodPosturePercent.rounded()))%")
-                        .font(DS.Font.titleBold)
+                        .font(DS.Font.titleLgBold)
                 }
             }
 
             summaryCard(title: "Resets") {
                 Text("\(todaySummary.resets)")
-                    .font(DS.Font.titleBold)
+                    .font(DS.Font.scoreLg)
             }
 
             summaryCard(title: "Longest Slouch") {
                 Text(formattedDuration(minutes: todaySummary.longestSlouchMinutes))
-                    .font(DS.Font.titleBold)
+                    .font(DS.Font.scoreLg)
             }
         }
     }
@@ -94,9 +94,9 @@ struct DashboardView: View {
             content()
             Spacer(minLength: 0)
         }
-        .padding(14)
-        .frame(maxWidth: .infinity, minHeight: 90, alignment: .topLeading)
-        .background(cardBackground)
+        .padding(DS.Space.lg)
+        .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
     }
 
     // MARK: - Charts
@@ -141,8 +141,8 @@ struct DashboardView: View {
             }
             .frame(height: 220)
         }
-        .padding(14)
-        .background(cardBackground)
+        .padding(DS.Space.lg)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
     }
 
     private var weeklyTrendCard: some View {
@@ -181,8 +181,8 @@ struct DashboardView: View {
             }
             .frame(height: 200)
         }
-        .padding(14)
-        .background(cardBackground)
+        .padding(DS.Space.lg)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
     }
 
     private var hourlyTimelineBins: [ChartHour] {
@@ -194,15 +194,6 @@ struct DashboardView: View {
         let dayStart = calendar.startOfDay(for: reference)
         let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? dayStart.addingTimeInterval(60 * 60 * 24)
         return dayStart...dayEnd
-    }
-
-    private var cardBackground: some View {
-        RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-            .fill(Color.black.opacity(0.28))
-            .overlay(
-                RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
-            )
     }
 
     // MARK: - Data
@@ -431,7 +422,7 @@ private struct CircularPercentView: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.15), lineWidth: 5)
+                .stroke(Color.white.opacity(0.15), lineWidth: DS.Size.scoreStroke)
 
             Circle()
                 .trim(from: 0, to: progress)
@@ -440,11 +431,11 @@ private struct CircularPercentView: View {
                         colors: [DS.Severity.good, DS.Palette.yellow, DS.Severity.moderate],
                         center: .center
                     ),
-                    style: StrokeStyle(lineWidth: 5, lineCap: .round)
+                    style: StrokeStyle(lineWidth: DS.Size.scoreStroke, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
         }
-        .frame(width: 42, height: 42)
+        .frame(width: 48, height: 48)
     }
 }
 
