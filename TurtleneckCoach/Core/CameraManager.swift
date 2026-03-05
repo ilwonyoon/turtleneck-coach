@@ -76,15 +76,30 @@ final class CameraManager: NSObject, @unchecked Sendable {
             throw CameraError.notAuthorized
         }
         try configure()
-        queue.async { [weak self] in
-            self?.session.startRunning()
-        }
+        startSession()
     }
 
     /// Stop the camera session.
     func stop() {
+        stopSession()
+    }
+
+    /// Start or resume AVCaptureSession safely (idempotent).
+    func startSession() {
         queue.async { [weak self] in
-            self?.session.stopRunning()
+            guard let self else { return }
+            guard self.isConfigured else { return }
+            guard !self.session.isRunning else { return }
+            self.session.startRunning()
+        }
+    }
+
+    /// Stop AVCaptureSession safely (idempotent).
+    func stopSession() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            guard self.session.isRunning else { return }
+            self.session.stopRunning()
         }
     }
 

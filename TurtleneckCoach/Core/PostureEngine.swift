@@ -1,6 +1,22 @@
 import SwiftUI
 import Combine
 import os
+import UserNotifications
+
+enum MonitoringPowerState: String {
+    case active
+    case drowsy
+    case inactive
+}
+
+enum PowerSavingSettings {
+    static let autoPauseWhenAwayKey = "autoPauseWhenAway"
+    static let inactiveTimeoutSecondsKey = "inactiveTimeoutSeconds"
+    static let defaultAutoPauseWhenAway = true
+    static let defaultInactiveTimeoutSeconds: Double = 30
+    static let minInactiveTimeoutSeconds: Double = 30
+    static let maxInactiveTimeoutSeconds: Double = 300
+}
 
 /// Main orchestrator: continuous camera -> periodic analysis -> UI + notifications.
 @MainActor
@@ -25,8 +41,17 @@ final class PostureEngine: ObservableObject {
     @Published var currentFrame: CGImage?
     @Published var currentJoints: DetectedJoints?
     @Published var bodyDetected = false
+    @Published var powerState: MonitoringPowerState = .active
     @AppStorage(SensitivityMode.storageKey)
     private var sensitivityModeRawValue = SensitivityMode.defaultMode.rawValue
+    @AppStorage(PowerSavingSettings.autoPauseWhenAwayKey)
+    private var autoPauseEnabled = PowerSavingSettings.defaultAutoPauseWhenAway {
+        didSet { handleAutoPauseSettingChanged() }
+    }
+    @AppStorage(PowerSavingSettings.inactiveTimeoutSecondsKey)
+    private var inactiveTimeout = PowerSavingSettings.defaultInactiveTimeoutSeconds {
+        didSet { handleInactiveTimeoutChanged() }
+    }
 
     // Score history for 1-minute average
     private var scoreHistory: [(date: Date, score: Int)] = []
@@ -82,7 +107,17 @@ final class PostureEngine: ObservableObject {
     private let mediaPipeClient = MediaPipeClient()
     private let calibrationManager = CalibrationManager()
     private let notificationService = NotificationService()
+    // Set notification delegate in init or wherever the engine initializes
     private var analysisTimer: Timer?
+    private var probeTimer: Timer?
+    private var probeTask: Task<Void, Never>?
+    private var noDetectionStart: Date?
+    private var consecutiveDetections = 0
+    private let activeAnalysisInterval: TimeInterval = 0.33
+    private let drowsyAnalysisInterval: TimeInterval = 2.0
+    private let calibrationAnalysisInterval: TimeInterval = 0.2
+    private let inactiveProbeInterval: TimeInterval = 6.0
+    private let inactiveProbeWarmup: TimeInterval = 1.5
     private var useMediaPipe = true  // prefer MediaPipe, fallback to Vision
     private var mediaPipeConnectAttempted = false
     private var lastMediaPipeHeadPitch: CGFloat = 0
@@ -190,6 +225,16 @@ final class PostureEngine: ObservableObject {
     private let jitterHoldDuration: TimeInterval = 3.0
 
     var menuBarStatusText: String {
+        if isMonitoring {
+            switch powerState {
+            case .drowsy:
+                return "Low Power"
+            case .inactive:
+                return "Paused"
+            case .active:
+                break
+            }
+        }
         guard !menuBarIsIdle else { return "—" }
         switch menuBarSeverity {
         case .good: return "Great"
@@ -244,6 +289,13 @@ final class PostureEngine: ObservableObject {
     // MARK: - Init
 
     init() {
+        UNUserNotificationCenter.current().delegate = notificationService
+        UserDefaults.standard.register(defaults: [
+            PowerSavingSettings.autoPauseWhenAwayKey: PowerSavingSettings.defaultAutoPauseWhenAway,
+            PowerSavingSettings.inactiveTimeoutSecondsKey: PowerSavingSettings.defaultInactiveTimeoutSeconds
+        ])
+        handleInactiveTimeoutChanged()
+
         #if DEBUG
         // Log engine creation
         let initLine = "\(Date()): [ENGINE] PostureEngine init\n"
@@ -307,6 +359,7 @@ final class PostureEngine: ObservableObject {
 
     func startMonitoring() {
         guard !isMonitoring else { return }
+        resetPowerManagementState()
         isMonitoring = true
         lastError = nil
         resetMenuBarForIdle()
@@ -352,7 +405,8 @@ final class PostureEngine: ObservableObject {
         isMonitoring = false
         analysisTimer?.invalidate()
         analysisTimer = nil
-        camera.stop()
+        resetPowerManagementState()
+        camera.stopSession()
         mediaPipeClient.disconnect()
         mediaPipeConnectAttempted = false
         currentFrame = nil
@@ -375,29 +429,65 @@ final class PostureEngine: ObservableObject {
         buildSessionRecord(endDate: Date())
     }
 
-    private func scheduleAnalysis() {
-        analysisTimer?.invalidate()
-        guard isMonitoring else { return }
+    private var powerStateManagementEnabled: Bool {
+        autoPauseEnabled && !isCalibrating
+    }
 
-        let interval = isCalibrating ? 0.2 : 0.33
+    private var inactiveTimeoutInterval: TimeInterval {
+        max(PowerSavingSettings.minInactiveTimeoutSeconds, inactiveTimeout)
+    }
+
+    private var drowsyTimeoutInterval: TimeInterval {
+        inactiveTimeoutInterval * 0.5
+    }
+
+    private var currentAnalysisInterval: TimeInterval {
+        if isCalibrating { return calibrationAnalysisInterval }
+        if !autoPauseEnabled { return activeAnalysisInterval }
+        switch powerState {
+        case .active:
+            return activeAnalysisInterval
+        case .drowsy:
+            return drowsyAnalysisInterval
+        case .inactive:
+            return activeAnalysisInterval
+        }
+    }
+
+    private func scheduleAnalysis(runImmediately: Bool = true) {
+        analysisTimer?.invalidate()
+        guard isMonitoring, powerState != .inactive else { return }
+
+        let interval = currentAnalysisInterval
         analysisTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 self?.analyzeLatestFrame()
             }
         }
-        // Run once immediately
-        analyzeLatestFrame()
+        if runImmediately {
+            analyzeLatestFrame()
+        }
     }
 
     // MARK: - Analyze
 
-    private func analyzeLatestFrame() {
+    private func analyzeLatestFrame(isProbe: Bool = false) {
+        if isProbe {
+            engineLog("running inactive probe analysis")
+        }
         let now = Date()
         updateSessionTrackingClock(now: now)
+
+        if isCalibrating && powerState != .active {
+            transitionPowerState(to: .active, reason: "calibration requires active mode")
+        } else if !autoPauseEnabled && powerState != .active {
+            transitionPowerState(to: .active, reason: "auto-pause disabled")
+        }
 
         guard let image = grabPendingFrame() else {
             if Int.random(in: 0..<30) == 0 { engineLog("no pending frame") }
             updateMenuBarForNoDetection(at: now)
+            handleNoDetection(at: now)
             return
         }
         if Int.random(in: 0..<10) == 0 { engineLog("analyzing frame \(image.width)x\(image.height)") }
@@ -435,9 +525,11 @@ final class PostureEngine: ObservableObject {
             bodyDetected = false
             currentJoints = nil
             updateMenuBarForNoDetection(at: now)
+            handleNoDetection(at: now)
             return
         }
 
+        handleDetectionSuccess()
         bodyDetected = true
         currentJoints = result.joints
         lastSuccessfulDetectionAt = now
@@ -551,8 +643,8 @@ final class PostureEngine: ObservableObject {
                 if !shouldSuppress {
                     let msg = NotificationService.message(for: held)
                     notificationService.notify(
-                        title: "Turtleneck Coach",
-                        message: msg,
+                        title: msg.title,
+                        message: msg.body,
                         severity: held
                     )
                 }
@@ -597,6 +689,151 @@ final class PostureEngine: ObservableObject {
         updateMenuBarSeverity(newSeverity: postureState.severity, currentCVA: postureState.currentCVA, now: now)
 
         lastError = nil
+    }
+
+    // MARK: - Power Management
+
+    private func handleNoDetection(at now: Date) {
+        guard powerStateManagementEnabled else {
+            noDetectionStart = nil
+            consecutiveDetections = 0
+            if powerState != .active {
+                transitionPowerState(to: .active, reason: "power saving disabled")
+            }
+            return
+        }
+
+        consecutiveDetections = 0
+        if noDetectionStart == nil {
+            noDetectionStart = now
+        }
+        guard let start = noDetectionStart else { return }
+
+        let elapsed = now.timeIntervalSince(start)
+        if elapsed >= inactiveTimeoutInterval {
+            transitionPowerState(to: .inactive, reason: "no detection for \(Int(elapsed.rounded()))s")
+        } else if elapsed >= drowsyTimeoutInterval {
+            transitionPowerState(to: .drowsy, reason: "no detection for \(Int(elapsed.rounded()))s")
+        }
+    }
+
+    private func handleDetectionSuccess() {
+        noDetectionStart = nil
+
+        guard powerStateManagementEnabled else {
+            consecutiveDetections = 0
+            if powerState != .active {
+                transitionPowerState(to: .active, reason: "power saving disabled")
+            }
+            return
+        }
+
+        consecutiveDetections = min(consecutiveDetections + 1, 2)
+        guard powerState != .active, consecutiveDetections >= 2 else { return }
+        transitionPowerState(to: .active, reason: "reactivated by consecutive detections")
+    }
+
+    private func transitionPowerState(to newState: MonitoringPowerState, reason: String? = nil) {
+        if !powerStateManagementEnabled && newState != .active {
+            return
+        }
+        guard powerState != newState else { return }
+
+        let previous = powerState
+        powerState = newState
+        if let reason {
+            engineLog("power state \(previous.rawValue) -> \(newState.rawValue) (\(reason))")
+        } else {
+            engineLog("power state \(previous.rawValue) -> \(newState.rawValue)")
+        }
+
+        switch newState {
+        case .active:
+            stopProbeTimer()
+            camera.startSession()
+            noDetectionStart = nil
+            consecutiveDetections = 0
+            scheduleAnalysis(runImmediately: false)
+        case .drowsy:
+            stopProbeTimer()
+            scheduleAnalysis(runImmediately: false)
+        case .inactive:
+            analysisTimer?.invalidate()
+            analysisTimer = nil
+            camera.stopSession()
+            startProbeTimer()
+        }
+    }
+
+    private func startProbeTimer() {
+        stopProbeTimer()
+        guard isMonitoring else { return }
+
+        probeTimer = Timer.scheduledTimer(withTimeInterval: inactiveProbeInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.runInactiveProbeCycle()
+            }
+        }
+    }
+
+    private func stopProbeTimer() {
+        probeTimer?.invalidate()
+        probeTimer = nil
+        probeTask?.cancel()
+        probeTask = nil
+    }
+
+    private func runInactiveProbeCycle() {
+        guard isMonitoring, powerState == .inactive, powerStateManagementEnabled else { return }
+        guard probeTask == nil else { return }
+
+        camera.startSession()
+        probeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer { self.probeTask = nil }
+
+            try? await Task.sleep(nanoseconds: UInt64(self.inactiveProbeWarmup * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            guard self.isMonitoring, self.powerState == .inactive, self.powerStateManagementEnabled else { return }
+
+            self.analyzeLatestFrame(isProbe: true)
+
+            if self.powerState == .inactive {
+                self.camera.stopSession()
+            }
+        }
+    }
+
+    private func resetPowerManagementState() {
+        stopProbeTimer()
+        noDetectionStart = nil
+        consecutiveDetections = 0
+        powerState = .active
+    }
+
+    private func handleAutoPauseSettingChanged() {
+        noDetectionStart = nil
+        consecutiveDetections = 0
+
+        guard isMonitoring else { return }
+        if !autoPauseEnabled {
+            transitionPowerState(to: .active, reason: "auto-pause disabled")
+        } else if powerState == .inactive {
+            startProbeTimer()
+        } else {
+            scheduleAnalysis(runImmediately: false)
+        }
+    }
+
+    private func handleInactiveTimeoutChanged() {
+        let clamped = min(
+            max(inactiveTimeout, PowerSavingSettings.minInactiveTimeoutSeconds),
+            PowerSavingSettings.maxInactiveTimeoutSeconds
+        )
+        if clamped != inactiveTimeout {
+            inactiveTimeout = clamped
+            return
+        }
     }
 
     // MARK: - Notification Suppression
@@ -1023,6 +1260,9 @@ final class PostureEngine: ObservableObject {
         if !isMonitoring {
             startMonitoring()
         } else {
+            transitionPowerState(to: .active, reason: "calibration started")
+            noDetectionStart = nil
+            consecutiveDetections = 0
             scheduleAnalysis()
         }
     }

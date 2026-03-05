@@ -20,7 +20,7 @@ final class DashboardWindowController {
         let hostingView = NSHostingView(rootView: dashboard)
 
         let newWindow = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 860, height: 700),
+            contentRect: NSRect(x: 0, y: 0, width: 680, height: 620),
             styleMask: [.titled, .closable, .resizable, .miniaturizable],
             backing: .buffered,
             defer: false
@@ -29,8 +29,9 @@ final class DashboardWindowController {
         newWindow.contentView = hostingView
         newWindow.center()
         newWindow.isReleasedWhenClosed = false
+        UserDefaults.standard.removeObject(forKey: "NSWindow Frame PostureDashboard")
         newWindow.setFrameAutosaveName("PostureDashboard")
-        newWindow.minSize = NSSize(width: 600, height: 480)
+        newWindow.minSize = NSSize(width: 500, height: 580)
 
         newWindow.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)

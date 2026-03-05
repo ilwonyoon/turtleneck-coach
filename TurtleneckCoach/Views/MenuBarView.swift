@@ -252,6 +252,8 @@ struct MenuBarView: View {
             }
 
             Spacer()
+
+            powerStateBadge
         }
     }
 
@@ -259,6 +261,8 @@ struct MenuBarView: View {
         guard engine.isMonitoring else { return "Paused" }
         if engine.isCalibrating { return "Calibrating..." }
         if engine.calibrationData == nil { return "Starting up..." }
+        if engine.powerState == .inactive { return "Paused" }
+        if engine.powerState == .drowsy && !engine.bodyDetected { return "Low Power" }
 
         // Head turned sideways — show rotation-specific main text
         let absYaw = abs(engine.currentHeadYaw)
@@ -286,6 +290,10 @@ struct MenuBarView: View {
         guard engine.isMonitoring else { return "Tap Start when you're ready." }
         if engine.isCalibrating { return "Sit up straight. Hold still." }
         if engine.calibrationData == nil { return "Preparing camera..." }
+        if engine.powerState == .inactive { return "No one detected. Probing every 6 seconds." }
+        if engine.powerState == .drowsy && !engine.bodyDetected {
+            return "No body detected. Slower checks to save battery."
+        }
 
         switch engine.menuBarSeverity {
         case .good:
@@ -297,6 +305,20 @@ struct MenuBarView: View {
                 headYaw: engine.currentHeadYaw,
                 classification: engine.postureState.classification
             )
+        }
+    }
+
+    @ViewBuilder
+    private var powerStateBadge: some View {
+        if engine.isMonitoring && !engine.isCalibrating {
+            switch engine.powerState {
+            case .active:
+                EmptyView()
+            case .drowsy:
+                badge("Low Power", icon: "moon.fill")
+            case .inactive:
+                badge("Paused", icon: "pause.fill")
+            }
         }
     }
 

@@ -27,18 +27,19 @@ enum NotificationFrequency: String, CaseIterable {
 }
 
 /// Manages macOS native notifications with cooldown.
-final class NotificationService {
+final class NotificationService: NSObject {
     static let notificationsEnabledKey = "notificationsEnabled"
     static let notificationFrequencyKey = NotificationFrequency.storageKey
     static let minSeverityKey = "minSeverity"
 
-    private let userDefaults: UserDefaults
+    private var userDefaults: UserDefaults = .standard
     private var notificationsEnabled: Bool = true
     private var notificationFrequency: NotificationFrequency = .normal
     private var minSeverity: Severity = .correction
     private var lastNotificationTime: Date = .distantPast
 
     init(userDefaults: UserDefaults = .standard) {
+        super.init()
         self.userDefaults = userDefaults
         userDefaults.register(defaults: [
             Self.notificationsEnabledKey: true,
@@ -108,21 +109,31 @@ final class NotificationService {
     }
 
     /// Turtleneck Coach notification messages by severity.
-    static func message(for severity: Severity) -> String {
+    static func message(for severity: Severity) -> (title: String, body: String) {
         switch severity {
         case .correction:
-            return "Head's drifting. Tuck your chin."
+            return ("⚠️ Turtleneck Coach", "Head's drifting. Tuck your chin.")
         case .bad:
-            return "Posture's gone. Sit up, reset."
+            return ("🔴 Turtleneck Coach", "Posture's gone. Sit up, reset.")
         case .away:
-            return ""
+            return ("Turtleneck Coach", "")
         case .good:
-            return ""
+            return ("Turtleneck Coach", "")
         }
     }
 
     /// Reset cooldown so next notification sends immediately.
     func resetCooldown() {
         lastNotificationTime = .distantPast
+    }
+}
+
+extension NotificationService: UNUserNotificationCenterDelegate {
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound, .list])
     }
 }

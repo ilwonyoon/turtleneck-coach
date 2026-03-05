@@ -1,110 +1,222 @@
 import SwiftUI
 import Charts
+import AppKit
 
 @MainActor
 struct DashboardView: View {
     @ObservedObject var engine: PostureEngine
 
-    private func closeWindow() {
-        NSApp.keyWindow?.close()
-    }
-
     @State private var chartHours: [ChartHour] = []
     @State private var weeklyTrendDays: [WeeklyTrendDay] = []
     @State private var todaySummary = TodaySummary.empty
+    @State private var coachMessage: DashboardMessage?
+    @State private var lastMessageBucket: Int = -1
+    @State private var lifetimeMonitoredMinutes: Double = 0
+    @State private var sevenDayGoodPosturePercent: Double = 0
+    @State private var coachingTipOffset: Int = 0
     @State private var refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
+    @State private var animateIn = false
+    @State private var chartAnimateIn = false
 
     private var calendar: Calendar { .current }
+    private var coachingTips: [CoachingTip] { CoachingTip.tips(for: coachingLevel) }
+    private var coachingTipOfTheDay: CoachingTip { CoachingTip.tipOfTheDay(for: coachingLevel) }
+
+    private var selectedCoachingTip: CoachingTip {
+        guard !coachingTips.isEmpty else { return coachingTipOfTheDay }
+        let baseIndex = coachingTips.firstIndex(where: { $0.id == coachingTipOfTheDay.id }) ?? 0
+        let offset = coachingTipOffset % coachingTips.count
+        let resolvedIndex = (baseIndex + offset + coachingTips.count) % coachingTips.count
+        return coachingTips[resolvedIndex]
+    }
+
+    private var coachingLevel: CoachingLevel {
+        if lifetimeMonitoredMinutes < 90 {
+            return .foundation
+        }
+
+        if sevenDayGoodPosturePercent < 30 {
+            return .awareness
+        }
+        if sevenDayGoodPosturePercent < 70 {
+            return .build
+        }
+        return .maintain
+    }
 
     var body: some View {
         ScrollView {
-            VStack(spacing: DS.Space.lg) {
-                header
-
+            VStack(spacing: DS.Space.sm) {
                 summaryCards
 
                 postureTimelineCard
 
                 weeklyTrendCard
             }
-            .padding(DS.Space.xl)
+            .padding(DS.Space.lg)
         }
-        .frame(minWidth: 600, minHeight: 480)
+        .frame(minWidth: 500, minHeight: 580)
         .background(Color(nsColor: .windowBackgroundColor))
-        .onAppear(perform: reloadData)
+        .onAppear {
+            reloadData()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                animateIn = true
+                withAnimation(.easeOut(duration: 0.8)) {
+                    chartAnimateIn = true
+                }
+            }
+        }
         .onChange(of: engine.isMonitoring) { _, _ in
             reloadData()
         }
         .onReceive(refreshTimer) { _ in
             reloadData()
         }
-    }
-
-    // MARK: - Header
-
-    private var header: some View {
-        HStack {
-            Text("Posture Dashboard")
-                .font(DS.Font.titleLgBold)
-
-            Spacer()
-
-            Button("Done") {
-                closeWindow()
-            }
-            .buttonStyle(.bordered)
+        .onChange(of: coachingLevel) { _, _ in
+            coachingTipOffset = 0
         }
     }
 
     // MARK: - Summary
 
     private var summaryCards: some View {
-        HStack(spacing: DS.Space.lg) {
-            summaryCard(title: "Bad Posture Time") {
-                Text(formattedDuration(minutes: todaySummary.badPostureMinutes))
-                    .font(DS.Font.scoreLg)
-                    .foregroundStyle(DS.Severity.moderate)
-            }
+        HStack(spacing: DS.Space.sm) {
+            goodPostureHeroCard
+                .frame(maxHeight: .infinity)
 
-            summaryCard(title: "Good Posture %") {
-                HStack(spacing: 10) {
-                    CircularPercentView(percent: todaySummary.goodPosturePercent)
-                    Text("\(Int(todaySummary.goodPosturePercent.rounded()))%")
-                        .font(DS.Font.titleLgBold)
-                }
-            }
-
-            summaryCard(title: "Resets") {
-                Text("\(todaySummary.resets)")
-                    .font(DS.Font.scoreLg)
-            }
-
-            summaryCard(title: "Longest Slouch") {
-                Text(formattedDuration(minutes: todaySummary.longestSlouchMinutes))
-                    .font(DS.Font.scoreLg)
-            }
+            coachingTipCard
+                .frame(maxHeight: .infinity)
         }
     }
 
-    private func summaryCard<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+    private var goodPostureHeroCard: some View {
         VStack(alignment: .leading, spacing: DS.Space.sm) {
-            Text(title)
+            Text("Good Posture")
                 .font(DS.Font.caption)
                 .foregroundColor(.secondary)
-            content()
+
+            HStack(alignment: .firstTextBaseline, spacing: DS.Space.xs) {
+                Text(formattedDuration(minutes: animateIn ? todaySummary.goodPostureMinutes : 0))
+                    .font(DS.Font.scoreLg)
+                    .foregroundStyle(DS.Severity.good)
+                    .contentTransition(.numericText())
+                    .animation(.easeOut(duration: 0.8), value: animateIn)
+                Text("/ " + formattedDuration(minutes: animateIn ? todaySummary.totalMonitoredMinutes : 0))
+                    .font(DS.Font.subhead)
+                    .foregroundColor(.secondary)
+                    .contentTransition(.numericText())
+                    .animation(.easeOut(duration: 0.8), value: animateIn)
+            }
+
             Spacer(minLength: 0)
+
+            Text(coachMessage?.main ?? "")
+                .font(DS.Font.subhead)
+                .foregroundColor(.primary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeIn(duration: 0.6).delay(0.4), value: animateIn)
+            Text(coachMessage?.sub ?? "")
+                .font(DS.Font.caption)
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .opacity(animateIn ? 1 : 0)
+                .animation(.easeIn(duration: 0.6).delay(0.4), value: animateIn)
         }
-        .padding(DS.Space.lg)
-        .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
+        .padding(DS.Space.md)
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+    }
+
+    private var coachingTipCard: some View {
+        let tip = selectedCoachingTip
+
+        return VStack(alignment: .leading, spacing: DS.Space.sm) {
+            Text(levelBadgeText(for: coachingLevel))
+                .font(DS.Font.caption)
+                .foregroundStyle(.primary)
+                .padding(.horizontal, DS.Space.sm)
+                .padding(.vertical, DS.Space.xs)
+                .background(
+                    Color.primary.opacity(0.08),
+                    in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                )
+
+            Text(tip.title)
+                .font(DS.Font.headline)
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+
+            Text(tip.body)
+                .font(DS.Font.subhead)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+
+            HStack(spacing: DS.Space.sm) {
+                Button {
+                    if let url = tip.youtubeSearchURL {
+                        NSWorkspace.shared.open(url)
+                    }
+                } label: {
+                    Label("Search on YouTube", systemImage: "play.rectangle.fill")
+                        .font(DS.Font.subheadMedium)
+                        .foregroundStyle(DS.Severity.good)
+                        .padding(.horizontal, DS.Space.sm)
+                        .padding(.vertical, DS.Space.xs)
+                        .background(
+                            DS.Severity.good.opacity(0.14),
+                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+
+                Button {
+                    coachingTipOffset += 1
+                } label: {
+                    Text("Next Tip")
+                        .font(DS.Font.subheadMedium)
+                        .foregroundStyle(.primary)
+                        .padding(.horizontal, DS.Space.sm)
+                        .padding(.vertical, DS.Space.xs)
+                        .background(
+                            Color.primary.opacity(0.08),
+                            in: RoundedRectangle(cornerRadius: DS.Radius.md, style: .continuous)
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("Educational only")
+                .font(DS.Font.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(DS.Space.md)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
+    }
+
+    private func levelBadgeText(for level: CoachingLevel) -> String {
+        switch level {
+        case .foundation:
+            return "Level 0 - Foundation"
+        case .awareness:
+            return "Level 1 - Awareness"
+        case .build:
+            return "Level 2 - Build"
+        case .maintain:
+            return "Level 3 - Maintain"
+        }
     }
 
     // MARK: - Charts
 
     private var postureTimelineCard: some View {
-        VStack(alignment: .leading, spacing: DS.Space.md) {
+        VStack(alignment: .leading, spacing: DS.Space.sm) {
             HStack {
-                Text("Posture Timeline")
+                Text("Today's Activity")
                     .font(DS.Font.headline)
                 Spacer()
                 Text("Today")
@@ -116,13 +228,13 @@ struct DashboardView: View {
                 ForEach(hourlyTimelineBins) { bin in
                     BarMark(
                         x: .value("Hour", bin.hourStart, unit: .hour),
-                        y: .value("Minutes", bin.goodMinutes)
+                        y: .value("Minutes", chartAnimateIn ? bin.goodMinutes : 0)
                     )
                     .foregroundStyle(by: .value("Posture", "Good"))
 
                     BarMark(
                         x: .value("Hour", bin.hourStart, unit: .hour),
-                        y: .value("Minutes", bin.badMinutes)
+                        y: .value("Minutes", chartAnimateIn ? bin.badMinutes : 0)
                     )
                     .foregroundStyle(by: .value("Posture", "Bad"))
                 }
@@ -131,6 +243,7 @@ struct DashboardView: View {
                 "Good": DS.Severity.good,
                 "Bad": DS.Severity.moderate
             ])
+            .chartYScale(domain: 0...60)
             .chartXScale(domain: hourlyChartDomain)
             .chartXAxis {
                 AxisMarks(values: .stride(by: .hour, count: 2)) { _ in
@@ -139,19 +252,19 @@ struct DashboardView: View {
                     AxisValueLabel(format: .dateTime.hour(.defaultDigits(amPM: .abbreviated)))
                 }
             }
-            .frame(height: 220)
+            .frame(height: 160)
         }
-        .padding(DS.Space.lg)
+        .padding(DS.Space.md)
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
     }
 
     private var weeklyTrendCard: some View {
-        VStack(alignment: .leading, spacing: DS.Space.md) {
+        VStack(alignment: .leading, spacing: DS.Space.sm) {
             HStack {
-                Text("Weekly Trend")
+                Text("Weekly Progress")
                     .font(DS.Font.headline)
                 Spacer()
-                Text("Bad posture time")
+                Text("Posture score")
                     .font(DS.Font.subheadBold)
                     .foregroundStyle(.secondary)
             }
@@ -160,18 +273,19 @@ struct DashboardView: View {
                 ForEach(weeklyTrendDays) { day in
                     BarMark(
                         x: .value("Date", day.date, unit: .day),
-                        y: .value("Bad Posture", day.badMinutes)
+                        y: .value("Posture Score", chartAnimateIn ? day.score : 0)
                     )
-                    .foregroundStyle(DS.Severity.moderate)
+                    .foregroundStyle(DS.Severity.good)
                     .annotation(position: .top) {
-                        if day.badMinutes > 0 {
-                            Text(formattedDurationCompact(minutes: day.badMinutes))
+                        if chartAnimateIn && day.score > 0 {
+                            Text("\(Int(day.score.rounded()))")
                                 .font(DS.Font.caption2)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
             }
+            .chartYScale(domain: 0...100)
             .chartXAxis {
                 AxisMarks(values: .stride(by: .day)) { _ in
                     AxisGridLine()
@@ -179,9 +293,9 @@ struct DashboardView: View {
                     AxisValueLabel(format: .dateTime.weekday(.abbreviated))
                 }
             }
-            .frame(height: 200)
+            .frame(height: 150)
         }
-        .padding(DS.Space.lg)
+        .padding(DS.Space.md)
         .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: DS.Radius.lg, style: .continuous))
     }
 
@@ -203,9 +317,10 @@ struct DashboardView: View {
         let todayStart = calendar.startOfDay(for: now)
         guard let tomorrow = calendar.date(byAdding: .day, value: 1, to: todayStart) else { return }
         let todayRange = todayStart...tomorrow.addingTimeInterval(-1)
+        let liveSession = engine.currentSessionSnapshot()
 
         var sessions = engine.dataStore.loadSessions(range: todayRange)
-        if let liveSession = engine.currentSessionSnapshot(),
+        if let liveSession,
            calendar.isDate(liveSession.startDate, inSameDayAs: todayStart),
            !sessions.contains(where: { $0.id == liveSession.id }) {
             sessions.append(liveSession)
@@ -213,6 +328,30 @@ struct DashboardView: View {
         sessions.sort { $0.startDate < $1.startDate }
 
         todaySummary = summarizeToday(from: sessions)
+
+        let goodPercent = todaySummary.totalMonitoredMinutes > 0
+            ? (todaySummary.goodPostureMinutes / todaySummary.totalMonitoredMinutes) * 100
+            : 0
+        let currentBucket: Int
+        let trend: TrendDirection
+        if todaySummary.totalMonitoredMinutes <= 0 {
+            currentBucket = -1
+            trend = .newUser
+        } else if goodPercent < 30 {
+            currentBucket = 0
+            trend = .stable
+        } else if goodPercent < 70 {
+            currentBucket = 1
+            trend = .stable
+        } else {
+            currentBucket = 2
+            trend = .stable
+        }
+        if currentBucket != lastMessageBucket {
+            lastMessageBucket = currentBucket
+            coachMessage = DashboardMessages.message(forProgress: goodPercent, trend: trend)
+        }
+
         let hourlyAggregates = engine.dataStore.loadHourlyAggregates(for: todayStart, sessions: sessions)
         chartHours = makeChartHours(for: todayStart, using: hourlyAggregates)
 
@@ -223,6 +362,38 @@ struct DashboardView: View {
             using: storedAggregates,
             liveTodaySessions: sessions
         )
+
+        var weeklySessions = engine.dataStore.loadSessions(range: weeklyRange)
+        if let liveSession,
+           !weeklySessions.contains(where: { $0.id == liveSession.id }) {
+            weeklySessions.append(liveSession)
+        }
+        sevenDayGoodPosturePercent = weightedGoodPosturePercent(from: weeklySessions)
+
+        let lifetimeRange = Date(timeIntervalSince1970: 0)...now
+        var lifetimeSessions = engine.dataStore.loadSessions(range: lifetimeRange)
+        if let liveSession,
+           !lifetimeSessions.contains(where: { $0.id == liveSession.id }) {
+            lifetimeSessions.append(liveSession)
+        }
+        lifetimeMonitoredMinutes = lifetimeSessions.reduce(0) { partial, session in
+            partial + max(0, session.duration)
+        } / 60.0
+    }
+
+    private func weightedGoodPosturePercent(from sessions: [SessionRecord]) -> Double {
+        let totalDuration = sessions.reduce(0.0) { partial, session in
+            partial + max(0, session.duration)
+        }
+
+        guard totalDuration > 0 else { return 0 }
+
+        let weightedGood = sessions.reduce(0.0) { partial, session in
+            let safePercent = min(100, max(0, session.goodPosturePercent))
+            return partial + (safePercent * max(0, session.duration))
+        }
+
+        return weightedGood / totalDuration
     }
 
     private func summarizeToday(from sessions: [SessionRecord]) -> TodaySummary {
@@ -231,6 +402,10 @@ struct DashboardView: View {
         }
 
         guard totalDuration > 0 else { return .empty }
+
+        let weightedScoreSum = sessions.reduce(0.0) { partial, session in
+            partial + (session.averageScore * max(0, session.duration))
+        }
 
         let weightedGoodSum = sessions.reduce(0.0) { partial, session in
             partial + (session.goodPosturePercent * max(0, session.duration))
@@ -255,8 +430,15 @@ struct DashboardView: View {
             .map { max(0, $0.longestSlouchSeconds) / 60.0 }
             .max() ?? 0
 
+        let totalMonitoredMinutes = totalDuration / 60.0
+        let badPostureMinutes = max(0, totalBadPostureMinutes)
+        let goodPostureMinutes = max(0, totalMonitoredMinutes - badPostureMinutes)
+
         return TodaySummary(
-            badPostureMinutes: max(0, totalBadPostureMinutes),
+            goodPostureMinutes: goodPostureMinutes,
+            averageScore: max(0, min(100, weightedScoreSum / totalDuration)),
+            totalMonitoredMinutes: max(0, totalMonitoredMinutes),
+            badPostureMinutes: badPostureMinutes,
             goodPosturePercent: weightedGoodSum / totalDuration,
             resets: max(0, resets),
             longestSlouchMinutes: max(0, longestSlouchMinutes)
@@ -279,20 +461,8 @@ struct DashboardView: View {
         return allDays(in: range).map { day in
             let key = calendar.startOfDay(for: day)
             let aggregate = byDay[key]
-
-            let badMinutes: Double
-            if let aggregate {
-                if aggregate.totalBadPostureMinutes > 0 {
-                    badMinutes = aggregate.totalBadPostureMinutes
-                } else {
-                    let fallbackRatio = 1 - (min(100, max(0, aggregate.goodPosturePercent)) / 100)
-                    badMinutes = max(0, aggregate.totalMonitoredMinutes * fallbackRatio)
-                }
-            } else {
-                badMinutes = 0
-            }
-
-            return WeeklyTrendDay(date: key, badMinutes: max(0, badMinutes))
+            let score = max(0, min(100, aggregate?.averageScore ?? 0))
+            return WeeklyTrendDay(date: key, score: score)
         }
     }
 
@@ -422,7 +592,7 @@ private struct CircularPercentView: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(Color.white.opacity(0.15), lineWidth: DS.Size.scoreStroke)
+                .stroke(Color.primary.opacity(0.1), lineWidth: DS.Size.scoreStroke)
 
             Circle()
                 .trim(from: 0, to: progress)
@@ -434,8 +604,9 @@ private struct CircularPercentView: View {
                     style: StrokeStyle(lineWidth: DS.Size.scoreStroke, lineCap: .round)
                 )
                 .rotationEffect(.degrees(-90))
+                .scaleEffect(x: -1, y: 1)
+                .animation(.easeOut(duration: 1.0), value: progress)
         }
-        .frame(width: 48, height: 48)
     }
 }
 
@@ -452,16 +623,22 @@ private struct WeeklyTrendDay: Identifiable {
     var id: Date { date }
 
     let date: Date
-    let badMinutes: Double
+    let score: Double
 }
 
 private struct TodaySummary {
+    let goodPostureMinutes: Double
+    let averageScore: Double
+    let totalMonitoredMinutes: Double
     let badPostureMinutes: Double
     let goodPosturePercent: Double
     let resets: Int
     let longestSlouchMinutes: Double
 
     static let empty = TodaySummary(
+        goodPostureMinutes: 0,
+        averageScore: 0,
+        totalMonitoredMinutes: 0,
         badPostureMinutes: 0,
         goodPosturePercent: 0,
         resets: 0,

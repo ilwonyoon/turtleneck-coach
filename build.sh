@@ -56,6 +56,8 @@ swiftc \
   TurtleneckCoach/Models/PostureMetrics.swift \
   TurtleneckCoach/Models/PostureState.swift \
   TurtleneckCoach/Services/FeedbackEngine.swift \
+  TurtleneckCoach/Services/DashboardMessages.swift \
+  TurtleneckCoach/Services/CoachingTips.swift \
   TurtleneckCoach/Services/NotificationService.swift \
   TurtleneckCoach/TurtleneckCoachApp.swift \
   TurtleneckCoach/Views/CalibrationView.swift \

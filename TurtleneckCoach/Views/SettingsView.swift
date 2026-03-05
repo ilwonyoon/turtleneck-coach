@@ -19,6 +19,12 @@ struct SettingsView: View {
     @AppStorage(NotificationService.minSeverityKey)
     private var minSeverityRawValue = Severity.correction.rawValue
 
+    @AppStorage(PowerSavingSettings.autoPauseWhenAwayKey)
+    private var autoPauseWhenAway = PowerSavingSettings.defaultAutoPauseWhenAway
+
+    @AppStorage(PowerSavingSettings.inactiveTimeoutSecondsKey)
+    private var inactiveTimeoutSeconds = PowerSavingSettings.defaultInactiveTimeoutSeconds
+
     private var sensitivityModeBinding: Binding<SensitivityMode> {
         Binding(
             get: { SensitivityMode(rawValue: sensitivityModeRawValue) ?? .balanced },
@@ -52,6 +58,20 @@ struct SettingsView: View {
         return engine.calibrationData == nil ? "No baseline saved" : "Ready"
     }
 
+    private var inactiveTimeoutLabel: String {
+        let totalSeconds = Int(inactiveTimeoutSeconds.rounded())
+        let minutes = totalSeconds / 60
+        let seconds = totalSeconds % 60
+
+        if minutes == 0 {
+            return "\(totalSeconds)s"
+        }
+        if seconds == 0 {
+            return "\(minutes)m"
+        }
+        return "\(minutes)m \(seconds)s"
+    }
+
     private let valueColumnWidth: CGFloat = 220
     private let menuWidth: CGFloat = 170
 
@@ -83,6 +103,39 @@ struct SettingsView: View {
                 Text("Camera")
             } footer: {
                 Text("Choose where your camera is placed for posture analysis.")
+            }
+
+            Section {
+                LabeledContent("Auto-pause when away") {
+                    valueColumn {
+                        Toggle("", isOn: $autoPauseWhenAway)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
+
+                LabeledContent("Go inactive after") {
+                    valueColumn {
+                        HStack(spacing: 8) {
+                            Slider(
+                                value: $inactiveTimeoutSeconds,
+                                in: PowerSavingSettings.minInactiveTimeoutSeconds...PowerSavingSettings.maxInactiveTimeoutSeconds,
+                                step: 5
+                            )
+                            .frame(width: 120)
+
+                            Text(inactiveTimeoutLabel)
+                                .monospacedDigit()
+                                .foregroundStyle(.secondary)
+                                .frame(width: 64, alignment: .trailing)
+                        }
+                    }
+                }
+                .disabled(!autoPauseWhenAway)
+            } header: {
+                Text("Power Saving")
+            } footer: {
+                Text("Reduces camera activity when no one is detected to save battery.")
             }
 
             Section {
