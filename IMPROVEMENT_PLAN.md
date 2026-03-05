@@ -1,4 +1,4 @@
-# Turtle Neck Detector - Improvement Plan & OKR
+# Turtleneck Coach - Improvement Plan & OKR
 
 > Living document. Updated as work progresses.
 > Last updated: 2026-03-03
@@ -304,8 +304,8 @@ Every week, measure and record:
 ## Architecture Reference
 
 ```
-TurtleNeckDetector/
-├── TurtleNeckDetectorApp.swift    # @main, MenuBarExtra
+TurtleneckCoach/
+├── TurtleneckCoachApp.swift       # @main, MenuBarExtra
 ├── Core/
 │   ├── PostureEngine.swift         # Orchestrator (timer→camera→vision→UI)
 │   ├── CameraManager.swift         # AVCaptureSession, frame rotation

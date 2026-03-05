@@ -2,7 +2,7 @@ import SwiftUI
 import UserNotifications
 
 @main
-struct TurtleNeckDetectorApp: App {
+struct TurtleneckCoachApp: App {
     @StateObject private var engine = PostureEngine()
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build and sign TurtleNeckDetector for distribution.
+# Build and sign TurtleneckCoach for distribution.
 # - Default signing is ad-hoc (-) so the script works immediately.
 # - Pass a Developer ID identity to enable hardened runtime automatically.
 #
@@ -12,7 +12,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-APP_NAME="TurtleNeckDetector"
+APP_NAME="TurtleneckCoach"
 APP_BUNDLE="${PROJECT_ROOT}/${APP_NAME}.app"
 CONTENTS_DIR="${APP_BUNDLE}/Contents"
 MACOS_DIR="${CONTENTS_DIR}/MacOS"
@@ -22,9 +22,9 @@ EXECUTABLE_PATH="${MACOS_DIR}/${APP_NAME}"
 BUILD_DIR="${PROJECT_ROOT}/build/release"
 MODULE_CACHE_DIR="${BUILD_DIR}/ModuleCache.noindex"
 
-INFO_PLIST_SOURCE="${PROJECT_ROOT}/TurtleNeckDetector/Resources/Info.plist"
+INFO_PLIST_SOURCE="${PROJECT_ROOT}/TurtleneckCoach/Resources/Info.plist"
 INFO_PLIST_DEST="${CONTENTS_DIR}/Info.plist"
-ENTITLEMENTS_PATH="${PROJECT_ROOT}/TurtleNeckDetector/Resources/TurtleNeckDetector.entitlements"
+ENTITLEMENTS_PATH="${PROJECT_ROOT}/TurtleneckCoach/Resources/TurtleneckCoach.entitlements"
 PYTHON_SERVER_SOURCE="${PROJECT_ROOT}/python_server"
 PYTHON_SERVER_DEST="${RESOURCES_DIR}/python_server"
 
@@ -72,9 +72,9 @@ else
   <key>CFBundleIdentifier</key>
   <string>com.turtleneck.detector</string>
   <key>CFBundleName</key>
-  <string>TurtleNeckDetector</string>
+  <string>Turtleneck Coach</string>
   <key>CFBundleExecutable</key>
-  <string>TurtleNeckDetector</string>
+  <string>TurtleneckCoach</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleVersion</key>
@@ -86,13 +86,13 @@ else
   <key>CFBundleIconFile</key>
   <string>AppIcon</string>
   <key>NSCameraUsageDescription</key>
-  <string>Turtle Neck Detector uses the camera to analyze your posture. Images are processed on-device and never stored.</string>
+  <string>Turtleneck Coach uses the camera to analyze your posture. Images are processed on-device and never stored.</string>
 </dict>
 </plist>
 PLIST
 fi
 
-ICON_SOURCE="${PROJECT_ROOT}/TurtleNeckDetector/Resources/AppIcon.icns"
+ICON_SOURCE="${PROJECT_ROOT}/TurtleneckCoach/Resources/AppIcon.icns"
 if [[ -f "${ICON_SOURCE}" ]]; then
   cp "${ICON_SOURCE}" "${RESOURCES_DIR}/AppIcon.icns"
 else
@@ -122,10 +122,10 @@ echo "[3/6] Compiling Swift sources (release optimization)..."
 SWIFT_SOURCES=()
 while IFS= read -r source_file; do
   SWIFT_SOURCES+=("${source_file}")
-done < <(find "${PROJECT_ROOT}/TurtleNeckDetector" -type f -name '*.swift' | sort)
+done < <(find "${PROJECT_ROOT}/TurtleneckCoach" -type f -name '*.swift' | sort)
 
 if [[ "${#SWIFT_SOURCES[@]}" -eq 0 ]]; then
-  echo "error: no Swift sources found under ${PROJECT_ROOT}/TurtleNeckDetector" >&2
+  echo "error: no Swift sources found under ${PROJECT_ROOT}/TurtleneckCoach" >&2
   exit 1
 fi
 

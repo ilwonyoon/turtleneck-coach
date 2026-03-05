@@ -43,7 +43,7 @@ let held = menuBarSeverity
 if held == .correction || held == .bad {
     let msg = NotificationService.message(for: held)
     notificationService.notify(
-        title: "PT Turtle",
+        title: "Turtleneck Coach",
         message: msg,
         severity: held
     )
@@ -65,7 +65,7 @@ if held == .correction || held == .bad {
     if !shouldSuppress {
         let msg = NotificationService.message(for: held)
         notificationService.notify(
-            title: "PT Turtle",
+            title: "Turtleneck Coach",
             message: msg,
             severity: held
         )
@@ -342,7 +342,7 @@ previousFaceSize = nil
 
 ```bash
 ./build.sh
-open TurtleNeckDetector.app
+open TurtleneckCoach.app
 ```
 
 Test each filter:

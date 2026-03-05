@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// PT Turtle Design System — centralized design tokens.
+/// Turtleneck Coach Design System — centralized design tokens.
 /// All visual constants live here. Views reference `DS.*` instead of hardcoded values.
 ///
 /// Typography uses SwiftUI semantic text styles (SF Pro default).

@@ -1,12 +1,12 @@
-# PT Turtle Design System — Codex Implementation Spec
+# Turtleneck Coach Design System — Codex Implementation Spec
 
 ## Overview
 
-Replace all hardcoded design values across the PT Turtle codebase with centralized `DS.*` design tokens. The app must look **identical** before and after — this is a pure refactor.
+Replace all hardcoded design values across the Turtleneck Coach codebase with centralized `DS.*` design tokens. The app must look **identical** before and after — this is a pure refactor.
 
 ## Deliverables (in order)
 
-1. Create `TurtleNeckDetector/DesignSystem/DesignTokens.swift`
+1. Create `TurtleneckCoach/DesignSystem/DesignTokens.swift`
 2. Add it to `build.sh` compile list
 3. Migrate 7 view files + PostureEngine to use `DS.*` tokens
 4. Create `scripts/lint-design-tokens.sh`
@@ -16,12 +16,12 @@ Replace all hardcoded design values across the PT Turtle codebase with centraliz
 
 ## Phase 1: DesignTokens.swift
 
-Create `TurtleNeckDetector/DesignSystem/DesignTokens.swift`:
+Create `TurtleneckCoach/DesignSystem/DesignTokens.swift`:
 
 ```swift
 import SwiftUI
 
-/// PT Turtle Design System — centralized design tokens.
+/// Turtleneck Coach Design System — centralized design tokens.
 /// All visual constants live here. Views reference `DS.*` instead of hardcoded values.
 enum DS {
 
@@ -151,10 +151,10 @@ enum DS {
 In `build.sh`, add the new file to the swiftc compilation list. Insert it BEFORE the existing Core files (around line 45):
 
 ```
-  TurtleNeckDetector/DesignSystem/DesignTokens.swift \
+  TurtleneckCoach/DesignSystem/DesignTokens.swift \
 ```
 
-Insert this line right after line 44 (`swiftc \`) and before `TurtleNeckDetector/Core/CalibrationManager.swift \`.
+Insert this line right after line 44 (`swiftc \`) and before `TurtleneckCoach/Core/CalibrationManager.swift \`.
 
 ---
 
@@ -396,7 +396,7 @@ Create `scripts/lint-design-tokens.sh`:
 
 ```bash
 #!/bin/bash
-# PT Turtle Design Token Lint
+# Turtleneck Coach Design Token Lint
 # Scans view files for hardcoded values that should use DS.* tokens.
 # Exit 0 = clean, Exit 1 = violations found.
 set -euo pipefail
@@ -409,14 +409,14 @@ NC='\033[0m'
 
 # Files to scan (views + PostureEngine)
 SCAN_FILES=(
-    TurtleNeckDetector/Views/PostureScoreView.swift
-    TurtleNeckDetector/Views/CalibrationView.swift
-    TurtleNeckDetector/Views/CameraPreviewView.swift
-    TurtleNeckDetector/Views/SettingsView.swift
-    TurtleNeckDetector/Views/OnboardingView.swift
-    TurtleNeckDetector/Views/DashboardView.swift
-    TurtleNeckDetector/Views/MenuBarView.swift
-    TurtleNeckDetector/Core/PostureEngine.swift
+    TurtleneckCoach/Views/PostureScoreView.swift
+    TurtleneckCoach/Views/CalibrationView.swift
+    TurtleneckCoach/Views/CameraPreviewView.swift
+    TurtleneckCoach/Views/SettingsView.swift
+    TurtleneckCoach/Views/OnboardingView.swift
+    TurtleneckCoach/Views/DashboardView.swift
+    TurtleneckCoach/Views/MenuBarView.swift
+    TurtleneckCoach/Core/PostureEngine.swift
 )
 
 # Skip lines with "// DS: one-off" annotation
@@ -440,7 +440,7 @@ check_pattern() {
     done < <(grep -n "$pattern" "$file" 2>/dev/null || true)
 }
 
-echo "PT Turtle Design Token Lint"
+echo "Turtleneck Coach Design Token Lint"
 echo "==========================="
 echo ""
 
@@ -498,7 +498,7 @@ Add this section after the "Frameworks" section:
 ```markdown
 ## Design System
 
-All visual constants live in `TurtleNeckDetector/DesignSystem/DesignTokens.swift` under the `DS` namespace.
+All visual constants live in `TurtleneckCoach/DesignSystem/DesignTokens.swift` under the `DS` namespace.
 
 - **Primitive tokens**: `DS.Font`, `DS.Space`, `DS.Radius`, `DS.Palette` — raw values
 - **Semantic tokens**: `DS.Severity`, `DS.Surface`, `DS.Label`, `DS.Size` — intent-based
@@ -515,5 +515,5 @@ After all changes:
 
 1. `./build.sh` — must compile with zero errors
 2. `./scripts/lint-design-tokens.sh` — must exit 0
-3. `grep -rn "\.system(size:" TurtleNeckDetector/Views/` — must return 0 results
+3. `grep -rn "\.system(size:" TurtleneckCoach/Views/` — must return 0 results
 4. App must look visually identical — no layout or color changes

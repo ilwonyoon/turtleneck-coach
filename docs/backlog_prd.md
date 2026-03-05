@@ -1,4 +1,4 @@
-# PT Turtle — Product Backlog PRD
+# Turtleneck Coach — Product Backlog PRD
 
 > Last updated: 2026-03-04
 
@@ -24,7 +24,7 @@
 - Screen distance check using `faceSizeNormalized` (too close / too far warning)
 - Skip option for returning users (persisted via UserDefaults)
 
-**Files to modify**: `TurtleNeckDetectorApp.swift`, new `OnboardingView.swift`
+**Files to modify**: `TurtleneckCoachApp.swift`, new `OnboardingView.swift`
 
 ### 2. False Positive Reduction
 

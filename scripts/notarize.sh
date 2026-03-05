@@ -4,7 +4,7 @@ set -euo pipefail
 # Submit a DMG to Apple notarization, wait for result, staple ticket, and validate.
 #
 # Usage:
-#   ./scripts/notarize.sh /path/to/TurtleNeckDetector-1.0.0.dmg [keychain_profile]
+#   ./scripts/notarize.sh /path/to/TurtleneckCoach-1.0.0.dmg [keychain_profile]
 #
 # Auth options:
 # 1) Recommended keychain profile:
@@ -24,8 +24,8 @@ if [[ "${DMG_PATH}" == "-h" || "${DMG_PATH}" == "--help" ]]; then
 Usage: ./scripts/notarize.sh <DMG_PATH> [KEYCHAIN_PROFILE]
 
 Examples:
-  ./scripts/notarize.sh ./TurtleNeckDetector-1.0.0.dmg turtle-notary
-  NOTARYTOOL_PROFILE=turtle-notary ./scripts/notarize.sh ./TurtleNeckDetector-1.0.0.dmg
+  ./scripts/notarize.sh ./TurtleneckCoach-1.0.0.dmg turtle-notary
+  NOTARYTOOL_PROFILE=turtle-notary ./scripts/notarize.sh ./TurtleneckCoach-1.0.0.dmg
 USAGE
   exit 0
 fi

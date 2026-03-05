@@ -543,7 +543,7 @@ final class PostureEngine: ObservableObject {
                 if !shouldSuppress {
                     let msg = NotificationService.message(for: held)
                     notificationService.notify(
-                        title: "PT Turtle",
+                        title: "Turtleneck Coach",
                         message: msg,
                         severity: held
                     )

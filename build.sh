@@ -1,29 +1,29 @@
 #!/bin/bash
-# Build and sign TurtleNeckDetector
+# Build and sign TurtleneckCoach
 set -e
 
-echo "Building TurtleNeckDetector..."
+echo "Building TurtleneckCoach..."
 
 # Ensure app bundle structure exists
-mkdir -p TurtleNeckDetector.app/Contents/MacOS
-mkdir -p TurtleNeckDetector.app/Contents/Resources
+mkdir -p TurtleneckCoach.app/Contents/MacOS
+mkdir -p TurtleneckCoach.app/Contents/Resources
 
 # Copy app icon
-cp TurtleNeckDetector/Resources/AppIcon.icns TurtleNeckDetector.app/Contents/Resources/AppIcon.icns
+cp TurtleneckCoach/Resources/AppIcon.icns TurtleneckCoach.app/Contents/Resources/AppIcon.icns
 
 # Create Info.plist if missing
-if [ ! -f TurtleNeckDetector.app/Contents/Info.plist ]; then
-cat > TurtleNeckDetector.app/Contents/Info.plist << 'INFOPLIST'
+if [ ! -f TurtleneckCoach.app/Contents/Info.plist ]; then
+cat > TurtleneckCoach.app/Contents/Info.plist << 'INFOPLIST'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
     <key>CFBundleIdentifier</key>
-    <string>com.ilwonyoon.TurtleNeckDetector</string>
+    <string>com.turtleneck.detector</string>
     <key>CFBundleName</key>
-    <string>TurtleNeckDetector</string>
+    <string>Turtleneck Coach</string>
     <key>CFBundleExecutable</key>
-    <string>TurtleNeckDetector</string>
+    <string>TurtleneckCoach</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleVersion</key>
@@ -35,46 +35,46 @@ cat > TurtleNeckDetector.app/Contents/Info.plist << 'INFOPLIST'
     <key>LSUIElement</key>
     <true/>
     <key>NSCameraUsageDescription</key>
-    <string>TurtleNeckDetector needs camera access to monitor your posture.</string>
+    <string>Turtleneck Coach uses the camera to analyze your posture. Images are processed on-device and never stored.</string>
 </dict>
 </plist>
 INFOPLIST
 fi
 
 swiftc \
-  TurtleNeckDetector/DesignSystem/DesignTokens.swift \
-  TurtleNeckDetector/Core/CalibrationManager.swift \
-  TurtleNeckDetector/Core/CameraManager.swift \
-  TurtleNeckDetector/Core/MediaPipeClient.swift \
-  TurtleNeckDetector/Core/PostureAnalyzer.swift \
-  TurtleNeckDetector/Core/PostureClassifier.swift \
-  TurtleNeckDetector/Core/PostureDataStore.swift \
-  TurtleNeckDetector/Core/PostureEngine.swift \
-  TurtleNeckDetector/Core/VisionPoseDetector.swift \
-  TurtleNeckDetector/Models/CalibrationData.swift \
-  TurtleNeckDetector/Models/CameraPosition.swift \
-  TurtleNeckDetector/Models/PostureMetrics.swift \
-  TurtleNeckDetector/Models/PostureState.swift \
-  TurtleNeckDetector/Services/FeedbackEngine.swift \
-  TurtleNeckDetector/Services/NotificationService.swift \
-  TurtleNeckDetector/TurtleNeckDetectorApp.swift \
-  TurtleNeckDetector/Views/CalibrationView.swift \
-  TurtleNeckDetector/Views/CameraPreviewView.swift \
-  TurtleNeckDetector/Views/DashboardView.swift \
-  TurtleNeckDetector/Views/DashboardWindowController.swift \
-  TurtleNeckDetector/Views/MenuBarView.swift \
-  TurtleNeckDetector/Views/PostureScoreView.swift \
-  TurtleNeckDetector/Views/SettingsView.swift \
-  TurtleNeckDetector/Views/SettingsWindowController.swift \
-  TurtleNeckDetector/Views/OnboardingView.swift \
-  -o TurtleNeckDetector.app/Contents/MacOS/TurtleNeckDetector \
+  TurtleneckCoach/DesignSystem/DesignTokens.swift \
+  TurtleneckCoach/Core/CalibrationManager.swift \
+  TurtleneckCoach/Core/CameraManager.swift \
+  TurtleneckCoach/Core/MediaPipeClient.swift \
+  TurtleneckCoach/Core/PostureAnalyzer.swift \
+  TurtleneckCoach/Core/PostureClassifier.swift \
+  TurtleneckCoach/Core/PostureDataStore.swift \
+  TurtleneckCoach/Core/PostureEngine.swift \
+  TurtleneckCoach/Core/VisionPoseDetector.swift \
+  TurtleneckCoach/Models/CalibrationData.swift \
+  TurtleneckCoach/Models/CameraPosition.swift \
+  TurtleneckCoach/Models/PostureMetrics.swift \
+  TurtleneckCoach/Models/PostureState.swift \
+  TurtleneckCoach/Services/FeedbackEngine.swift \
+  TurtleneckCoach/Services/NotificationService.swift \
+  TurtleneckCoach/TurtleneckCoachApp.swift \
+  TurtleneckCoach/Views/CalibrationView.swift \
+  TurtleneckCoach/Views/CameraPreviewView.swift \
+  TurtleneckCoach/Views/DashboardView.swift \
+  TurtleneckCoach/Views/DashboardWindowController.swift \
+  TurtleneckCoach/Views/MenuBarView.swift \
+  TurtleneckCoach/Views/PostureScoreView.swift \
+  TurtleneckCoach/Views/SettingsView.swift \
+  TurtleneckCoach/Views/SettingsWindowController.swift \
+  TurtleneckCoach/Views/OnboardingView.swift \
+  -o TurtleneckCoach.app/Contents/MacOS/TurtleneckCoach \
   -target arm64-apple-macos14 \
   -framework SwiftUI -framework Vision -framework AVFoundation -framework UserNotifications -framework AppKit -framework Network -framework Charts \
   -parse-as-library
 
 echo "Signing..."
 
-codesign -s - --entitlements /dev/stdin TurtleNeckDetector.app <<'ENTITLEMENTS'
+codesign -s - --entitlements /dev/stdin TurtleneckCoach.app <<'ENTITLEMENTS'
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -85,4 +85,4 @@ codesign -s - --entitlements /dev/stdin TurtleNeckDetector.app <<'ENTITLEMENTS'
 </plist>
 ENTITLEMENTS
 
-echo "Done! Run: open TurtleNeckDetector.app"
+echo "Done! Run: open TurtleneckCoach.app"

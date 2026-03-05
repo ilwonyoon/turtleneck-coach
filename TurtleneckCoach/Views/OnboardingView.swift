@@ -46,7 +46,7 @@ struct OnboardingView: View {
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(DS.Palette.green)
 
-            Text("PT Turtle")
+            Text("Turtleneck Coach")
                 .font(DS.Font.titleBold)
 
             Text("Reduce your bad posture time while you work.\nNo images are stored or sent anywhere.")
@@ -76,7 +76,7 @@ struct OnboardingView: View {
                 cameraDeniedBanner
             }
 
-            Text("When you start, sit upright for a few seconds so PT Turtle can learn your posture.")
+            Text("When you start, sit upright for a few seconds so Turtleneck Coach can learn your posture.")
                 .font(DS.Font.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -294,7 +294,7 @@ struct OnboardingView: View {
         guard !didAttemptNotificationRequest else { return }
         didAttemptNotificationRequest = true
         Task {
-            await TurtleNeckDetectorApp.requestNotificationPermissionIfNeeded()
+            await TurtleneckCoachApp.requestNotificationPermissionIfNeeded()
             checkNotificationStatus()
         }
     }
@@ -361,7 +361,7 @@ struct OnboardingView: View {
         cameraDenied = false
 
         Task {
-            let cameraGranted = await TurtleNeckDetectorApp.requestAllPermissions()
+            let cameraGranted = await TurtleneckCoachApp.requestAllPermissions()
             await MainActor.run {
                 isRequestingPermissions = false
                 if cameraGranted {

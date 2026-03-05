@@ -2,19 +2,19 @@
 set -euo pipefail
 
 # Create a distributable DMG containing:
-# - TurtleNeckDetector.app
+# - TurtleneckCoach.app
 # - Applications symlink
 # - Custom volume name and volume icon
 #
 # Usage:
-#   ./scripts/create-dmg.sh ./TurtleNeckDetector.app [output_dir]
+#   ./scripts/create-dmg.sh ./TurtleneckCoach.app [output_dir]
 # Optional:
-#   DMG_ICON_PATH=/path/to/icon.icns ./scripts/create-dmg.sh ./TurtleNeckDetector.app
+#   DMG_ICON_PATH=/path/to/icon.icns ./scripts/create-dmg.sh ./TurtleneckCoach.app
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-APP_PATH="${1:-${PROJECT_ROOT}/TurtleNeckDetector.app}"
+APP_PATH="${1:-${PROJECT_ROOT}/TurtleneckCoach.app}"
 OUTPUT_DIR="${2:-${PROJECT_ROOT}}"
 
 if [[ "${APP_PATH}" == "-h" || "${APP_PATH}" == "--help" ]]; then
@@ -22,8 +22,8 @@ if [[ "${APP_PATH}" == "-h" || "${APP_PATH}" == "--help" ]]; then
 Usage: ./scripts/create-dmg.sh [APP_PATH] [OUTPUT_DIR]
 
 Examples:
-  ./scripts/create-dmg.sh ./TurtleNeckDetector.app
-  ./scripts/create-dmg.sh ./TurtleNeckDetector.app ./dist
+  ./scripts/create-dmg.sh ./TurtleneckCoach.app
+  ./scripts/create-dmg.sh ./TurtleneckCoach.app ./dist
 USAGE
   exit 0
 fi

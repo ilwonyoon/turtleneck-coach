@@ -172,7 +172,7 @@ struct MenuBarView: View {
 
     private var header: some View {
         HStack {
-            Text("PT Turtle")
+            Text("Turtleneck Coach")
                 .font(DS.Font.titleBold)
             Spacer()
             Button {

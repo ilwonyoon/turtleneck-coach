@@ -107,7 +107,7 @@ final class NotificationService {
         return true
     }
 
-    /// PT Turtle notification messages by severity.
+    /// Turtleneck Coach notification messages by severity.
     static func message(for severity: Severity) -> String {
         switch severity {
         case .correction:

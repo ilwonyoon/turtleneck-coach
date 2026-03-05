@@ -1,5 +1,5 @@
 #!/bin/bash
-# PT Turtle Design Token Lint
+# Turtleneck Coach Design Token Lint
 # Scans view files for hardcoded values that should use DS.* tokens.
 # Exit 0 = clean, Exit 1 = violations found.
 set -euo pipefail
@@ -12,14 +12,14 @@ NC='\033[0m'
 
 # Files to scan (views + PostureEngine)
 SCAN_FILES=(
-    TurtleNeckDetector/Views/PostureScoreView.swift
-    TurtleNeckDetector/Views/CalibrationView.swift
-    TurtleNeckDetector/Views/CameraPreviewView.swift
-    TurtleNeckDetector/Views/SettingsView.swift
-    TurtleNeckDetector/Views/OnboardingView.swift
-    TurtleNeckDetector/Views/DashboardView.swift
-    TurtleNeckDetector/Views/MenuBarView.swift
-    TurtleNeckDetector/Core/PostureEngine.swift
+    TurtleneckCoach/Views/PostureScoreView.swift
+    TurtleneckCoach/Views/CalibrationView.swift
+    TurtleneckCoach/Views/CameraPreviewView.swift
+    TurtleneckCoach/Views/SettingsView.swift
+    TurtleneckCoach/Views/OnboardingView.swift
+    TurtleneckCoach/Views/DashboardView.swift
+    TurtleneckCoach/Views/MenuBarView.swift
+    TurtleneckCoach/Core/PostureEngine.swift
 )
 
 # Skip lines with "// DS: one-off" annotation
@@ -43,7 +43,7 @@ check_pattern() {
     done < <(grep -n "$pattern" "$file" 2>/dev/null || true)
 }
 
-echo "PT Turtle Design Token Lint"
+echo "Turtleneck Coach Design Token Lint"
 echo "==========================="
 echo ""
 

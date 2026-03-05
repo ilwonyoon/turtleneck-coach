@@ -169,11 +169,24 @@ final class PostureDataStore {
                 .appendingPathComponent("Library", isDirectory: true)
                 .appendingPathComponent("Application Support", isDirectory: true)
 
-        self.storeDirectory = appSupportRoot.appendingPathComponent("TurtleNeckDetector", isDirectory: true)
+        self.storeDirectory = appSupportRoot.appendingPathComponent("TurtleneckCoach", isDirectory: true)
         self.sessionsFileURL = storeDirectory.appendingPathComponent("sessions.json")
         self.dailyAggregatesFileURL = storeDirectory.appendingPathComponent("daily_aggregates.json")
 
+        migrateFromLegacyDirectory(appSupportRoot: appSupportRoot)
         ensureStoreDirectoryExists()
+    }
+
+    /// Migrate data from the old "TurtleNeckDetector" directory if it exists.
+    private func migrateFromLegacyDirectory(appSupportRoot: URL) {
+        let legacyDir = appSupportRoot.appendingPathComponent("TurtleNeckDetector", isDirectory: true)
+        guard fileManager.fileExists(atPath: legacyDir.path),
+              !fileManager.fileExists(atPath: storeDirectory.path) else { return }
+        do {
+            try fileManager.moveItem(at: legacyDir, to: storeDirectory)
+        } catch {
+            // Migration failed — the app will start fresh. Legacy data is preserved.
+        }
     }
 
     func saveSession(_ session: SessionRecord) {

@@ -14,7 +14,7 @@ Returning users skip onboarding entirely via persisted flag.
 
 ## Current Flow (what to change)
 
-**`TurtleNeckDetectorApp.swift`** currently:
+**`TurtleneckCoachApp.swift`** currently:
 1. Requests permissions in `.task` block before showing UI
 2. Shows a spinner while waiting
 3. Shows `MenuBarView` once permissions resolve
@@ -39,7 +39,7 @@ var body: some Scene {
 
 ## Implementation
 
-### 1. Modify `TurtleNeckDetectorApp.swift`
+### 1. Modify `TurtleneckCoachApp.swift`
 
 - Replace `@State private var permissionsReady = false` with `@AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false`
 - Remove the `.task { await requestAllPermissions() }` block
@@ -64,7 +64,7 @@ var body: some Scene {
 
 - Keep `requestAllPermissions()` function — OnboardingView will call the same logic inline.
 
-### 2. Create `TurtleNeckDetector/Views/OnboardingView.swift` (NEW)
+### 2. Create `TurtleneckCoach/Views/OnboardingView.swift` (NEW)
 
 Three-step view with `@State private var step = 0`.
 
@@ -100,7 +100,7 @@ private var welcomeStep: some View {
         Image(systemName: "tortoise.fill")
             .font(.system(size: 56))
             .foregroundStyle(.teal)
-        Text("PT Turtle")
+        Text("Turtleneck Coach")
             .font(.title3.weight(.semibold))
         Text("Monitors your posture while you work.\nNo images are stored.")
             .font(.subheadline)
@@ -250,7 +250,7 @@ private func scoreZoneRow(color: Color, label: String, description: String) -> s
 
 Add to the swiftc file list (after `MenuBarView.swift`):
 ```
-TurtleNeckDetector/Views/OnboardingView.swift \
+TurtleneckCoach/Views/OnboardingView.swift \
 ```
 
 ## Design Patterns (MUST match existing app)
@@ -271,8 +271,8 @@ TurtleNeckDetector/Views/OnboardingView.swift \
 
 | File | Action |
 |------|--------|
-| `TurtleNeckDetector/TurtleNeckDetectorApp.swift` | Modify |
-| `TurtleNeckDetector/Views/OnboardingView.swift` | **New file** |
+| `TurtleneckCoach/TurtleneckCoachApp.swift` | Modify |
+| `TurtleneckCoach/Views/OnboardingView.swift` | **New file** |
 | `build.sh` | Add new file to compile list |
 
 ## Verification
@@ -285,10 +285,10 @@ TurtleNeckDetector/Views/OnboardingView.swift \
 defaults delete com.turtleneck.detector hasCompletedOnboarding
 
 # OR if using the other bundle ID:
-defaults delete com.ilwonyoon.TurtleNeckDetector hasCompletedOnboarding
+defaults delete com.ilwonyoon.TurtleneckCoach hasCompletedOnboarding
 
 # Launch
-open TurtleNeckDetector.app
+open TurtleneckCoach.app
 ```
 
 - First launch: Welcome → Get Started → permissions dialog → calibration → score zones → monitoring

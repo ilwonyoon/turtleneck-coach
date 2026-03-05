@@ -1,31 +1,31 @@
-# PT Turtle Dashboard Redesign 실행 계획
+# Turtleneck Coach Dashboard Redesign 실행 계획
 
 > 작성일: 2026-03-04  
-> 기준 PRD: "PT Turtle Dashboard Redesign PRD"
+> 기준 PRD: "Turtleneck Coach Dashboard Redesign PRD"
 
 ## 1) 현재 코드베이스 분석 요약
 
 ### 현재 Dashboard 구조 (사실 기반)
 - 상단 4개 카드가 `Monitored`, `Good Posture`, `Average Score`, `Slouch Alerts`로 구성되어 있음.
-  - 참조: [DashboardView.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleNeckDetector/Views/DashboardView.swift#L72)
+  - 참조: [DashboardView.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleneckCoach/Views/DashboardView.swift#L72)
 - 메인 차트는 `Score Trend`(점수 기반 라인/에어리어) 중심.
-  - 참조: [DashboardView.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleNeckDetector/Views/DashboardView.swift#L114)
+  - 참조: [DashboardView.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleneckCoach/Views/DashboardView.swift#L114)
 - 보조 차트는 `Compliance`(Good/Bad 비율 스택 바)로 일/주/월 표시.
-  - 참조: [DashboardView.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleNeckDetector/Views/DashboardView.swift#L209)
+  - 참조: [DashboardView.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleneckCoach/Views/DashboardView.swift#L209)
 
 ### 현재 저장/집계 데이터 구조
 - 세션 레코드: `duration`, `averageScore`, `goodPosturePercent`, `averageCVA`, `slouchEventCount`.
-  - 참조: [PostureDataStore.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleNeckDetector/Core/PostureDataStore.swift#L3)
+  - 참조: [PostureDataStore.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleneckCoach/Core/PostureDataStore.swift#L3)
 - 일간 집계: `totalMonitoredMinutes`, `averageScore`, `goodPosturePercent`, `sessionCount`.
-  - 참조: [PostureDataStore.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleNeckDetector/Core/PostureDataStore.swift#L14)
+  - 참조: [PostureDataStore.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleneckCoach/Core/PostureDataStore.swift#L14)
 - 시간대 집계: 이미 `goodMinutes`, `badMinutes`를 제공함.
-  - 참조: [PostureDataStore.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleNeckDetector/Core/PostureDataStore.swift#L25)
+  - 참조: [PostureDataStore.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleneckCoach/Core/PostureDataStore.swift#L25)
 
 ### 현재 엔진 계측 상태
 - `Slouch Alerts` 카운트는 심각도 전환 시 `sessionSlouchEventCount`를 증가시키는 방식.
-  - 참조: [PostureEngine.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleNeckDetector/Core/PostureEngine.swift#L766)
+  - 참조: [PostureEngine.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleneckCoach/Core/PostureEngine.swift#L766)
 - `Resets`, `Longest Slouch`를 직접 계산하는 세션 필드는 아직 없음.
-  - 참조: [PostureEngine.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleNeckDetector/Core/PostureEngine.swift#L780)
+  - 참조: [PostureEngine.swift](/Users/ilwonyoon/Documents/Turtle_neck_detector-dashboard-update/TurtleneckCoach/Core/PostureEngine.swift#L780)
 
 ## 2) PRD 대비 갭 분석
 
@@ -113,13 +113,13 @@
 
 ## 4) 파일 단위 변경 계획
 
-- `TurtleNeckDetector/Core/PostureEngine.swift`
+- `TurtleneckCoach/Core/PostureEngine.swift`
   - 세션 계측 필드/전환 로직/레코드 생성 확장
-- `TurtleNeckDetector/Core/PostureDataStore.swift`
+- `TurtleneckCoach/Core/PostureDataStore.swift`
   - 모델 확장, 집계 계산 확장, 디코드 호환 처리
-- `TurtleNeckDetector/Views/DashboardView.swift`
+- `TurtleneckCoach/Views/DashboardView.swift`
   - 상단 카드 교체, Score Trend 제거, Timeline + Weekly Trend 추가
-- `TurtleNeckDetector/DesignSystem/DesignTokens.swift` (필요 시)
+- `TurtleneckCoach/DesignSystem/DesignTokens.swift` (필요 시)
   - Dashboard 전용 색 토큰(orange/green 중심) 보강
 - `test_*.swift` 또는 신규 테스트 파일
   - 집계/전환 로직 검증 추가

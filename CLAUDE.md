@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./build.sh
 
 # Run
-open TurtleNeckDetector.app
+open TurtleneckCoach.app
 
 # Optional: start MediaPipe Python server (enhances face mesh detection)
 source venv/bin/activate
@@ -24,8 +24,8 @@ Release packaging/notarization docs and scripts:
 
 - Guide: [`docs/DISTRIBUTION.md`](/Users/ilwonyoon/Documents/Turtle_neck_detector/docs/DISTRIBUTION.md)
 - Release build: `./scripts/build-release.sh [SIGNING_IDENTITY]`
-- DMG packaging: `./scripts/create-dmg.sh ./TurtleNeckDetector.app`
-- Notarization: `./scripts/notarize.sh ./TurtleNeckDetector-<version>.dmg [KEYCHAIN_PROFILE]`
+- DMG packaging: `./scripts/create-dmg.sh ./TurtleneckCoach.app`
+- Notarization: `./scripts/notarize.sh ./TurtleneckCoach-<version>.dmg [KEYCHAIN_PROFILE]`
 
 Quick flow:
 
@@ -34,10 +34,10 @@ Quick flow:
 ./scripts/build-release.sh
 
 # 2) Create DMG
-./scripts/create-dmg.sh ./TurtleNeckDetector.app
+./scripts/create-dmg.sh ./TurtleneckCoach.app
 
 # 3) Notarize + staple (requires Apple credentials/keychain profile)
-./scripts/notarize.sh ./TurtleNeckDetector-1.0.0.dmg turtle-notary
+./scripts/notarize.sh ./TurtleneckCoach-1.0.0.dmg turtle-notary
 ```
 
 ## Testing
@@ -108,7 +108,7 @@ SwiftUI, Vision, AVFoundation, UserNotifications, AppKit, Network
 
 ## Design System
 
-All visual constants live in `TurtleNeckDetector/DesignSystem/DesignTokens.swift` under the `DS` namespace.
+All visual constants live in `TurtleneckCoach/DesignSystem/DesignTokens.swift` under the `DS` namespace.
 
 - **Primitive tokens**: `DS.Font`, `DS.Space`, `DS.Radius`, `DS.Palette` — raw values
 - **Semantic tokens**: `DS.Severity`, `DS.Surface`, `DS.Label`, `DS.Size` — intent-based

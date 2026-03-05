@@ -1,7 +1,7 @@
 import Foundation
 
 /// Dynamic feedback messages and streak tracking.
-/// PT Turtle brand voice: firm but kind coach, short/clear/actionable, no medical claims.
+/// Turtleneck Coach brand voice: firm but kind coach, short/clear/actionable, no medical claims.
 struct FeedbackEngine {
 
     struct FeedbackMessage {
