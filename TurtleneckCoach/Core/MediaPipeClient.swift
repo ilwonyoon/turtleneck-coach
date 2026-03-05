@@ -145,6 +145,11 @@ final class MediaPipeClient: @unchecked Sendable {
 
     /// Connect to the Python server via Unix Domain Socket.
     func connect() -> Bool {
+        // Close any existing socket before reconnecting
+        if socketFD >= 0 {
+            close(socketFD)
+            socketFD = -1
+        }
         // Start Python server if needed
         if !FileManager.default.fileExists(atPath: socketPath) {
             guard startPythonServer() else { return false }
@@ -187,6 +192,9 @@ final class MediaPipeClient: @unchecked Sendable {
         }
 
         socketFD = fd
+        var timeout = timeval(tv_sec: 3, tv_usec: 0)
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
         _isConnected = true
         log("Connected to pose server")
         return true
@@ -219,6 +227,9 @@ final class MediaPipeClient: @unchecked Sendable {
 
             if result == 0 {
                 socketFD = fd
+                var timeout = timeval(tv_sec: 3, tv_usec: 0)
+                setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
+                setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
                 _isConnected = true
                 log("Connected on retry \(attempt)")
                 return true
@@ -261,13 +272,13 @@ final class MediaPipeClient: @unchecked Sendable {
 
         // Send length-prefixed JPEG
         guard sendRaw(data: jpegData) else {
-            _isConnected = false
+            disconnect()
             return nil
         }
 
         // Receive length-prefixed JSON response
         guard let responseData = receiveRaw() else {
-            _isConnected = false
+            disconnect()
             return nil
         }
 
@@ -343,6 +354,7 @@ final class MediaPipeClient: @unchecked Sendable {
     }
 
     private func log(_ msg: String) {
+        #if DEBUG
         let line = "\(Date()): [MediaPipeClient] \(msg)\n"
         if let data = line.data(using: .utf8) {
             let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
@@ -354,6 +366,7 @@ final class MediaPipeClient: @unchecked Sendable {
                 try? data.write(to: url)
             }
         }
+        #endif
     }
 
     /// Convert a MediaPipeResult into DetectedJoints for skeleton rendering.

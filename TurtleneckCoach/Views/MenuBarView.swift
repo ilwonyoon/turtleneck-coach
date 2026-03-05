@@ -109,9 +109,11 @@ struct MenuBarView: View {
                     controlButtons
 
                     // Debug capture buttons
+                    #if DEBUG
                     if engine.isMonitoring && engine.calibrationData != nil && !engine.isCalibrating {
                         debugCaptureButtons
                     }
+                    #endif
                 }
                 .padding(DS.Space.lg)
             }
@@ -436,6 +438,7 @@ struct MenuBarView: View {
         }
     }
 
+    #if DEBUG
     // MARK: - Debug Capture
 
     @ObservedObject private var tuning = FHPTuning.shared
@@ -540,6 +543,7 @@ struct MenuBarView: View {
         .background(DS.Surface.card)
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
     }
+    #endif
 
     // MARK: - Error Banner
 
@@ -558,9 +562,18 @@ struct MenuBarView: View {
 
     // MARK: - Footer
 
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+
     private var footer: some View {
         HStack {
-            Text("Privacy: No images stored")
+            Text("v\(appVersion)")
+                .font(DS.Font.micro)
+                .foregroundColor(.secondary)
+            Text("\u{00B7}")
+                .foregroundStyle(.quaternary)
+            Text("No images stored")
                 .font(DS.Font.micro)
                 .foregroundColor(.secondary)
             Spacer()

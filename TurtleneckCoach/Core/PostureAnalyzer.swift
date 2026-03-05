@@ -113,6 +113,7 @@ struct PostureAnalyzer {
             baselineIrisGaze: baseline.irisGazeOffset
         )
 
+        #if DEBUG
         // Debug: log classifier inputs every ~3s
         let pitchDelta = metrics.headPitch - baseline.headPitch
         let fsc = baseline.baselineFaceSize > 0 ? (metrics.faceSizeNormalized - baseline.baselineFaceSize) / baseline.baselineFaceSize : 0
@@ -131,6 +132,7 @@ struct PostureAnalyzer {
                 fh.closeFile()
             }
         }
+        #endif
 
         let adjustedCVA: CGFloat
         if classification == .lookingDown {
@@ -140,6 +142,7 @@ struct PostureAnalyzer {
             adjustedCVA = metrics.neckEarAngle
         }
 
+        #if DEBUG
         // Debug: log adjusted CVA and score
         let t = FHPTuning.shared
         let adjDebug = String(format: "[ADJUST] rawCVA=%.1f adjustedCVA=%.1f baseline=%.1f class=%@ score=%d [tuning: shrink=%.1f%% scale=%.0f pitch=%.1f°]",
@@ -154,6 +157,7 @@ struct PostureAnalyzer {
                 fh.closeFile()
             }
         }
+        #endif
 
         let severity = classifySeverity(adjustedCVA, mode: sensitivityMode)
         let useFallback = !metrics.earsVisible
@@ -167,7 +171,7 @@ struct PostureAnalyzer {
             // Face fallback mode: use CVA difference from baseline as the deviation signal
             let effectiveCVADrop = baseline.neckEarAngle - adjustedCVA
             // Normalize: 10° drop = moderate concern, 20° drop = severe
-            score = max(0, effectiveCVADrop / baseline.neckEarAngle)
+            score = baseline.neckEarAngle > 1e-6 ? max(0, effectiveCVADrop / baseline.neckEarAngle) : 0.0
             // Bad if CVA dropped below "good" threshold or dropped significantly from baseline
             isCurrentlyBad = severity != .good || effectiveCVADrop > 8.0
         } else {

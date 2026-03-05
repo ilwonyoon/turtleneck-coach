@@ -152,10 +152,12 @@ final class VisionPoseDetector {
     private static let maxReliableYawDegrees: CGFloat = 15
 
     init() {
+        #if DEBUG
         // Write startup marker to confirm logging works
         let msg = "VisionPoseDetector init at \(Date())\n"
         let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
         try? msg.data(using: .utf8)?.write(to: url)
+        #endif
     }
 
     // Face baseline stored during calibration
@@ -172,6 +174,7 @@ final class VisionPoseDetector {
     private var lastFaceFallbackCVA: CGFloat?
     private var debugCounter = 0
     private func log(_ msg: String) {
+        #if DEBUG
         let line = "\(Date()): \(msg)\n"
         if let data = line.data(using: .utf8) {
             let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
@@ -183,6 +186,7 @@ final class VisionPoseDetector {
                 try? data.write(to: url)
             }
         }
+        #endif
     }
 
     /// Detect pose in image. Tries 2D body pose first, then face landmarks fallback.
@@ -426,19 +430,23 @@ final class VisionPoseDetector {
             }
             if let lEye = landmarks.leftEye {
                 let pts = lEye.normalizedPoints
-                let avg = pts.reduce(CGPoint.zero) { CGPoint(x: $0.x + $1.x, y: $0.y + $1.y) }
-                leftEyeCenter = CGPoint(
-                    x: (bbox.origin.x + (avg.x / CGFloat(pts.count)) * bbox.width) * w,
-                    y: (1 - (bbox.origin.y + (avg.y / CGFloat(pts.count)) * bbox.height)) * h
-                )
+                if !pts.isEmpty {
+                    let avg = pts.reduce(CGPoint.zero) { CGPoint(x: $0.x + $1.x, y: $0.y + $1.y) }
+                    leftEyeCenter = CGPoint(
+                        x: (bbox.origin.x + (avg.x / CGFloat(pts.count)) * bbox.width) * w,
+                        y: (1 - (bbox.origin.y + (avg.y / CGFloat(pts.count)) * bbox.height)) * h
+                    )
+                }
             }
             if let rEye = landmarks.rightEye {
                 let pts = rEye.normalizedPoints
-                let avg = pts.reduce(CGPoint.zero) { CGPoint(x: $0.x + $1.x, y: $0.y + $1.y) }
-                rightEyeCenter = CGPoint(
-                    x: (bbox.origin.x + (avg.x / CGFloat(pts.count)) * bbox.width) * w,
-                    y: (1 - (bbox.origin.y + (avg.y / CGFloat(pts.count)) * bbox.height)) * h
-                )
+                if !pts.isEmpty {
+                    let avg = pts.reduce(CGPoint.zero) { CGPoint(x: $0.x + $1.x, y: $0.y + $1.y) }
+                    rightEyeCenter = CGPoint(
+                        x: (bbox.origin.x + (avg.x / CGFloat(pts.count)) * bbox.width) * w,
+                        y: (1 - (bbox.origin.y + (avg.y / CGFloat(pts.count)) * bbox.height)) * h
+                    )
+                }
             }
             if let contour = landmarks.faceContour {
                 let pts = contour.normalizedPoints
@@ -494,7 +502,7 @@ final class VisionPoseDetector {
 
             // Signal 2: Face getting bigger (leaning toward camera)
             // Dead zone: ignore < 8% size change
-            let sizeIncrease = ((smoothHeight - adjBaseH) / adjBaseH) * yawFactor
+            let sizeIncrease = adjBaseH > 1e-6 ? ((smoothHeight - adjBaseH) / adjBaseH) * yawFactor : 0.0
             let sizeContrib = sizeIncrease > 0.08 ? (sizeIncrease - 0.08) * 3.0 : 0.0
             forwardScore += sizeContrib
 

@@ -27,6 +27,6 @@
 	<key>NSDocumentsFolderUsageDescription</key>
 	<string>Turtleneck Coach accesses the Documents folder to locate the posture analysis server.</string>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright 2024. All rights reserved.</string>
+	<string>Copyright 2024-2026. All rights reserved.</string>
 </dict>
 </plist>

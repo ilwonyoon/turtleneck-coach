@@ -130,9 +130,11 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
             finalImage = rawImage
         }
 
+        #if DEBUG
         if Int.random(in: 0..<90) == 0 {
             print("[Camera] Frame: \(w)x\(h) → \(finalImage.width)x\(finalImage.height)")
         }
+        #endif
         onFrame(finalImage)
     }
 }

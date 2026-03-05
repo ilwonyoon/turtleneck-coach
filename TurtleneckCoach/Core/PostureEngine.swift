@@ -106,6 +106,7 @@ final class PostureEngine: ObservableObject {
     private let cvaBoundaryBuffer: CGFloat = 2.0
     private let cvaTransitionCrossover: CGFloat = 3.0
 
+    #if DEBUG
     // MARK: - Debug Capture
     @Published var debugCaptureLabel: String?
     private var debugCaptureStart: Date?
@@ -154,6 +155,7 @@ final class PostureEngine: ObservableObject {
     }
 
     private func appendToDebugLog(_ text: String) {
+        #if DEBUG
         if let data = text.data(using: .utf8) {
             let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
             if let fh = try? FileHandle(forWritingTo: url) {
@@ -162,7 +164,9 @@ final class PostureEngine: ObservableObject {
                 fh.closeFile()
             }
         }
+        #endif
     }
+    #endif
 
     // MARK: - Notification Suppression State
     private var sustainedBadStart: Date? = nil
@@ -240,6 +244,7 @@ final class PostureEngine: ObservableObject {
     // MARK: - Init
 
     init() {
+        #if DEBUG
         // Log engine creation
         let initLine = "\(Date()): [ENGINE] PostureEngine init\n"
         let initUrl = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
@@ -250,6 +255,7 @@ final class PostureEngine: ObservableObject {
         } else {
             try? initLine.data(using: .utf8)?.write(to: initUrl)
         }
+        #endif
 
         // No saved calibration loaded — always recalibrate on app start
         if let saved = UserDefaults.standard.string(forKey: "cameraPosition"),
@@ -279,6 +285,7 @@ final class PostureEngine: ObservableObject {
     }
 
     private func engineLog(_ msg: String) {
+        #if DEBUG
         let line = "\(Date()): [ENGINE] \(msg)\n"
         let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
         if let fh = try? FileHandle(forWritingTo: url) {
@@ -286,6 +293,7 @@ final class PostureEngine: ObservableObject {
             fh.write(line.data(using: .utf8)!)
             fh.closeFile()
         }
+        #endif
     }
 
     private func grabPendingFrame() -> CGImage? {

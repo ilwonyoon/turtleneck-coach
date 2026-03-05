@@ -1,5 +1,6 @@
 import SwiftUI
 import UserNotifications
+import AppKit
 
 struct SettingsView: View {
     @ObservedObject var engine: PostureEngine
@@ -217,6 +218,36 @@ struct SettingsView: View {
             } footer: {
                 Text("Calibration data is stored locally on this Mac.")
             }
+
+            Section {
+                LabeledContent("Version") {
+                    valueColumn {
+                        Text("\(appVersion) (\(buildNumber))")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                LabeledContent("") {
+                    valueColumn {
+                        Button("Send Feedback") { openFeedbackEmail() }
+                    }
+                }
+
+                LabeledContent("") {
+                    valueColumn {
+                        Button("Export Session Data") { exportSessionData() }
+                    }
+                }
+
+                LabeledContent("") {
+                    valueColumn {
+                        Link("Privacy Policy",
+                             destination: privacyPolicyURL)
+                    }
+                }
+            } header: {
+                Text("About")
+            }
         }
         .formStyle(.grouped)
         .padding(DS.Space.xl)
@@ -226,6 +257,74 @@ struct SettingsView: View {
                 DispatchQueue.main.async {
                     systemNotificationStatus = settings.authorizationStatus
                 }
+            }
+        }
+    }
+
+    // MARK: - About Helpers
+
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    }
+
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
+
+    private var privacyPolicyURL: URL {
+        URL(string: "https://gist.github.com/ilwonyoon/3e4c3781ab34990acb8af2f5972b687b")!
+    }
+
+    private func openFeedbackEmail() {
+        let version = appVersion
+        let build = buildNumber
+        let os = ProcessInfo.processInfo.operatingSystemVersionString
+
+        let today = Calendar.current.startOfDay(for: Date())
+        let todayEnd = Calendar.current.date(byAdding: .day, value: 1, to: today) ?? Date()
+        let sessions = engine.dataStore.loadSessions(range: today...todayEnd)
+        let totalMinutes = sessions.reduce(0.0) { $0 + $1.duration } / 60.0
+        let avgScore = sessions.isEmpty ? 0.0 :
+            sessions.reduce(0.0) { $0 + $1.averageScore } / Double(sessions.count)
+        let corrections = sessions.reduce(0) { $0 + $1.resetCount }
+
+        let subject = "Turtleneck Coach Feedback v\(version)"
+        let body = """
+        ---
+        App: Turtleneck Coach \(version) (build \(build))
+        macOS: \(os)
+        Today: \(String(format: "%.0f", totalMinutes))min monitored, avg score \(String(format: "%.0f", avgScore)), \(corrections) corrections
+        ---
+
+        (Write your feedback here)
+
+        """
+
+        let mailto = "mailto:ilwonyoon@gmail.com?subject=\(subject)&body=\(body)"
+        if let encoded = mailto.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+           let url = URL(string: encoded) {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    private func exportSessionData() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.json]
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let dateString = formatter.string(from: Date())
+        panel.nameFieldStringValue = "turtleneck-coach-sessions-\(dateString).json"
+
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
+            let now = Date()
+            let ninetyDaysAgo = now.addingTimeInterval(-90 * 86400)
+            let sessions = engine.dataStore.loadSessions(range: ninetyDaysAgo...now)
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            encoder.dateEncodingStrategy = .iso8601
+            if let data = try? encoder.encode(sessions) {
+                try? data.write(to: url, options: .atomic)
             }
         }
     }
