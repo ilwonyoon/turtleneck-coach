@@ -232,6 +232,10 @@ final class PostureEngine: ObservableObject {
     private var sessionCVASum: Double = 0
     private var sessionCVASampleCount = 0
     private var sessionSlouchEventCount = 0
+    private var sessionBadPostureSeconds: TimeInterval = 0
+    private var sessionResetCount = 0
+    private var sessionLongestSlouchSeconds: TimeInterval = 0
+    private var sessionCurrentSlouchStart: Date?
 
     // MARK: - Init
 
@@ -508,7 +512,7 @@ final class PostureEngine: ObservableObject {
                 sensitivityMode: sensitivityMode
             )
             postureState = newState
-            trackSlouchTransition(from: previousSeverity, to: newState.severity)
+            trackSlouchTransition(from: previousSeverity, to: newState.severity, at: now)
 
             // Track good posture duration — based on severity, not isTurtleNeck
             if newState.severity == .good {
@@ -564,7 +568,7 @@ final class PostureEngine: ObservableObject {
                 currentCVA: metrics.neckEarAngle,
                 baselineCVA: 0
             )
-            trackSlouchTransition(from: previousSeverity, to: severity)
+            trackSlouchTransition(from: previousSeverity, to: severity, at: now)
         }
 
         // Record score for rolling average (works with or without calibration)
@@ -711,6 +715,10 @@ final class PostureEngine: ObservableObject {
         sessionCVASum = 0
         sessionCVASampleCount = 0
         sessionSlouchEventCount = 0
+        sessionBadPostureSeconds = 0
+        sessionResetCount = 0
+        sessionLongestSlouchSeconds = 0
+        sessionCurrentSlouchStart = nil
 
         sessionSaveTimer = Timer.scheduledTimer(withTimeInterval: periodicSessionSaveInterval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
@@ -732,6 +740,10 @@ final class PostureEngine: ObservableObject {
         sessionCVASum = 0
         sessionCVASampleCount = 0
         sessionSlouchEventCount = 0
+        sessionBadPostureSeconds = 0
+        sessionResetCount = 0
+        sessionLongestSlouchSeconds = 0
+        sessionCurrentSlouchStart = nil
     }
 
     private func updateSessionTrackingClock(now: Date) {
@@ -746,6 +758,12 @@ final class PostureEngine: ObservableObject {
         if shouldCountAsGoodPosture {
             sessionGoodPostureSeconds += delta
         }
+        if shouldCountAsBadPosture {
+            if sessionCurrentSlouchStart == nil {
+                sessionCurrentSlouchStart = lastTick
+            }
+            sessionBadPostureSeconds += delta
+        }
         sessionLastTick = now
     }
 
@@ -756,6 +774,13 @@ final class PostureEngine: ObservableObject {
         postureState.severity == .good
     }
 
+    private var shouldCountAsBadPosture: Bool {
+        calibrationData != nil &&
+        !isCalibrating &&
+        bodyDetected &&
+        (postureState.severity == .bad || postureState.severity == .away)
+    }
+
     private func recordSessionSample(score: Int, cva: CGFloat) {
         guard activeSessionID != nil else { return }
         sessionScoreSum += Double(score)
@@ -764,11 +789,27 @@ final class PostureEngine: ObservableObject {
         sessionCVASampleCount += 1
     }
 
-    private func trackSlouchTransition(from previous: Severity, to current: Severity) {
+    private func trackSlouchTransition(from previous: Severity, to current: Severity, at now: Date) {
         guard activeSessionID != nil else { return }
         guard previous != current else { return }
-        if current == .bad || current == .away {
+        let wasBad = isBadSeverity(previous)
+        let isBad = isBadSeverity(current)
+
+        if isBad && !wasBad {
             sessionSlouchEventCount += 1
+            sessionCurrentSlouchStart = now
+        }
+
+        if !isBad && wasBad {
+            if let slouchStart = sessionCurrentSlouchStart {
+                let slouchDuration = max(0, now.timeIntervalSince(slouchStart))
+                sessionLongestSlouchSeconds = max(sessionLongestSlouchSeconds, slouchDuration)
+            }
+            sessionCurrentSlouchStart = nil
+        }
+
+        if isActionableSeverity(previous) && current == .good {
+            sessionResetCount += 1
         }
     }
 
@@ -795,6 +836,14 @@ final class PostureEngine: ObservableObject {
 
         let clampedGoodSeconds = min(duration, max(0, sessionGoodPostureSeconds))
         let goodPosturePercent = duration > 0 ? (clampedGoodSeconds / duration) * 100 : 0
+        let liveSlouchSeconds: TimeInterval
+        if let slouchStart = sessionCurrentSlouchStart, isBadSeverity(postureState.severity) {
+            liveSlouchSeconds = max(0, endDate.timeIntervalSince(slouchStart))
+        } else {
+            liveSlouchSeconds = 0
+        }
+        let longestSlouchSeconds = max(sessionLongestSlouchSeconds, liveSlouchSeconds)
+        let clampedBadSeconds = min(duration, max(0, sessionBadPostureSeconds))
 
         return SessionRecord(
             id: id,
@@ -804,8 +853,19 @@ final class PostureEngine: ObservableObject {
             averageScore: max(0, min(100, averageScore)),
             goodPosturePercent: max(0, min(100, goodPosturePercent)),
             averageCVA: max(0, averageCVA),
-            slouchEventCount: max(0, sessionSlouchEventCount)
+            slouchEventCount: max(0, sessionSlouchEventCount),
+            badPostureSeconds: clampedBadSeconds,
+            resetCount: max(0, sessionResetCount),
+            longestSlouchSeconds: max(0, longestSlouchSeconds)
         )
+    }
+
+    private func isBadSeverity(_ severity: Severity) -> Bool {
+        severity == .bad || severity == .away
+    }
+
+    private func isActionableSeverity(_ severity: Severity) -> Bool {
+        severity == .correction || severity == .bad || severity == .away
     }
 
     // MARK: - Menu Bar Severity Hold Timer

@@ -29,6 +29,10 @@
 		A10020 /* PostureDataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10023 /* PostureDataStore.swift */; };
 		A10021 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10024 /* DashboardView.swift */; };
 		A10022 /* PostureClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10025 /* PostureClassifier.swift */; };
+		A10023 /* DesignTokens.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10026 /* DesignTokens.swift */; };
+		A10024 /* DashboardWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10027 /* DashboardWindowController.swift */; };
+		A10025 /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10028 /* SettingsWindowController.swift */; };
+		A10026 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10029 /* OnboardingView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -57,6 +61,10 @@
 		B10023 /* PostureDataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureDataStore.swift; sourceTree = "<group>"; };
 		B10024 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		B10025 /* PostureClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PostureClassifier.swift; sourceTree = "<group>"; };
+		B10026 /* DesignTokens.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesignTokens.swift; sourceTree = "<group>"; };
+		B10027 /* DashboardWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardWindowController.swift; sourceTree = "<group>"; };
+		B10028 /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsWindowController.swift; sourceTree = "<group>"; };
+		B10029 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -82,6 +90,7 @@
 			isa = PBXGroup;
 			children = (
 				B10001 /* TurtleNeckDetectorApp.swift */,
+				D10009 /* DesignSystem */,
 				D10003 /* Core */,
 				D10004 /* Models */,
 				D10005 /* Services */,
@@ -131,12 +140,23 @@
 			children = (
 				B10013 /* MenuBarView.swift */,
 				B10024 /* DashboardView.swift */,
+				B10029 /* OnboardingView.swift */,
+				B10027 /* DashboardWindowController.swift */,
+				B10028 /* SettingsWindowController.swift */,
 				B10014 /* PostureScoreView.swift */,
 				B10015 /* CalibrationView.swift */,
 				B10016 /* SettingsView.swift */,
 				B10022 /* CameraPreviewView.swift */,
 			);
 			path = Views;
+			sourceTree = "<group>";
+		};
+		D10009 /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				B10026 /* DesignTokens.swift */,
+			);
+			path = DesignSystem;
 			sourceTree = "<group>";
 		};
 		D10007 /* Resources */ = {
@@ -247,6 +267,10 @@
 				A10019 /* CameraPreviewView.swift in Sources */,
 				A10020 /* PostureDataStore.swift in Sources */,
 				A10021 /* DashboardView.swift in Sources */,
+				A10023 /* DesignTokens.swift in Sources */,
+				A10024 /* DashboardWindowController.swift in Sources */,
+				A10025 /* SettingsWindowController.swift in Sources */,
+				A10026 /* OnboardingView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

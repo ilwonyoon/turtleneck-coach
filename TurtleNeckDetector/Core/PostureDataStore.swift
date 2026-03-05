@@ -9,6 +9,64 @@ struct SessionRecord: Codable, Identifiable, Hashable {
     let goodPosturePercent: Double
     let averageCVA: Double
     let slouchEventCount: Int
+    let badPostureSeconds: TimeInterval
+    let resetCount: Int
+    let longestSlouchSeconds: TimeInterval
+
+    init(
+        id: UUID,
+        startDate: Date,
+        endDate: Date,
+        duration: TimeInterval,
+        averageScore: Double,
+        goodPosturePercent: Double,
+        averageCVA: Double,
+        slouchEventCount: Int,
+        badPostureSeconds: TimeInterval = 0,
+        resetCount: Int = 0,
+        longestSlouchSeconds: TimeInterval = 0
+    ) {
+        self.id = id
+        self.startDate = startDate
+        self.endDate = endDate
+        self.duration = duration
+        self.averageScore = averageScore
+        self.goodPosturePercent = goodPosturePercent
+        self.averageCVA = averageCVA
+        self.slouchEventCount = slouchEventCount
+        self.badPostureSeconds = badPostureSeconds
+        self.resetCount = resetCount
+        self.longestSlouchSeconds = longestSlouchSeconds
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case startDate
+        case endDate
+        case duration
+        case averageScore
+        case goodPosturePercent
+        case averageCVA
+        case slouchEventCount
+        case badPostureSeconds
+        case resetCount
+        case longestSlouchSeconds
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        startDate = try container.decode(Date.self, forKey: .startDate)
+        endDate = try container.decode(Date.self, forKey: .endDate)
+        duration = try container.decode(TimeInterval.self, forKey: .duration)
+        averageScore = try container.decode(Double.self, forKey: .averageScore)
+        goodPosturePercent = try container.decode(Double.self, forKey: .goodPosturePercent)
+        averageCVA = try container.decode(Double.self, forKey: .averageCVA)
+        slouchEventCount = try container.decodeIfPresent(Int.self, forKey: .slouchEventCount) ?? 0
+        badPostureSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .badPostureSeconds) ?? 0
+        resetCount = try container.decodeIfPresent(Int.self, forKey: .resetCount) ?? 0
+        longestSlouchSeconds = try container.decodeIfPresent(TimeInterval.self, forKey: .longestSlouchSeconds) ?? 0
+    }
 }
 
 struct DailyAggregate: Codable, Identifiable, Hashable {
@@ -20,6 +78,53 @@ struct DailyAggregate: Codable, Identifiable, Hashable {
     let averageScore: Double
     let goodPosturePercent: Double
     let sessionCount: Int
+    let totalBadPostureMinutes: Double
+    let resetCount: Int
+    let longestSlouchMinutes: Double
+
+    init(
+        date: Date,
+        totalMonitoredMinutes: Double,
+        averageScore: Double,
+        goodPosturePercent: Double,
+        sessionCount: Int,
+        totalBadPostureMinutes: Double = 0,
+        resetCount: Int = 0,
+        longestSlouchMinutes: Double = 0
+    ) {
+        self.date = date
+        self.totalMonitoredMinutes = totalMonitoredMinutes
+        self.averageScore = averageScore
+        self.goodPosturePercent = goodPosturePercent
+        self.sessionCount = sessionCount
+        self.totalBadPostureMinutes = totalBadPostureMinutes
+        self.resetCount = resetCount
+        self.longestSlouchMinutes = longestSlouchMinutes
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case date
+        case totalMonitoredMinutes
+        case averageScore
+        case goodPosturePercent
+        case sessionCount
+        case totalBadPostureMinutes
+        case resetCount
+        case longestSlouchMinutes
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        date = try container.decode(Date.self, forKey: .date)
+        totalMonitoredMinutes = try container.decode(Double.self, forKey: .totalMonitoredMinutes)
+        averageScore = try container.decode(Double.self, forKey: .averageScore)
+        goodPosturePercent = try container.decode(Double.self, forKey: .goodPosturePercent)
+        sessionCount = try container.decode(Int.self, forKey: .sessionCount)
+        let fallbackBad = max(0, totalMonitoredMinutes * (100 - goodPosturePercent) / 100)
+        totalBadPostureMinutes = try container.decodeIfPresent(Double.self, forKey: .totalBadPostureMinutes) ?? fallbackBad
+        resetCount = try container.decodeIfPresent(Int.self, forKey: .resetCount) ?? 0
+        longestSlouchMinutes = try container.decodeIfPresent(Double.self, forKey: .longestSlouchMinutes) ?? 0
+    }
 }
 
 struct HourlyAggregate: Codable, Identifiable, Hashable {
@@ -158,13 +263,32 @@ final class PostureDataStore {
 
         let averageScore = totalDuration > 0 ? weightedScoreSum / totalDuration : 0
         let goodPosturePercent = totalDuration > 0 ? weightedGoodPercentSum / totalDuration : 0
+        let totalBadPostureMinutes = daySessions.reduce(0.0) { partial, session in
+            let badMinutesFromField = max(0, session.badPostureSeconds) / 60.0
+            if badMinutesFromField > 0 {
+                return partial + badMinutesFromField
+            }
+
+            let durationMinutes = max(0, session.duration) / 60.0
+            let fallbackBadRatio = 1 - (clampToPercent(session.goodPosturePercent) / 100.0)
+            return partial + max(0, durationMinutes * fallbackBadRatio)
+        }
+        let resetCount = daySessions.reduce(0) { partial, session in
+            partial + max(0, session.resetCount)
+        }
+        let longestSlouchMinutes = daySessions
+            .map { max(0, $0.longestSlouchSeconds) / 60.0 }
+            .max() ?? 0
 
         return DailyAggregate(
             date: day,
             totalMonitoredMinutes: totalMinutes,
             averageScore: clampToPercent(averageScore),
             goodPosturePercent: clampToPercent(goodPosturePercent),
-            sessionCount: daySessions.count
+            sessionCount: daySessions.count,
+            totalBadPostureMinutes: max(0, totalBadPostureMinutes),
+            resetCount: max(0, resetCount),
+            longestSlouchMinutes: max(0, longestSlouchMinutes)
         )
     }
 
