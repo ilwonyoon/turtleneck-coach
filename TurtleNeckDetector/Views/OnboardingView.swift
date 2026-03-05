@@ -49,7 +49,7 @@ struct OnboardingView: View {
             Text("PT Turtle")
                 .font(DS.Font.titleBold)
 
-            Text("Monitors your posture while you work.\nNo images are stored or sent anywhere.")
+            Text("Reduce your bad posture time while you work.\nNo images are stored or sent anywhere.")
                 .font(DS.Font.subheadMedium)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -58,10 +58,10 @@ struct OnboardingView: View {
             VStack(alignment: .leading, spacing: 10) {
                 featureRow(icon: "camera.fill", color: .blue,
                            title: "Camera Access",
-                           detail: "Analyzes head and shoulder position in real time to calculate your posture angle.")
+                           detail: "Tracks your head and shoulders to detect when you start slouching.")
                 featureRow(icon: "bell.fill", color: .orange,
                            title: "Notifications",
-                           detail: "Gentle alerts when your posture drifts so you can correct before it becomes a habit.")
+                           detail: "Gentle reminders when you've been leaning forward for a while.")
                 featureRow(icon: "lock.shield.fill", color: .green,
                            title: "Private by Design",
                            detail: "All processing happens on your Mac. Nothing leaves your device.")
@@ -76,10 +76,16 @@ struct OnboardingView: View {
                 cameraDeniedBanner
             }
 
+            Text("When you start, sit upright for a few seconds so PT Turtle can learn your posture.")
+                .font(DS.Font.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
             Button {
                 requestPermissionsAndStart()
             } label: {
-                Text(isRequestingPermissions ? "Requesting Access..." : "Get Started")
+                Text(isRequestingPermissions ? "Requesting Access..." : "Start Monitoring")
                     .font(DS.Font.subheadMedium)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
