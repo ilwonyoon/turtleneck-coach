@@ -206,16 +206,38 @@ final class PostureEngine: ObservableObject {
 
     #if DEBUG
     // MARK: - Debug Capture
+    private enum DebugEyeClass: String {
+        case forwardHead
+        case lookingDown
+        case inconclusive
+        case fallback
+        case skip
+    }
+
+    private struct DebugEyeSample {
+        let date: Date
+        let eyeClass: DebugEyeClass
+        let confidence: Double
+        let reason: String
+    }
+
+    private let debugEyeMajorityConfidenceThreshold: Double = 0.70
+
     @Published var debugCaptureLabel: String?
     private var debugCaptureStart: Date?
     private let debugCaptureDuration: TimeInterval = 5.0
     private var debugSnapshotTimer: Timer?
     private var debugSnapshotCount = 0
+    private var debugCaptureLogOffset: UInt64?
+    private var debugEyeSamples: [DebugEyeSample] = []
+    private let debugLogPath = "/tmp/turtle_cvadebug.log"
 
     func startDebugCapture(label: String) {
         debugCaptureLabel = label
         debugCaptureStart = Date()
         debugSnapshotCount = 0
+        debugCaptureLogOffset = currentDebugLogOffset()
+        debugEyeSamples.removeAll(keepingCapacity: true)
         let header = "\n===== DEBUG CAPTURE: \(label) START =====\n"
         appendToDebugLog(header)
         // Take snapshot immediately, then every 1 second
@@ -237,8 +259,13 @@ final class PostureEngine: ObservableObject {
         debugSnapshotTimer = nil
         let footer = "===== DEBUG CAPTURE: \(label) END (\(debugSnapshotCount) snapshots saved) =====\n\n"
         appendToDebugLog(footer)
+        if let summary = summarizeDebugCapture(label: label) {
+            appendToDebugLog(summary + "\n")
+        }
         debugCaptureLabel = nil
         debugCaptureStart = nil
+        debugCaptureLogOffset = nil
+        debugEyeSamples.removeAll(keepingCapacity: true)
     }
 
     private func saveDebugSnapshot(label: String) {
@@ -256,6 +283,206 @@ final class PostureEngine: ObservableObject {
         #if DEBUG
         DebugLogWriter.append(text)
         #endif
+    }
+
+    private func currentDebugLogOffset() -> UInt64? {
+        let url = URL(fileURLWithPath: debugLogPath)
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+              let size = attrs[.size] as? NSNumber else { return nil }
+        return size.uint64Value
+    }
+
+    private func summarizeDebugCapture(label: String) -> String? {
+        let url = URL(fileURLWithPath: debugLogPath)
+        guard let offset = debugCaptureLogOffset,
+              let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+
+        do {
+            try handle.seek(toOffset: offset)
+            let data = handle.readDataToEndOfFile()
+            guard let text = String(data: data, encoding: .utf8) else { return nil }
+
+            var classCounts: [String: Int] = [:]
+            var evalScores: [Int] = []
+            var evalClasses: [String] = []
+            for line in text.split(separator: "\n").map(String.init) where line.contains("[EVAL]") {
+                if let cls = captureGroup(in: line, pattern: "class=([^ ]+)") {
+                    classCounts[cls, default: 0] += 1
+                    evalClasses.append(cls)
+                }
+                if let scoreText = captureGroup(in: line, pattern: "relScore=([0-9]+)"),
+                   let score = Int(scoreText) {
+                    evalScores.append(score)
+                }
+            }
+
+            let eyeWindowStart = (debugCaptureStart ?? Date()).addingTimeInterval(-debugCaptureDuration)
+            let eyeWindowSamples = debugEyeSamples.filter { $0.date >= eyeWindowStart }
+            let eyeCounts = Dictionary(grouping: eyeWindowSamples, by: \.eyeClass.rawValue).mapValues(\.count)
+            let usableEyeSamples = eyeWindowSamples.filter { $0.eyeClass != .skip }
+            let decisiveEyeSamples = usableEyeSamples.filter {
+                ($0.eyeClass == .forwardHead || $0.eyeClass == .lookingDown) &&
+                $0.confidence >= debugEyeMajorityConfidenceThreshold
+            }
+            let decisiveEyeCounts = Dictionary(grouping: decisiveEyeSamples, by: \.eyeClass.rawValue).mapValues(\.count)
+            let skipReasonCounts = Dictionary(
+                grouping: eyeWindowSamples.filter { $0.eyeClass == .skip },
+                by: \.reason
+            ).mapValues(\.count)
+
+            guard !classCounts.isEmpty || !eyeCounts.isEmpty else { return nil }
+
+            let classText = formatCountSummary(classCounts)
+            let eyeText = eyeCounts.isEmpty ? "n/a" : formatCountSummary(eyeCounts)
+            let majorityEyeClass = decisiveEyeCounts.max {
+                if $0.value == $1.value { return $0.key > $1.key }
+                return $0.value < $1.value
+            }
+            let majorityText = majorityEyeClass.map { "\($0.key):\($0.value)" } ?? "n/a"
+            let avgEyeConf = decisiveEyeSamples.isEmpty
+                ? "n/a"
+                : String(format: "%.2f", decisiveEyeSamples.reduce(0.0) { $0 + $1.confidence } / Double(decisiveEyeSamples.count))
+            let avgEyeConfAll = usableEyeSamples.isEmpty
+                ? "n/a"
+                : String(format: "%.2f", usableEyeSamples.reduce(0.0) { $0 + $1.confidence } / Double(usableEyeSamples.count))
+            let skipText = skipReasonCounts.isEmpty ? "none" : formatCountSummary(skipReasonCounts)
+            let scoreSummary = summarizeDebugScores(scores: evalScores, classes: evalClasses)
+            return "[DEBUG SUMMARY] label=\(label) class=\(classText) scoreAvg=\(scoreSummary.scoreAvg) scoreHoldAvg=\(scoreSummary.scoreHoldAvg) scoreLowAvg=\(scoreSummary.scoreLowAvg) scoreMin=\(scoreSummary.scoreMin) holdClass=\(scoreSummary.holdClass) eyeWindow=5.0s eyeSamples=\(eyeWindowSamples.count) eyeUsable=\(usableEyeSamples.count) eyeMajorityUsable=\(decisiveEyeSamples.count) eyeMajorityConfMin=\(String(format: "%.2f", debugEyeMajorityConfidenceThreshold)) eyeMajority=\(majorityText) eyeConfAvg=\(avgEyeConf) eyeConfAvgAll=\(avgEyeConfAll) eyeClass=\(eyeText) eyeSkip=\(skipText)"
+        } catch {
+            return nil
+        }
+    }
+
+    private func summarizeDebugScores(scores: [Int], classes: [String]) -> (
+        scoreAvg: String,
+        scoreHoldAvg: String,
+        scoreLowAvg: String,
+        scoreMin: String,
+        holdClass: String
+    ) {
+        guard !scores.isEmpty else {
+            return ("n/a", "n/a", "n/a", "n/a", "n/a")
+        }
+
+        let avg = String(format: "%.1f", Double(scores.reduce(0, +)) / Double(scores.count))
+        let minScore = String(scores.min() ?? 0)
+
+        let lowerCount = max(1, scores.count / 3)
+        let lowBand = scores.sorted().prefix(lowerCount)
+        let lowAvg = String(format: "%.1f", Double(lowBand.reduce(0, +)) / Double(lowBand.count))
+
+        let start = scores.count / 4
+        let end = max(start + 1, scores.count - start)
+        let holdScores = Array(scores[start..<end])
+        let holdAvg = String(format: "%.1f", Double(holdScores.reduce(0, +)) / Double(holdScores.count))
+
+        let holdClasses: [String]
+        if classes.count == scores.count {
+            holdClasses = Array(classes[start..<end])
+        } else {
+            holdClasses = classes
+        }
+        let holdClassCounts = Dictionary(grouping: holdClasses, by: { $0 }).mapValues(\.count)
+        let holdClass = holdClassCounts.max {
+            if $0.value == $1.value { return $0.key > $1.key }
+            return $0.value < $1.value
+        }?.key ?? "n/a"
+
+        return (avg, holdAvg, lowAvg, minScore, holdClass)
+    }
+
+    private func recordDebugEyeSampleIfNeeded(
+        metrics: PostureMetrics,
+        baseline: CalibrationData?,
+        usingMediaPipe: Bool,
+        yawDegrees: CGFloat,
+        now: Date
+    ) {
+        guard debugCaptureLabel != nil else { return }
+
+        let sample = classifyDebugEyeSample(
+            metrics: metrics,
+            baseline: baseline,
+            usingMediaPipe: usingMediaPipe,
+            yawDegrees: yawDegrees
+        )
+        debugEyeSamples.append(DebugEyeSample(
+            date: now,
+            eyeClass: sample.eyeClass,
+            confidence: sample.confidence,
+            reason: sample.reason
+        ))
+
+        let cutoff = now.addingTimeInterval(-debugCaptureDuration)
+        if debugEyeSamples.count > 32 {
+            debugEyeSamples.removeAll { $0.date < cutoff }
+        }
+    }
+
+    private func classifyDebugEyeSample(
+        metrics: PostureMetrics,
+        baseline: CalibrationData?,
+        usingMediaPipe: Bool,
+        yawDegrees: CGFloat
+    ) -> (eyeClass: DebugEyeClass, confidence: Double, reason: String) {
+        guard cameraPosition == .center else {
+            return (.skip, 0, "nonCenterCamera")
+        }
+        guard let baseline else {
+            return (.skip, 0, "noBaseline")
+        }
+        guard baseline.schemaVersion >= 2, baseline.baselineFaceSize > 0.0001 else {
+            return (.skip, 0, "unsupportedBaseline")
+        }
+        guard yawDegrees < 20 else {
+            return (.skip, 0, "highYaw")
+        }
+        guard metrics.landmarksDetected else {
+            return (.skip, 0, "noLandmarks")
+        }
+        guard usingMediaPipe else {
+            return (.fallback, 0.25, "visionFallback")
+        }
+
+        let irisGazeDelta = metrics.irisGazeOffset - baseline.irisGazeOffset
+
+        let result = PostureClassifier.classifyEyeLevelForwardHeadVsLookingDown(
+            cvaDrop: baseline.neckEarAngle - metrics.neckEarAngle,
+            pitchDrop: baseline.headPitch - metrics.headPitch,
+            faceSizeChange: (metrics.faceSizeNormalized - baseline.baselineFaceSize) / baseline.baselineFaceSize,
+            depthIncrease: metrics.forwardDepth - baseline.forwardDepth,
+            yawDegrees: yawDegrees,
+            irisGazeOffset: irisGazeDelta
+        )
+
+        switch result.classification {
+        case .forwardHead:
+            return (.forwardHead, Double(result.confidence), "narrowHelper")
+        case .lookingDown:
+            return (.lookingDown, Double(result.confidence), "narrowHelper")
+        case .inconclusive:
+            return (.inconclusive, Double(result.confidence), "narrowHelper")
+        }
+    }
+
+    private func captureGroup(in text: String, pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let range = NSRange(text.startIndex..<text.endIndex, in: text)
+        guard let match = regex.firstMatch(in: text, range: range),
+              match.numberOfRanges > 1,
+              let matchRange = Range(match.range(at: 1), in: text) else { return nil }
+        return String(text[matchRange])
+    }
+
+    private func formatCountSummary(_ counts: [String: Int]) -> String {
+        counts
+            .sorted { lhs, rhs in
+                if lhs.value == rhs.value { return lhs.key < rhs.key }
+                return lhs.value > rhs.value
+            }
+            .map { "\($0.key):\($0.value)" }
+            .joined(separator: ",")
     }
     #endif
 
@@ -836,6 +1063,15 @@ final class PostureEngine: ObservableObject {
             noseY: result.joints.nose.y,
             now: now
         )
+        #if DEBUG
+        recordDebugEyeSampleIfNeeded(
+            metrics: metrics,
+            baseline: calibrationData,
+            usingMediaPipe: usingMediaPipe,
+            yawDegrees: abs(currentHeadYaw),
+            now: now
+        )
+        #endif
 
         // Calibration mode
         if calibrationManager.isCalibrating {

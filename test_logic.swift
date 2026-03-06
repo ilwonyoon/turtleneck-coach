@@ -274,12 +274,26 @@ struct TestRunner {
         print("  Perfect: \(perfectScore) (expect >=90): \(perfectOk ? "PASS" : "FAIL")")
         if perfectOk { totalPassed += 1 }
 
+        // Mild forward head should separate more clearly from good.
+        totalTests += 1
+        let mildFhpScore = PostureAnalyzer.compositeRelativeScore(
+            currentCVA: 46, baselineCVA: 55,
+            currentPitch: 6, baselinePitch: 5,
+            currentFaceSize: 0.086, baselineFaceSize: 0.1,
+            currentForwardDepth: 0.05, baselineForwardDepth: 0.02,
+            classification: .forwardHead
+        )
+        let mildFhpOk = mildFhpScore <= 60
+        print("  Mild FHP: \(mildFhpScore) (expect <=60): \(mildFhpOk ? "PASS" : "FAIL")")
+        if mildFhpOk { totalPassed += 1 }
+
         // Forward head (CVA dropped + face bigger)
         totalTests += 1
         let fhpScore = PostureAnalyzer.compositeRelativeScore(
             currentCVA: 38, baselineCVA: 55,
             currentPitch: 8, baselinePitch: 5,
             currentFaceSize: 0.12, baselineFaceSize: 0.1,
+            currentForwardDepth: 0.08, baselineForwardDepth: 0.02,
             classification: .forwardHead
         )
         let fhpOk = fhpScore < 60
@@ -298,8 +312,93 @@ struct TestRunner {
         print("  LookingDown: \(downScore) vs FHP: \(fhpScore) (expect down > fhp): \(downVsFhp ? "PASS" : "FAIL")")
         if downVsFhp { totalPassed += 1 }
 
-        // ===== Test 7: FeedbackEngine =====
-        print("\n=== Test 7: FeedbackEngine ===")
+        totalTests += 1
+        let goodVsMildOk = perfectScore - mildFhpScore >= 30
+        print("  Good vs Mild FHP gap: \(perfectScore - mildFhpScore) (expect >=30): \(goodVsMildOk ? "PASS" : "FAIL")")
+        if goodVsMildOk { totalPassed += 1 }
+
+        // ===== Test 7: Eye-level narrow helper (log-only) =====
+        print("\n=== Test 7: Eye-Level Narrow Helper ===")
+
+        totalTests += 1
+        let eyeLevelGood = PostureClassifier.classifyEyeLevelForwardHeadVsLookingDown(
+            cvaDrop: 1.5,
+            pitchDrop: 2.5,
+            faceSizeChange: -0.01,
+            depthIncrease: 0.01,
+            yawDegrees: 2.0,
+            irisGazeOffset: 0.08
+        )
+        let eyeLevelGoodOk =
+            eyeLevelGood.classification == .inconclusive &&
+            eyeLevelGood.confidence == 0
+        print("  Good/neutral helper: class=\(eyeLevelGood.classification.rawValue) conf=\(eyeLevelGood.confidence) (expect inconclusive/0): \(eyeLevelGoodOk ? "PASS" : "FAIL")")
+        if eyeLevelGoodOk { totalPassed += 1 }
+
+        totalTests += 1
+        let eyeLevelForward = PostureClassifier.classifyEyeLevelForwardHeadVsLookingDown(
+            cvaDrop: 9.0,
+            pitchDrop: 2.0,
+            faceSizeChange: -0.10,
+            depthIncrease: 0.08,
+            yawDegrees: 4.0,
+            irisGazeOffset: 0.05
+        )
+        let eyeLevelForwardOk =
+            eyeLevelForward.classification == .forwardHead &&
+            eyeLevelForward.confidence >= 0.20 &&
+            eyeLevelForward.forwardHeadEvidence > eyeLevelForward.lookingDownEvidence
+        print("  ForwardHead narrow helper: class=\(eyeLevelForward.classification.rawValue) conf=\(eyeLevelForward.confidence) (expect forwardHead): \(eyeLevelForwardOk ? "PASS" : "FAIL")")
+        if eyeLevelForwardOk { totalPassed += 1 }
+
+        totalTests += 1
+        let eyeLevelLookingDown = PostureClassifier.classifyEyeLevelForwardHeadVsLookingDown(
+            cvaDrop: 5.0,
+            pitchDrop: 9.0,
+            faceSizeChange: -0.01,
+            depthIncrease: 0.00,
+            yawDegrees: 3.0,
+            irisGazeOffset: 0.34
+        )
+        let eyeLevelLookingDownOk =
+            eyeLevelLookingDown.classification == .lookingDown &&
+            eyeLevelLookingDown.confidence >= 0.20 &&
+            eyeLevelLookingDown.lookingDownEvidence > eyeLevelLookingDown.forwardHeadEvidence
+        print("  LookingDown narrow helper: class=\(eyeLevelLookingDown.classification.rawValue) conf=\(eyeLevelLookingDown.confidence) (expect lookingDown): \(eyeLevelLookingDownOk ? "PASS" : "FAIL")")
+        if eyeLevelLookingDownOk { totalPassed += 1 }
+
+        totalTests += 1
+        let eyeLevelMixed = PostureClassifier.classifyEyeLevelForwardHeadVsLookingDown(
+            cvaDrop: 6.0,
+            pitchDrop: 7.0,
+            faceSizeChange: -0.03,
+            depthIncrease: 0.02,
+            yawDegrees: 5.0,
+            irisGazeOffset: 0.18
+        )
+        let eyeLevelMixedOk =
+            eyeLevelMixed.classification == .inconclusive &&
+            eyeLevelMixed.confidence < 0.30
+        print("  Mixed/inconclusive helper: class=\(eyeLevelMixed.classification.rawValue) conf=\(eyeLevelMixed.confidence) (expect inconclusive): \(eyeLevelMixedOk ? "PASS" : "FAIL")")
+        if eyeLevelMixedOk { totalPassed += 1 }
+
+        totalTests += 1
+        let eyeLevelYawFallback = PostureClassifier.classifyEyeLevelForwardHeadVsLookingDown(
+            cvaDrop: 9.0,
+            pitchDrop: 2.0,
+            faceSizeChange: -0.10,
+            depthIncrease: 0.08,
+            yawDegrees: 25.0,
+            irisGazeOffset: 0.05
+        )
+        let eyeLevelYawFallbackOk =
+            eyeLevelYawFallback.classification == .inconclusive &&
+            eyeLevelYawFallback.confidence == 0
+        print("  High-yaw helper fallback: class=\(eyeLevelYawFallback.classification.rawValue) conf=\(eyeLevelYawFallback.confidence) (expect inconclusive/0): \(eyeLevelYawFallbackOk ? "PASS" : "FAIL")")
+        if eyeLevelYawFallbackOk { totalPassed += 1 }
+
+        // ===== Test 8: FeedbackEngine =====
+        print("\n=== Test 8: FeedbackEngine ===")
         let msg0 = FeedbackEngine.goodMessage(forDuration: 0)
         let msg60 = FeedbackEngine.goodMessage(forDuration: 60)
         let msg300 = FeedbackEngine.goodMessage(forDuration: 300)
@@ -331,8 +430,8 @@ struct TestRunner {
         print("  Format 90s: \(fmt90) (expect '1m 30s'): \(fmt90ok ? "PASS" : "FAIL")")
         if fmt90ok { totalPassed += 1 }
 
-        // ===== Test 8: CameraPosition =====
-        print("\n=== Test 8: CameraPosition ===")
+        // ===== Test 9: CameraPosition =====
+        print("\n=== Test 9: CameraPosition ===")
 
         totalTests += 1
         let centerOk = CameraPosition.center.isSideView == false

@@ -99,6 +99,12 @@ struct PostureAnalyzer {
             irisGazeOffset: metrics.irisGazeOffset,
             baselineIrisGaze: baseline.irisGazeOffset
         )
+        let eyeLevelDebug = debugEyeLevelClassification(
+            metrics: metrics,
+            baseline: baseline,
+            cameraPosition: cameraPosition,
+            yawDegrees: abs(yawDegrees)
+        )
 
         let adjustedCVA: CGFloat
         if classification == .lookingDown {
@@ -125,6 +131,7 @@ struct PostureAnalyzer {
                 currentCVA: adjustedCVA, baselineCVA: baseline.neckEarAngle,
                 currentPitch: metrics.headPitch, baselinePitch: baseline.headPitch,
                 currentFaceSize: metrics.faceSizeNormalized, baselineFaceSize: baseline.baselineFaceSize,
+                currentForwardDepth: metrics.forwardDepth, baselineForwardDepth: baseline.forwardDepth,
                 classification: classification
             )
             let forwardDeviation = relativeChange(
@@ -149,11 +156,28 @@ struct PostureAnalyzer {
 
         #if DEBUG
         let pitchDelta = metrics.headPitch - baseline.headPitch
+        let pitchDrop = baseline.headPitch - metrics.headPitch
         let fsc = baseline.baselineFaceSize > 0 ? (metrics.faceSizeNormalized - baseline.baselineFaceSize) / baseline.baselineFaceSize : 0
-        let debugLine = String(format: "[EVAL] rawCVA=%.1f adj=%.1f base=%.1f class=%@ relScore=%d sev=%@ pitchΔ=%.2f faceΔ=%.1f%%",
+        let depthIncrease = metrics.forwardDepth - baseline.forwardDepth
+        let irisDelta = metrics.irisGazeOffset - baseline.irisGazeOffset
+        var debugLine = String(format: "[EVAL] rawCVA=%.1f adj=%.1f base=%.1f class=%@ relScore=%d sev=%@ pitchΔ=%.2f faceΔ=%.1f%%",
             metrics.neckEarAngle, adjustedCVA, baseline.neckEarAngle,
             classification.rawValue, computedScore, severity.rawValue,
             pitchDelta, fsc * 100)
+        if let eyeLevelDebug {
+            debugLine += String(
+                format: " eye=active eyeClass=%@ eyeConf=%.2f eyeFwd=%.2f eyeDown=%.2f eyePitchDrop=%.2f depthΔ=%.3f irisΔ=%.3f",
+                eyeLevelDebug.classification.rawValue,
+                eyeLevelDebug.confidence,
+                eyeLevelDebug.forwardHeadEvidence,
+                eyeLevelDebug.lookingDownEvidence,
+                pitchDrop,
+                depthIncrease,
+                irisDelta
+            )
+        } else {
+            debugLine += " eye=skip"
+        }
         DebugLogWriter.append(debugLine + "\n")
         #endif
 
@@ -207,19 +231,39 @@ struct PostureAnalyzer {
         currentCVA: CGFloat, baselineCVA: CGFloat,
         currentPitch: CGFloat, baselinePitch: CGFloat,
         currentFaceSize: CGFloat, baselineFaceSize: CGFloat,
+        currentForwardDepth: CGFloat = 0,
+        baselineForwardDepth: CGFloat = 0,
         classification: PostureClassification
     ) -> Int {
         let cvaScore = relativeScore(currentCVA: currentCVA, baselineCVA: baselineCVA)
+        let cvaDrop = max(0, baselineCVA - currentCVA)
+        let cvaDropRatio = baselineCVA > 1e-6 ? cvaDrop / baselineCVA : 0
 
         // Pitch contribution (looking down penalty)
         let pitchDelta = max(0, currentPitch - baselinePitch)
         let pitchPenalty = min(15.0, pitchDelta * 1.0)
 
-        // Face size contribution (leaning forward = face gets bigger)
+        // Face size contribution (legacy near-camera lean)
         let faceSizeChange = baselineFaceSize > 0 ? (currentFaceSize - baselineFaceSize) / baselineFaceSize : 0
         let facePenalty = min(10.0, max(0, faceSizeChange) * 50.0)
 
         var composite = CGFloat(cvaScore) - pitchPenalty - facePenalty
+
+        // Apply extra penalty only when the classifier already believes this is FHP.
+        // This widens Good vs mild FHP separation without touching normal/lookingDown paths.
+        if classification == .forwardHead {
+            let faceShrinkPenalty = min(18.0, max(0, (-faceSizeChange) - 0.03) * 120.0)
+            let depthIncrease = max(0, currentForwardDepth - baselineForwardDepth)
+            let depthPenalty = min(12.0, depthIncrease * 120.0)
+            let forwardHeadPenalty =
+                min(8.0, cvaDropRatio * 12.0) +
+                faceShrinkPenalty +
+                depthPenalty
+            composite -= forwardHeadPenalty
+            if cvaDropRatio > 0.12 {
+                composite -= 1.0
+            }
+        }
 
         // Boost back if looking down (CVA drop is partly from neck flexion, not FHP)
         if classification == .lookingDown {
@@ -227,6 +271,33 @@ struct PostureAnalyzer {
         }
 
         return Int(round(min(98, max(2, composite))))
+    }
+
+    static func debugEyeLevelClassification(
+        metrics: PostureMetrics,
+        baseline: CalibrationData,
+        cameraPosition: CameraPosition,
+        yawDegrees: CGFloat
+    ) -> PostureClassifier.EyeLevelNarrowResult? {
+        guard !cameraPosition.isSideView else { return nil }
+        guard yawDegrees < 20 else { return nil }
+        guard baseline.baselineFaceSize > 0.0001 else { return nil }
+        guard metrics.landmarksDetected else { return nil }
+
+        let cvaDrop = baseline.neckEarAngle - metrics.neckEarAngle
+        let pitchDrop = baseline.headPitch - metrics.headPitch
+        let faceSizeChange = (metrics.faceSizeNormalized - baseline.baselineFaceSize) / baseline.baselineFaceSize
+        let depthIncrease = metrics.forwardDepth - baseline.forwardDepth
+        let irisDelta = metrics.irisGazeOffset - baseline.irisGazeOffset
+
+        return PostureClassifier.classifyEyeLevelForwardHeadVsLookingDown(
+            cvaDrop: cvaDrop,
+            pitchDrop: pitchDrop,
+            faceSizeChange: faceSizeChange,
+            depthIncrease: depthIncrease,
+            yawDegrees: yawDegrees,
+            irisGazeOffset: irisDelta
+        )
     }
 
     // MARK: - Severity Classification

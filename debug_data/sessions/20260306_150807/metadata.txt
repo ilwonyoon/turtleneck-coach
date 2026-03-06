@@ -1,0 +1,9 @@
+timestamp=20260306_150807
+created_at_iso=2026-03-06T23:08:07Z
+project_root=/Users/ilwonyoon/Documents/PT_turtle
+archive_root=/Users/ilwonyoon/Documents/PT_turtle/debug_data/sessions
+
+[sources]
+copied	/tmp/turtle_cvadebug.log	/Users/ilwonyoon/Documents/PT_turtle/debug_data/sessions/20260306_150807/turtle_cvadebug.log
+missing	/tmp/turtle_debug_snapshots
+copied	/tmp/turtle_manual_snapshots	/Users/ilwonyoon/Documents/PT_turtle/debug_data/sessions/20260306_150807/turtle_manual_snapshots
