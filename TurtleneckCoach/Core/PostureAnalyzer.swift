@@ -154,14 +154,7 @@ struct PostureAnalyzer {
             metrics.neckEarAngle, adjustedCVA, baseline.neckEarAngle,
             classification.rawValue, computedScore, severity.rawValue,
             pitchDelta, fsc * 100)
-        if let data = (debugLine + "\n").data(using: .utf8) {
-            let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
-            if let fh = try? FileHandle(forWritingTo: url) {
-                fh.seekToEndOfFile()
-                fh.write(data)
-                fh.closeFile()
-            }
-        }
+        DebugLogWriter.append(debugLine + "\n")
         #endif
 
         let isCurrentlyBad = severity != .good

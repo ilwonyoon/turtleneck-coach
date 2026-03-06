@@ -23,6 +23,7 @@ import socket
 import struct
 import sys
 import time
+from typing import Optional
 
 import cv2
 import mediapipe as mp
@@ -48,16 +49,16 @@ class OneEuroFilter:
         self.min_cutoff = min_cutoff
         self.beta = beta
         self.d_cutoff = d_cutoff
-        self.x_prev: float | None = None
+        self.x_prev: Optional[float] = None
         self.dx_prev: float = 0.0
-        self.t_prev: float | None = None
+        self.t_prev: Optional[float] = None
 
     def _smoothing_factor(self, cutoff: float) -> float:
         tau = 1.0 / (2.0 * math.pi * cutoff)
         te = 1.0 / self.freq
         return 1.0 / (1.0 + tau / te)
 
-    def __call__(self, x: float, t: float | None = None) -> float:
+    def __call__(self, x: float, t: Optional[float] = None) -> float:
         if self.x_prev is None:
             self.x_prev = x
             self.t_prev = t or time.monotonic()
@@ -251,7 +252,7 @@ class PoseServer:
         self.last_valid_yaw = 0.0
         self.face_lost_frames = 0
         self.max_face_hold_frames = 3  # hold ~1s at 3fps
-        self.last_good_cva: float | None = None
+        self.last_good_cva: Optional[float] = None
 
     def process_frame(self, jpeg_data: bytes) -> dict:
         """Process a JPEG frame and return pose analysis results."""

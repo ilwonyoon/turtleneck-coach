@@ -45,6 +45,7 @@ swiftc \
   TurtleneckCoach/DesignSystem/DesignTokens.swift \
   TurtleneckCoach/Core/CalibrationManager.swift \
   TurtleneckCoach/Core/CameraManager.swift \
+  TurtleneckCoach/Core/DebugLogWriter.swift \
   TurtleneckCoach/Core/MediaPipeClient.swift \
   TurtleneckCoach/Core/PostureAnalyzer.swift \
   TurtleneckCoach/Core/PostureClassifier.swift \
@@ -54,6 +55,7 @@ swiftc \
   TurtleneckCoach/Models/CalibrationData.swift \
   TurtleneckCoach/Models/CameraSourceMode.swift \
   TurtleneckCoach/Models/CameraPosition.swift \
+  TurtleneckCoach/Models/CameraContext.swift \
   TurtleneckCoach/Models/PostureMetrics.swift \
   TurtleneckCoach/Models/PostureState.swift \
   TurtleneckCoach/Services/FeedbackEngine.swift \

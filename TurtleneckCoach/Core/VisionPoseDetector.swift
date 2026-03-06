@@ -146,8 +146,7 @@ struct DetectionResult {
 }
 
 /// Wraps Apple Vision for pose detection with face landmarks fallback.
-final class VisionPoseDetector {
-
+final class VisionPoseDetector: @unchecked Sendable {
     private static let earVisibilityThreshold: Float = 0.5
     private static let maxReliableYawDegrees: CGFloat = 15
 
@@ -170,22 +169,14 @@ final class VisionPoseDetector {
     private var recentFaceHeight: [CGFloat] = []
     private var recentPitch: [CGFloat] = []
     private let smoothingWindow = 5
+    private let detectionQueue = DispatchQueue(label: "vision.pose.detector", qos: .userInitiated)
     private var lastReliableCVA: CGFloat?
     private var lastFaceFallbackCVA: CGFloat?
     private var debugCounter = 0
     private func log(_ msg: String) {
         #if DEBUG
         let line = "\(Date()): \(msg)\n"
-        if let data = line.data(using: .utf8) {
-            let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
-            if let fh = try? FileHandle(forWritingTo: url) {
-                fh.seekToEndOfFile()
-                fh.write(data)
-                fh.closeFile()
-            } else {
-                try? data.write(to: url)
-            }
-        }
+        DebugLogWriter.append(line)
         #endif
     }
 
@@ -236,6 +227,18 @@ final class VisionPoseDetector {
         }
 
         return nil
+    }
+
+    func detectAsync(in image: CGImage) async throws -> DetectionResult? {
+        try await withCheckedThrowingContinuation { continuation in
+            detectionQueue.async {
+                do {
+                    continuation.resume(returning: try self.detect(in: image))
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
     }
 
     /// Store current face metrics as calibration baseline.

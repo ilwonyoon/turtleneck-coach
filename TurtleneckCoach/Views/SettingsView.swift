@@ -72,6 +72,20 @@ struct SettingsView: View {
         return "\(minutes)m \(seconds)s"
     }
 
+    private var detectedContextText: String {
+        let confidence = Int((engine.inferredContextConfidence * 100).rounded())
+        let source = engine.inferredContextSource.capitalized
+        if engine.inferredCameraContext == .unknown {
+            return "Unknown (\(source))"
+        }
+        return "\(engine.inferredCameraContext.displayName) (\(source), \(confidence)%)"
+    }
+
+    private var detectedLaptopSubcontextText: String {
+        guard engine.inferredCameraContext == .laptop else { return "—" }
+        return engine.inferredLaptopSubcontext.displayName
+    }
+
     private let valueColumnWidth: CGFloat = 220
     private let menuWidth: CGFloat = 170
 
@@ -137,10 +151,39 @@ struct SettingsView: View {
                         .frame(width: menuWidth, alignment: .trailing)
                     }
                 }
+
+                LabeledContent("Context Mode") {
+                    valueColumn {
+                        Picker("", selection: $engine.cameraContextSelection) {
+                            ForEach(CameraContextSelection.allCases, id: \.self) { selection in
+                                Text(selection.displayName).tag(selection)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: menuWidth, alignment: .trailing)
+                    }
+                }
+
+                LabeledContent("Detected Context") {
+                    valueColumn {
+                        Text(detectedContextText)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                LabeledContent("Laptop State") {
+                    valueColumn {
+                        Text(detectedLaptopSubcontextText)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
             } header: {
                 Text("Camera")
             } footer: {
-                Text("Auto picks the recommended camera. Manual locks monitoring to your selected device. Camera Position controls posture-angle interpretation.")
+                Text("Auto picks the recommended camera. Manual locks monitoring to your selected device. Context Mode controls camera-type inference (Auto/Desktop/Laptop) for calibration guidance and future adaptive tuning.")
             }
 
             Section {

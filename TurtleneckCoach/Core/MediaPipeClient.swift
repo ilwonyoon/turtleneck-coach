@@ -58,7 +58,7 @@ final class MediaPipeClient: @unchecked Sendable {
     private var _isConnected = false
     private var lastReliableCVA: CGFloat?
 
-    var isConnected: Bool { _isConnected }
+    var isConnected: Bool { queue.sync { _isConnected } }
 
     // MARK: - Python Process Management
 
@@ -200,6 +200,14 @@ final class MediaPipeClient: @unchecked Sendable {
         return true
     }
 
+    func connectAsync() async -> Bool {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                continuation.resume(returning: self.connect())
+            }
+        }
+    }
+
     private func retryConnect() -> Bool {
         for attempt in 1...3 {
             Thread.sleep(forTimeInterval: Double(attempt) * 0.5)
@@ -297,6 +305,14 @@ final class MediaPipeClient: @unchecked Sendable {
         }
     }
 
+    func sendFrameAsync(_ image: CGImage) async -> MediaPipeResult? {
+        await withCheckedContinuation { continuation in
+            queue.async {
+                continuation.resume(returning: self.sendFrame(image))
+            }
+        }
+    }
+
     // MARK: - Low-Level Socket IO
 
     private func sendRaw(data: Data) -> Bool {
@@ -356,16 +372,7 @@ final class MediaPipeClient: @unchecked Sendable {
     private func log(_ msg: String) {
         #if DEBUG
         let line = "\(Date()): [MediaPipeClient] \(msg)\n"
-        if let data = line.data(using: .utf8) {
-            let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
-            if let fh = try? FileHandle(forWritingTo: url) {
-                fh.seekToEndOfFile()
-                fh.write(data)
-                fh.closeFile()
-            } else {
-                try? data.write(to: url)
-            }
-        }
+        DebugLogWriter.append(line)
         #endif
     }
 

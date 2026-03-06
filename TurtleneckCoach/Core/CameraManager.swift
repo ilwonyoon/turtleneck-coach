@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import CoreImage
+import Foundation
 import os.log
 
 /// Manages AVCaptureSession for continuous camera feed with periodic frame analysis.
@@ -13,6 +14,21 @@ final class CameraManager: NSObject, @unchecked Sendable {
     private var activeInput: AVCaptureDeviceInput?
     private let ciContext = CIContext()
     private let logger = Logger(subsystem: "com.turtleneck.detector", category: "Camera")
+    #if DEBUG
+    private struct FramePerfStats {
+        var frameCount = 0
+        var portraitFrameCount = 0
+        var totalConvertMs: Double = 0
+        var totalRotateMs: Double = 0
+        var totalFrameMs: Double = 0
+        var maxConvertMs: Double = 0
+        var maxRotateMs: Double = 0
+        var maxFrameMs: Double = 0
+        var lastReportAt = Date.distantPast
+    }
+    private var framePerfStats = FramePerfStats()
+    private let framePerfReportInterval: TimeInterval = 5.0
+    #endif
 
     /// Called on each new frame with the CGImage (already rotated to landscape if needed).
     var onFrame: ((CGImage) -> Void)?
@@ -268,6 +284,48 @@ final class CameraManager: NSObject, @unchecked Sendable {
         let extent = oriented.extent
         return ciContext.createCGImage(oriented, from: extent)
     }
+
+    #if DEBUG
+    private func recordFramePerf(
+        isPortrait: Bool,
+        convertMs: Double,
+        rotateMs: Double,
+        totalFrameMs: Double
+    ) {
+        framePerfStats.frameCount += 1
+        if isPortrait {
+            framePerfStats.portraitFrameCount += 1
+        }
+        framePerfStats.totalConvertMs += convertMs
+        framePerfStats.totalRotateMs += rotateMs
+        framePerfStats.totalFrameMs += totalFrameMs
+        framePerfStats.maxConvertMs = max(framePerfStats.maxConvertMs, convertMs)
+        framePerfStats.maxRotateMs = max(framePerfStats.maxRotateMs, rotateMs)
+        framePerfStats.maxFrameMs = max(framePerfStats.maxFrameMs, totalFrameMs)
+
+        let now = Date()
+        guard now.timeIntervalSince(framePerfStats.lastReportAt) >= framePerfReportInterval else { return }
+        guard framePerfStats.frameCount > 0 else { return }
+
+        let frames = Double(framePerfStats.frameCount)
+        let avgConvert = framePerfStats.totalConvertMs / frames
+        let avgRotate = framePerfStats.totalRotateMs / frames
+        let avgFrame = framePerfStats.totalFrameMs / frames
+        DebugLogWriter.append(String(
+            format: "%@: [PERF_CAMERA] frames=%d portrait=%d avgConvertMs=%.2f avgRotateMs=%.2f avgFrameMs=%.2f maxConvertMs=%.2f maxRotateMs=%.2f maxFrameMs=%.2f\n",
+            ISO8601DateFormatter().string(from: now),
+            framePerfStats.frameCount,
+            framePerfStats.portraitFrameCount,
+            avgConvert,
+            avgRotate,
+            avgFrame,
+            framePerfStats.maxConvertMs,
+            framePerfStats.maxRotateMs,
+            framePerfStats.maxFrameMs
+        ))
+        framePerfStats = FramePerfStats(lastReportAt: now)
+    }
+    #endif
 }
 
 extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
@@ -277,6 +335,9 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
         from connection: AVCaptureConnection
     ) {
         guard let onFrame else { return }
+        #if DEBUG
+        let frameStart = CFAbsoluteTimeGetCurrent()
+        #endif
 
         guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
@@ -287,7 +348,13 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
             height: CVPixelBufferGetHeight(pixelBuffer)
         )
 
+        #if DEBUG
+        let convertStart = CFAbsoluteTimeGetCurrent()
+        #endif
         guard let rawImage = ciContext.createCGImage(ciImage, from: rect) else { return }
+        #if DEBUG
+        let convertMs = (CFAbsoluteTimeGetCurrent() - convertStart) * 1000
+        #endif
 
         let w = CVPixelBufferGetWidth(pixelBuffer)
         let h = CVPixelBufferGetHeight(pixelBuffer)
@@ -295,12 +362,25 @@ extension CameraManager: AVCaptureVideoDataOutputSampleBufferDelegate {
 
         // If portrait, rotate to landscape
         let finalImage: CGImage
+        #if DEBUG
+        let rotateStart = CFAbsoluteTimeGetCurrent()
+        #endif
         if isPortrait {
             guard let rotated = rotateToLandscape(rawImage) else { return }
             finalImage = rotated
         } else {
             finalImage = rawImage
         }
+        #if DEBUG
+        let rotateMs = isPortrait ? (CFAbsoluteTimeGetCurrent() - rotateStart) * 1000 : 0
+        let totalFrameMs = (CFAbsoluteTimeGetCurrent() - frameStart) * 1000
+        recordFramePerf(
+            isPortrait: isPortrait,
+            convertMs: convertMs,
+            rotateMs: rotateMs,
+            totalFrameMs: totalFrameMs
+        )
+        #endif
 
         #if DEBUG
         if Int.random(in: 0..<90) == 0 {

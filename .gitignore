@@ -12,6 +12,8 @@ test_vision_file
 
 # Python
 venv/
+.venv/
+python_server/.venv/
 __pycache__/
 *.pyc
 

@@ -5,7 +5,6 @@ struct MenuBarView: View {
     @ObservedObject var engine: PostureEngine
     // Settings now opens in separate window via SettingsWindowController
     @State private var showDashboard = false
-    @State private var refreshTimer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
     @State private var showCalibrationToast = false
     @State private var lastCalibrationSuccess: Bool?
 
@@ -121,9 +120,6 @@ struct MenuBarView: View {
             footer
                 .padding(.horizontal, DS.Space.lg)
                 .padding(.vertical, DS.Space.sm)
-        }
-        .onReceive(refreshTimer) { _ in
-            engine.objectWillChange.send()
         }
         .onChange(of: engine.calibrationSuccess) { _, newValue in
             guard let success = newValue else { return }
@@ -321,6 +317,7 @@ struct MenuBarView: View {
     private var badgesRow: some View {
         HStack(spacing: 6) { // DS: one-off
             badge(engine.cameraPosition.rawValue.capitalized, icon: "camera")
+            badge(contextBadgeText, icon: "viewfinder")
 
             if engine.postureState.usingFallback {
                 badge("Eye Mode", icon: "eye")
@@ -331,6 +328,19 @@ struct MenuBarView: View {
             }
 
             Spacer()
+        }
+    }
+
+    private var contextBadgeText: String {
+        let context = engine.inferredCameraContext
+        let source = engine.inferredContextSource == "manual" ? "M" : "A"
+        switch context {
+        case .desktop:
+            return "Desktop \(source)"
+        case .laptop:
+            return "Laptop \(source)"
+        case .unknown:
+            return "Context ?"
         }
     }
 

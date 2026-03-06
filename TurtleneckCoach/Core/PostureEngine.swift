@@ -21,6 +21,7 @@ enum PowerSavingSettings {
 enum CameraSelectionSettings {
     static let cameraSourceModeKey = "cameraSourceMode"
     static let manualCameraDeviceIDKey = "manualCameraDeviceID"
+    static let cameraContextSelectionKey = "cameraContextSelection"
 }
 
 /// Main orchestrator: continuous camera -> periodic analysis -> UI + notifications.
@@ -59,8 +60,17 @@ final class PostureEngine: ObservableObject {
             applyCameraSelectionIfMonitoring()
         }
     }
+    @Published var cameraContextSelection: CameraContextSelection = .auto {
+        didSet {
+            persistCameraContextSelectionIfNeeded()
+        }
+    }
     @Published var availableCameraDevices: [CameraDeviceOption] = []
     @Published var activeCameraDisplayName = "No active camera"
+    @Published private(set) var inferredCameraContext: CameraContext = .unknown
+    @Published private(set) var inferredContextConfidence: CGFloat = 0
+    @Published private(set) var inferredLaptopSubcontext: LaptopSubcontext = .unknown
+    @Published private(set) var inferredContextSource: String = "auto"
     @AppStorage(SensitivityMode.storageKey)
     private var sensitivityModeRawValue = SensitivityMode.defaultMode.rawValue
     @AppStorage(CameraSelectionSettings.cameraSourceModeKey)
@@ -71,6 +81,10 @@ final class PostureEngine: ObservableObject {
     private var storedManualCameraDeviceID = "" {
         didSet { syncManualCameraDeviceIDFromStorage() }
     }
+    @AppStorage(CameraSelectionSettings.cameraContextSelectionKey)
+    private var cameraContextSelectionRawValue = CameraContextSelection.auto.rawValue {
+        didSet { syncCameraContextSelectionFromStorage() }
+    }
     @AppStorage(PowerSavingSettings.autoPauseWhenAwayKey)
     private var autoPauseEnabled = PowerSavingSettings.defaultAutoPauseWhenAway {
         didSet { handleAutoPauseSettingChanged() }
@@ -79,9 +93,14 @@ final class PostureEngine: ObservableObject {
     private var inactiveTimeout = PowerSavingSettings.defaultInactiveTimeoutSeconds {
         didSet { handleInactiveTimeoutChanged() }
     }
+    @AppStorage("adaptiveContextLogOnlyEnabled")
+    private var adaptiveContextLogOnlyEnabled = true
 
     // Score history for 1-minute average
     private var scoreHistory: [(date: Date, score: Int)] = []
+    private var lastContextInference: CameraContextInference?
+    private var lastContextLogAt: Date = .distantPast
+    private let contextLogInterval: TimeInterval = 2.0
 
     // MARK: - Computed
 
@@ -147,7 +166,24 @@ final class PostureEngine: ObservableObject {
     private let inactiveProbeWarmup: TimeInterval = 1.5
     private var useMediaPipe = true  // prefer MediaPipe, fallback to Vision
     private var mediaPipeConnectAttempted = false
+    private var isMediaPipeConnectInFlight = false
+    private var mediaPipeConnectTask: Task<Void, Never>?
+    private var lastMediaPipeConnectAttemptAt: Date = .distantPast
+    private let mediaPipeReconnectCooldown: TimeInterval = 5.0
+    private var isAnalysisInFlight = false
     private var lastMediaPipeHeadPitch: CGFloat = 0
+    #if DEBUG
+    private struct StartupPerfState {
+        let startedAt: Date
+        var firstFrameAt: Date?
+        var mediaPipeConnectedAt: Date?
+        var firstScoreAt: Date?
+        var firstScoreSource: String?
+        var calibrationCompletedAt: Date?
+        var analysisDrops = 0
+    }
+    private var startupPerfState: StartupPerfState?
+    #endif
     /// Current head yaw (horizontal rotation) — published for UI feedback
     @Published var currentHeadYaw: CGFloat = 0
     /// Current head pitch (forward tilt, 0=straight, positive=forward) — published for UI
@@ -218,14 +254,7 @@ final class PostureEngine: ObservableObject {
 
     private func appendToDebugLog(_ text: String) {
         #if DEBUG
-        if let data = text.data(using: .utf8) {
-            let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
-            if let fh = try? FileHandle(forWritingTo: url) {
-                fh.seekToEndOfFile()
-                fh.write(data)
-                fh.closeFile()
-            }
-        }
+        DebugLogWriter.append(text)
         #endif
     }
     #endif
@@ -313,6 +342,7 @@ final class PostureEngine: ObservableObject {
     private var sessionLongestSlouchSeconds: TimeInterval = 0
     private var sessionCurrentSlouchStart: Date?
     private var isSyncingCameraSelectionState = false
+    private var isSyncingCameraContextSelectionState = false
 
     // MARK: - Init
 
@@ -322,7 +352,9 @@ final class PostureEngine: ObservableObject {
             PowerSavingSettings.autoPauseWhenAwayKey: PowerSavingSettings.defaultAutoPauseWhenAway,
             PowerSavingSettings.inactiveTimeoutSecondsKey: PowerSavingSettings.defaultInactiveTimeoutSeconds,
             CameraSelectionSettings.cameraSourceModeKey: CameraSourceMode.auto.rawValue,
-            CameraSelectionSettings.manualCameraDeviceIDKey: ""
+            CameraSelectionSettings.manualCameraDeviceIDKey: "",
+            CameraSelectionSettings.cameraContextSelectionKey: CameraContextSelection.auto.rawValue,
+            "adaptiveContextLogOnlyEnabled": true
         ])
         handleInactiveTimeoutChanged()
 
@@ -339,7 +371,9 @@ final class PostureEngine: ObservableObject {
         }
         #endif
 
-        // No saved calibration loaded — always recalibrate on app start
+        // Warm-start from the last saved calibration so we can score quickly,
+        // then refresh it on monitor start for the current session.
+        calibrationData = CalibrationManager.loadSaved()
         if let saved = UserDefaults.standard.string(forKey: "cameraPosition"),
            let pos = CameraPosition(rawValue: saved) {
             cameraPosition = pos
@@ -357,6 +391,19 @@ final class PostureEngine: ObservableObject {
             self._pendingFrame = image
             self.frameLock.unlock()
 
+            #if DEBUG
+            if self.startupPerfState?.firstFrameAt == nil {
+                let now = Date()
+                self.startupPerfState?.firstFrameAt = now
+                if let startedAt = self.startupPerfState?.startedAt {
+                    self.engineLog(String(
+                        format: "[PERF_START] firstFrameMs=%.1f",
+                        now.timeIntervalSince(startedAt) * 1000
+                    ))
+                }
+            }
+            #endif
+
             // Throttled UI update on main thread for live preview
             let now = Date()
             if now.timeIntervalSince(self.lastUIUpdate) >= self.uiUpdateInterval {
@@ -370,14 +417,49 @@ final class PostureEngine: ObservableObject {
 
     private func engineLog(_ msg: String) {
         #if DEBUG
-        let line = "\(Date()): [ENGINE] \(msg)\n"
-        let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
-        if let fh = try? FileHandle(forWritingTo: url) {
-            fh.seekToEndOfFile()
-            fh.write(line.data(using: .utf8)!)
-            fh.closeFile()
-        }
+        DebugLogWriter.append("\(Date()): [ENGINE] \(msg)\n")
         #endif
+    }
+
+    private func scheduleMediaPipeConnectIfNeeded(logFailure: Bool) {
+        guard useMediaPipe, isMonitoring else { return }
+        guard !isMediaPipeConnectInFlight else { return }
+
+        let now = Date()
+        guard now.timeIntervalSince(lastMediaPipeConnectAttemptAt) >= mediaPipeReconnectCooldown else { return }
+
+        mediaPipeConnectAttempted = true
+        isMediaPipeConnectInFlight = true
+        lastMediaPipeConnectAttemptAt = now
+
+        mediaPipeConnectTask?.cancel()
+        mediaPipeConnectTask = Task { [weak self] in
+            guard let self else { return }
+            let connected = await self.mediaPipeClient.connectAsync()
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                self.isMediaPipeConnectInFlight = false
+                self.mediaPipeConnectTask = nil
+                guard self.isMonitoring else { return }
+
+                if connected {
+                    #if DEBUG
+                    let now = Date()
+                    self.startupPerfState?.mediaPipeConnectedAt = now
+                    if let startedAt = self.startupPerfState?.startedAt {
+                        self.engineLog(String(
+                            format: "[PERF_START] mediaPipeConnectedMs=%.1f",
+                            now.timeIntervalSince(startedAt) * 1000
+                        ))
+                    }
+                    #endif
+                    self.engineLog("MediaPipe server connected — using enhanced detection")
+                } else if logFailure {
+                    self.engineLog("MediaPipe server unavailable — falling back to Vision framework")
+                }
+            }
+        }
     }
 
     private func grabPendingFrame() -> CGImage? {
@@ -445,14 +527,37 @@ final class PostureEngine: ObservableObject {
         refreshActiveCameraDisplayName()
     }
 
+    private func persistCameraContextSelectionIfNeeded() {
+        guard !isSyncingCameraContextSelectionState else { return }
+        if cameraContextSelectionRawValue != cameraContextSelection.rawValue {
+            cameraContextSelectionRawValue = cameraContextSelection.rawValue
+        }
+    }
+
+    private func syncCameraContextSelectionFromStorage() {
+        guard !isSyncingCameraContextSelectionState else { return }
+        let resolved = CameraContextSelection(rawValue: cameraContextSelectionRawValue) ?? .auto
+        guard cameraContextSelection != resolved else { return }
+        isSyncingCameraContextSelectionState = true
+        cameraContextSelection = resolved
+        isSyncingCameraContextSelectionState = false
+    }
+
     private func loadCameraSelectionSettings() {
         isSyncingCameraSelectionState = true
         cameraSourceMode = CameraSourceMode(rawValue: cameraSourceModeRawValue) ?? .auto
         manualCameraDeviceID = storedManualCameraDeviceID
         isSyncingCameraSelectionState = false
 
+        isSyncingCameraContextSelectionState = true
+        cameraContextSelection = CameraContextSelection(rawValue: cameraContextSelectionRawValue) ?? .auto
+        isSyncingCameraContextSelectionState = false
+
         if cameraSourceModeRawValue != cameraSourceMode.rawValue {
             cameraSourceModeRawValue = cameraSourceMode.rawValue
+        }
+        if cameraContextSelectionRawValue != cameraContextSelection.rawValue {
+            cameraContextSelectionRawValue = cameraContextSelection.rawValue
         }
     }
 
@@ -492,6 +597,9 @@ final class PostureEngine: ObservableObject {
         guard !isMonitoring else { return }
         resetPowerManagementState()
         isMonitoring = true
+        #if DEBUG
+        startupPerfState = StartupPerfState(startedAt: Date())
+        #endif
         lastError = nil
         resetMenuBarForIdle()
         startSessionTracking()
@@ -505,15 +613,9 @@ final class PostureEngine: ObservableObject {
                 // Small delay for camera warmup
                 try? await Task.sleep(nanoseconds: 300_000_000)
 
-                // Try connecting to MediaPipe server
+                // Connect to MediaPipe in the background so monitor start doesn't block the UI.
                 if useMediaPipe && !mediaPipeConnectAttempted {
-                    mediaPipeConnectAttempted = true
-                    let connected = mediaPipeClient.connect()
-                    if connected {
-                        engineLog("MediaPipe server connected — using enhanced detection")
-                    } else {
-                        engineLog("MediaPipe server unavailable — falling back to Vision framework")
-                    }
+                    scheduleMediaPipeConnectIfNeeded(logFailure: true)
                 }
 
                 scheduleAnalysis()
@@ -549,12 +651,18 @@ final class PostureEngine: ObservableObject {
         refreshActiveCameraDisplayName()
         mediaPipeClient.disconnect()
         mediaPipeConnectAttempted = false
+        isMediaPipeConnectInFlight = false
+        mediaPipeConnectTask?.cancel()
+        mediaPipeConnectTask = nil
         currentFrame = nil
         currentJoints = nil
         bodyDetected = false
         smoothedCVA = nil
         resetSuppressionState()
         resetMenuBarForIdle()
+        #if DEBUG
+        startupPerfState = nil
+        #endif
     }
 
     func toggleMonitoring() {
@@ -601,17 +709,28 @@ final class PostureEngine: ObservableObject {
         let interval = currentAnalysisInterval
         analysisTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
-                self?.analyzeLatestFrame()
+                await self?.analyzeLatestFrame()
             }
         }
         if runImmediately {
-            analyzeLatestFrame()
+            Task { @MainActor [weak self] in
+                await self?.analyzeLatestFrame()
+            }
         }
     }
 
     // MARK: - Analyze
 
-    private func analyzeLatestFrame(isProbe: Bool = false) {
+    private func analyzeLatestFrame(isProbe: Bool = false) async {
+        guard !isAnalysisInFlight else {
+            #if DEBUG
+            startupPerfState?.analysisDrops += 1
+            #endif
+            return
+        }
+        isAnalysisInFlight = true
+        defer { isAnalysisInFlight = false }
+
         if isProbe {
             engineLog("running inactive probe analysis")
         }
@@ -637,43 +756,40 @@ final class PostureEngine: ObservableObject {
         let usingMediaPipe: Bool
 
         if useMediaPipe && mediaPipeClient.isConnected,
-           let mpResult = mediaPipeClient.sendFrame(image),
+           let mpResult = await mediaPipeClient.sendFrameAsync(image),
            mpResult.confidence > 0.1 {
             // MediaPipe path — convert result to DetectionResult
             let joints = mediaPipeClient.resultToJoints(mpResult)
             let metrics = mediaPipeClient.resultToMetrics(mpResult, imageWidth: image.width, imageHeight: image.height)
             detectionResult = DetectionResult(metrics: metrics, joints: joints)
             lastMediaPipeHeadPitch = CGFloat(mpResult.headPitch)
-            currentHeadPitch = CGFloat(mpResult.headPitch)
-            currentHeadYaw = CGFloat(mpResult.headYaw)
+            setCurrentHeadPoseIfNeeded(
+                pitch: CGFloat(mpResult.headPitch),
+                yaw: CGFloat(mpResult.headYaw)
+            )
             usingMediaPipe = true
         } else {
             // Vision framework fallback
-            detectionResult = try? poseDetector.detect(in: image)
+            detectionResult = try? await poseDetector.detectAsync(in: image)
             usingMediaPipe = false
 
-            // Try reconnecting MediaPipe periodically
-            if useMediaPipe && !mediaPipeClient.isConnected && Int.random(in: 0..<90) == 0 {
-                let connected = mediaPipeClient.connect()
-                if connected {
-                    engineLog("MediaPipe reconnected")
-                }
+            // Reconnect in the background with cooldown so fallback frames do not block the UI.
+            if useMediaPipe && !mediaPipeClient.isConnected {
+                scheduleMediaPipeConnectIfNeeded(logFailure: false)
             }
         }
 
         guard let result = detectionResult else {
-            bodyDetected = false
-            currentJoints = nil
+            setDetectionState(bodyDetected: false, joints: nil)
             updateMenuBarForNoDetection(at: now)
             handleNoDetection(at: now)
             return
         }
 
         handleDetectionSuccess()
-        bodyDetected = true
-        currentJoints = result.joints
+        setDetectionState(bodyDetected: true, joints: result.joints)
         lastSuccessfulDetectionAt = now
-        menuBarIsIdle = false
+        setMenuBarIdleIfNeeded(false)
         if let mesh = result.joints.faceMesh {
             engineLog("faceMesh present: \(mesh.landmarks.count) landmarks, \(mesh.depthValues.count) depths")
         } else {
@@ -714,6 +830,12 @@ final class PostureEngine: ObservableObject {
             forwardDepth: result.metrics.forwardDepth,
             irisGazeOffset: result.metrics.irisGazeOffset
         )
+        updateCameraContextInference(
+            metrics: metrics,
+            baseline: calibrationData,
+            noseY: result.joints.nose.y,
+            now: now
+        )
 
         // Calibration mode
         if calibrationManager.isCalibrating {
@@ -721,6 +843,16 @@ final class PostureEngine: ObservableObject {
                 calibrationMessage = calResult.message
                 calibrationSuccess = calResult.isValid
                 isCalibrating = false
+                #if DEBUG
+                let now = Date()
+                startupPerfState?.calibrationCompletedAt = now
+                if let startedAt = startupPerfState?.startedAt {
+                    engineLog(String(
+                        format: "[PERF_START] calibrationCompletedMs=%.1f",
+                        now.timeIntervalSince(startedAt) * 1000
+                    ))
+                }
+                #endif
 
                 if calResult.isValid, let data = calResult.data {
                     calibrationData = data
@@ -736,7 +868,9 @@ final class PostureEngine: ObservableObject {
                 scheduleAnalysis()
             }
             calibrationProgress = calibrationManager.progress
-            return
+            if calibrationData == nil {
+                return
+            }
         }
 
         // Normal monitoring
@@ -817,6 +951,24 @@ final class PostureEngine: ObservableObject {
         let score = postureState.score
         scoreHistory.append((date: now, score: score))
         recordSessionSample(score: score, cva: postureState.currentCVA)
+        #if DEBUG
+        if startupPerfState?.firstScoreAt == nil {
+            startupPerfState?.firstScoreAt = now
+            startupPerfState?.firstScoreSource = usingMediaPipe ? "mp" : "vision"
+            if let perf = startupPerfState {
+                let firstFrameMs = perf.firstFrameAt.map { $0.timeIntervalSince(perf.startedAt) * 1000 } ?? -1
+                let mpConnectMs = perf.mediaPipeConnectedAt.map { $0.timeIntervalSince(perf.startedAt) * 1000 } ?? -1
+                engineLog(String(
+                    format: "[PERF_START] firstScoreMs=%.1f source=%@ firstFrameMs=%.1f mediaPipeConnectedMs=%.1f analysisDrops=%d",
+                    now.timeIntervalSince(perf.startedAt) * 1000,
+                    perf.firstScoreSource ?? "unknown",
+                    firstFrameMs,
+                    mpConnectMs,
+                    perf.analysisDrops
+                ))
+            }
+        }
+        #endif
         // Debug: log smoothed CVA, score, and severity every 3rd frame
         if Int.random(in: 0..<3) == 0 {
             let source = usingMediaPipe ? "MP" : "Vision"
@@ -831,6 +983,204 @@ final class PostureEngine: ObservableObject {
         updateMenuBarSeverity(newSeverity: postureState.severity, currentScore: score, now: now)
 
         lastError = nil
+    }
+
+    // MARK: - Camera Context Inference (Phase 1: log-only)
+
+    private func updateCameraContextInference(
+        metrics: PostureMetrics,
+        baseline: CalibrationData?,
+        noseY: CGFloat,
+        now: Date
+    ) {
+        let inference = inferCameraContext(metrics: metrics, baseline: baseline, noseY: noseY)
+
+        // Avoid triggering SwiftUI updates on every frame when the inferred
+        // context is effectively unchanged.
+        if inferredCameraContext != inference.context {
+            inferredCameraContext = inference.context
+        }
+        if abs(inferredContextConfidence - inference.confidence) >= 0.01 {
+            inferredContextConfidence = inference.confidence
+        }
+        if inferredLaptopSubcontext != inference.subcontext {
+            inferredLaptopSubcontext = inference.subcontext
+        }
+        if inferredContextSource != inference.source {
+            inferredContextSource = inference.source
+        }
+
+        guard adaptiveContextLogOnlyEnabled else {
+            lastContextInference = inference
+            return
+        }
+
+        let previous = lastContextInference
+        let contextChanged =
+            previous?.context != inference.context ||
+            previous?.subcontext != inference.subcontext ||
+            previous?.source != inference.source
+        let confidenceChanged = abs((previous?.confidence ?? -1) - inference.confidence) >= 0.15
+        let periodicLogDue = now.timeIntervalSince(lastContextLogAt) >= contextLogInterval
+
+        guard contextChanged || confidenceChanged || periodicLogDue else { return }
+
+        let confText = String(format: "%.2f", inference.confidence)
+        let ratioText = inference.faceSizeRatio > 0 ? String(format: "%.2f", inference.faceSizeRatio) : "n/a"
+        let camName = camera.activeDevice?.displayName ?? activeCameraDisplayName
+        let camModel = camera.activeDevice?.modelID ?? "n/a"
+        let reasonText = inference.reasons.isEmpty ? "none" : inference.reasons.joined(separator: "|")
+        engineLog(
+            "[CTX] context=\(inference.context.rawValue) conf=\(confText) " +
+            "sub=\(inference.subcontext.rawValue) source=\(inference.source) " +
+            "faceRatio=\(ratioText) cam=\(camName) model=\(camModel) reasons=\(reasonText)"
+        )
+        lastContextInference = inference
+        lastContextLogAt = now
+    }
+
+    private func setCurrentHeadPoseIfNeeded(pitch: CGFloat, yaw: CGFloat) {
+        if abs(currentHeadPitch - pitch) >= 0.25 {
+            currentHeadPitch = pitch
+        }
+        if abs(currentHeadYaw - yaw) >= 0.25 {
+            currentHeadYaw = yaw
+        }
+    }
+
+    private func setDetectionState(bodyDetected detected: Bool, joints: DetectedJoints?) {
+        if bodyDetected != detected {
+            bodyDetected = detected
+        }
+
+        switch (currentJoints, joints) {
+        case (nil, nil):
+            break
+        case (nil, .some), (.some, nil):
+            currentJoints = joints
+        case let (.some(current), .some(next)):
+            if shouldPublishJointsUpdate(from: current, to: next) {
+                currentJoints = next
+            }
+        }
+    }
+
+    private func shouldPublishJointsUpdate(from current: DetectedJoints, to next: DetectedJoints) -> Bool {
+        let keypointThreshold: CGFloat = 0.000025
+        if pointDistanceSquared(current.nose, next.nose) > keypointThreshold { return true }
+        if pointDistanceSquared(current.neck, next.neck) > keypointThreshold { return true }
+        if pointDistanceSquared(current.leftShoulder, next.leftShoulder) > keypointThreshold { return true }
+        if pointDistanceSquared(current.rightShoulder, next.rightShoulder) > keypointThreshold { return true }
+        if pointDistanceSquared(current.leftEar, next.leftEar) > keypointThreshold { return true }
+        if pointDistanceSquared(current.rightEar, next.rightEar) > keypointThreshold { return true }
+        return false
+    }
+
+    private func pointDistanceSquared(_ lhs: CGPoint, _ rhs: CGPoint) -> CGFloat {
+        let dx = lhs.x - rhs.x
+        let dy = lhs.y - rhs.y
+        return dx * dx + dy * dy
+    }
+
+    private func setMenuBarIdleIfNeeded(_ isIdle: Bool) {
+        if menuBarIsIdle != isIdle {
+            menuBarIsIdle = isIdle
+        }
+    }
+
+    private func inferCameraContext(
+        metrics: PostureMetrics,
+        baseline: CalibrationData?,
+        noseY: CGFloat
+    ) -> CameraContextInference {
+        var laptopScore: CGFloat = 0
+        var desktopScore: CGFloat = 0
+        var reasons: [String] = []
+
+        let activeName = (camera.activeDevice?.displayName ?? activeCameraDisplayName).lowercased()
+        let activeModel = (camera.activeDevice?.modelID ?? "").lowercased()
+        let cameraHintBlob = "\(activeName) \(activeModel)"
+
+        if cameraHintBlob.contains("facetime") || cameraHintBlob.contains("built-in") || cameraHintBlob.contains("macbook") {
+            laptopScore += 0.65
+            reasons.append("deviceHint:laptop")
+        }
+        if cameraHintBlob.contains("logi") || cameraHintBlob.contains("logitech") ||
+            cameraHintBlob.contains("insta360") || cameraHintBlob.contains("webcam") ||
+            cameraHintBlob.contains("external") || cameraHintBlob.contains("display") {
+            desktopScore += 0.65
+            reasons.append("deviceHint:desktop")
+        }
+        if cameraSourceMode == .manual {
+            desktopScore += 0.20
+            reasons.append("manualCameraMode")
+        }
+
+        var faceSizeRatio: CGFloat = 0
+        if let baseline, baseline.baselineFaceSize > 0.0001 {
+            faceSizeRatio = metrics.faceSizeNormalized / baseline.baselineFaceSize
+        }
+
+        var subcontext: LaptopSubcontext = .unknown
+        if faceSizeRatio > 0 {
+            if faceSizeRatio > 1.22 {
+                subcontext = .tooNear
+                reasons.append("faceRatio:near")
+            } else if faceSizeRatio < 0.82 {
+                subcontext = .tooFar
+                reasons.append("faceRatio:far")
+            } else {
+                subcontext = .neutral
+            }
+
+            if let baseline,
+               subcontext == .neutral,
+               abs(metrics.headPitch - baseline.headPitch) > 8,
+               faceSizeRatio < 0.95,
+               noseY < 0.40 {
+                subcontext = .tiltBack
+                reasons.append("tiltBackHeuristic")
+            }
+        }
+
+        let totalScore = laptopScore + desktopScore
+        var context: CameraContext = .unknown
+        var confidence: CGFloat = 0
+        var source = "auto"
+
+        if totalScore > 0 {
+            let diff = abs(laptopScore - desktopScore)
+            confidence = min(1, diff / max(totalScore, 0.0001))
+            if confidence >= 0.25 {
+                context = laptopScore >= desktopScore ? .laptop : .desktop
+            } else {
+                reasons.append("lowConfidence")
+            }
+        } else {
+            reasons.append("noStrongHints")
+        }
+
+        if cameraContextSelection != .auto {
+            context = cameraContextSelection == .desktop ? .desktop : .laptop
+            confidence = 1
+            source = "manual"
+            reasons.append("manualContextOverride")
+        }
+
+        if context != .laptop {
+            subcontext = .unknown
+        } else if subcontext == .unknown {
+            subcontext = .neutral
+        }
+
+        return CameraContextInference(
+            context: context,
+            confidence: confidence,
+            subcontext: subcontext,
+            source: source,
+            faceSizeRatio: faceSizeRatio,
+            reasons: reasons
+        )
     }
 
     // MARK: - Power Management
@@ -938,7 +1288,7 @@ final class PostureEngine: ObservableObject {
             guard !Task.isCancelled else { return }
             guard self.isMonitoring, self.powerState == .inactive, self.powerStateManagementEnabled else { return }
 
-            self.analyzeLatestFrame(isProbe: true)
+            await self.analyzeLatestFrame(isProbe: true)
 
             if self.powerState == .inactive {
                 self.camera.stopSession()
