@@ -36,7 +36,18 @@ final class CameraManager: NSObject, @unchecked Sendable {
     func configure() throws {
         guard !isConfigured else { return }
 
-        guard let device = AVCaptureDevice.default(for: .video) else {
+        // Prefer built-in camera over virtual cameras (e.g. Insta360, OBS)
+        let device: AVCaptureDevice
+        let discoverySession = AVCaptureDevice.DiscoverySession(
+            deviceTypes: [.builtInWideAngleCamera],
+            mediaType: .video,
+            position: .unspecified
+        )
+        if let builtIn = discoverySession.devices.first {
+            device = builtIn
+        } else if let fallback = AVCaptureDevice.default(for: .video) {
+            device = fallback
+        } else {
             throw CameraError.configurationFailed
         }
 
