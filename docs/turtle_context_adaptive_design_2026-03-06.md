@@ -2,250 +2,314 @@
 Date: 2026-03-06
 Owner: PT_turtle experiment session
 
-## 1. 문서 목적
-이 문서는 아래 두 가지를 하나로 통합한다.
-1. 지금까지 수집한 로그/캡처 데이터 기반의 사실 정리
-2. 해당 데이터를 바탕으로 한 설계안(모니터 비회귀 보장 포함)과 사용자 시나리오
+## 1. Purpose
+This document consolidates two things into one design baseline:
+1. What the current logs and capture sessions actually show
+2. How the scoring system should adapt without regressing the monitor path
 
-## 2. 이번 세션 데이터 범위
-데이터 소스:
+The central conclusion has changed. The primary context model should not be `desktop vs laptop`. It should be the camera's vertical relation to the user's eyes:
+- `above_eye`
+- `eye_level`
+- `below_eye`
+
+Device type remains useful, but only as secondary metadata and a fallback hint.
+
+## 2. Evidence Summary From Current Sessions
+Data sources:
 - `/tmp/turtle_cvadebug.log`
 - `/tmp/turtle_manual_snapshots/*`
 
-수집 특성:
-- 환경: 랩탑 카메라 중심
-- 거리 변화: D0, D1, D2 수집 (D3는 얼굴 프레이밍 불량으로 제외)
-- 캡처 세트: Good/FWD 반복 세트 + mild/severe FWD 혼합
-- 이미지 수: 총 78장 (13 폴더 x 6장)
+Session characteristics:
+- Most collected data came from laptop-camera setups
+- Distance variation was collected across D0, D1, D2
+- Good, mild forward head posture, and severe forward head posture were captured repeatedly
+- Additional observation was made after introducing context UI and log-only inference
 
-## 3. 사실 기반 관찰 결과
-### 3.1 Good vs FWD 분리(랩탑 환경)
-집계 결과:
-- GOOD_POSTURE
-  - score: min/med/max = 94 / 98 / 98 (avg 97.714)
-  - rawCVA: min/med/max = 62 / 65 / 65 (avg 64.786)
-  - faceY median = 0.480
-  - faceH(faceSize) median = 0.368
-- FORWARD_HEAD
-  - score: min/med/max = 24 / 83.5 / 98 (avg 74.667)
-  - rawCVA: min/med/max = 26 / 56.85 / 65 (avg 52.305)
-  - faceY median = 0.431
-  - faceH(faceSize) median = 0.459
+Measured patterns from the current set:
+- Good posture remains relatively stable in score and raw CVA under the same camera geometry
+- Severe forward head posture is usually separable already
+- Mild forward head posture is the unstable zone and is sensitive to camera geometry
+- As the laptop screen moves farther back, score drop often becomes delayed or compressed rather than fully disappearing
 
-해석:
-- FWD에서는 대체로 faceY가 낮아지고(프레임 상단 쪽), faceSize가 커진다.
-- severe FWD는 안정적으로 분리되지만 mild FWD는 good 경계와 겹친다.
+New experimental conclusion:
+- An `eye_level` stand setup can separate Good vs forward head to some extent
+- A `lookingDown` posture currently tends to collapse into `forwardHead`
+- This means the current feature set is not cleanly separating neck translation from gaze/downward head orientation
 
-### 3.2 점수와 피처 결합 강도
-Forward 샘플 기준:
-- corr(faceSize, score) = -0.739
-- corr(cvaDrop, score) = -0.943
+Practical implication:
+- The main problem is not "can the system detect extreme forward head posture?"
+- The main problem is "can the system separate mild forward head posture from viewpoint-induced changes and from looking down?"
 
-해석:
-- faceSize(거리/구도 proxy) 영향도 크지만, 실제 점수는 cvaDrop에 훨씬 강하게 종속됨.
+## 3. Why Device Type Alone Was The Wrong Abstraction
+Using `desktop` vs `laptop` as the primary context was appealing because it maps to a visible hardware difference, but it is not the variable that directly distorts the posture signal.
 
-### 3.3 거리 변화(D0~D2)에서 나타난 패턴
-관찰:
-- Good은 대체로 안정적(대부분 96~98)
-- FWD는 감지는 되지만, 거리/구도 변화 시 초반 점수 하락이 늦거나 완만해지는 세트가 존재
-- 사용자 체감의 "랩탑 포지션에서 상향 평준화" 관찰과 로그가 일치
+Why it breaks down:
+1. A laptop on a stand can behave like a monitor at eye level.
+2. A monitor with a low webcam or unusual mount can behave like a below-eye camera.
+3. The same laptop shifts geometry materially when the display tilts back or the user changes seating distance.
+4. The score instability we observed tracks camera viewpoint geometry more directly than device class.
 
-핵심 결론:
-- 문제의 중심은 severe FWD 미검출이 아님
-- 핵심은 mild FWD 민감도의 일관성 저하(카메라 기하 변화 영향)
+What the model actually needs to know:
+1. Is the camera above the user's eyes, roughly level with them, or below them?
+2. Is that geometry stable enough that a previous calibration still applies?
+3. Is the current frame pattern more consistent with forward head translation or simply downward viewing?
 
-### 3.4 모니터 vs 랩탑 비교 가능 범위
-현재 확정 가능한 것:
-- 랩탑 데이터에서는 카메라 기하 변화가 mild 민감도에 영향을 줌
+Therefore:
+- `deviceType` should be treated as metadata, not as the primary scoring context
+- The primary context should be `verticalRelation`
+- Distance/tilt/framing remain secondary modifiers beneath that context
 
-현재 확정 불가한 것:
-- 외부 모니터(상단 웹캠)와의 정량 비교는 동일 프로토콜 데이터가 아직 없음
+## 4. Product Goals
+1. The system infers the camera's vertical relation as `above_eye`, `eye_level`, or `below_eye`.
+2. Calibration and scoring use a relation-specific baseline rather than a device-specific baseline.
+3. Device type (`laptop`, `external_monitor`, `unknown`) is stored as supporting metadata only.
+4. Distance, tilt, and framing quality are handled as secondary modifiers, not as the top-level context.
+5. Existing monitor behavior must not regress while this model is introduced.
 
-결론:
-- 이번 문서 설계는 모니터 데이터가 들어와도 그대로 확장 가능하게 구성함
+## 5. Design Principles
+1. Non-regression on the current good monitor path remains the first constraint.
+2. If inference confidence is low, the system must fall back to the current scoring path.
+3. The system should adapt to geometry, not overfit to hardware labels.
+4. Log-only validation should precede scoring changes.
+5. Runtime overhead must stay bounded; context adaptation cannot introduce UI or camera freezes.
 
-## 4. 제품 목표(합의된 해석)
-1. 시스템이 현재 카메라 컨텍스트를 `desktop monitor` vs `laptop`으로 구분한다.
-2. 해당 컨텍스트 기반으로 calibration/scoring을 분리 적용한다.
-3. laptop 틸트/거리 변화는 상위 컨텍스트(`laptop`) 아래 하위 분류로 처리한다.
+## 6. Primary Context Model
+### 6.1 Runtime State
+Primary runtime fields:
+- `verticalRelation`: `above_eye | eye_level | below_eye | unknown`
+- `verticalRelationConfidence`: `0.0 ... 1.0`
+- `verticalRelationSource`: `auto | manual`
 
-## 5. 설계 원칙
-1. 모니터 경로 비회귀가 최우선이다.
-2. 자동 분류 확신이 낮으면 기존 로직으로 즉시 fallback 한다.
-3. 컨텍스트 적응은 laptop 경로에서만 단계적으로 활성화한다.
-4. 점수 로직 변경 전, log-only 모드로 먼저 검증한다.
+Secondary metadata:
+- `deviceType`: `laptop | external_monitor | unknown`
+- `deviceTypeConfidence`: `0.0 ... 1.0`
+- `distanceState`: `neutral | too_near | too_far`
+- `tiltState`: `neutral | tilt_back | tilt_forward | unknown`
+- `framingQuality`: `good | degraded | invalid`
 
-## 6. 제안 아키텍처
-### 6.1 컨텍스트 계층
-런타임 상태:
-- `cameraContext`: `desktop | laptop | unknown`
-- `contextConfidence`: 0.0 ~ 1.0
-- `contextSource`: `auto | manual`
-- `laptopSubcontext`: `neutral | tilt_back | too_near | too_far`
+Interpretation:
+- `verticalRelation` drives baseline selection
+- `deviceType` informs UX, analytics, and fallback hints
+- `distanceState`, `tiltState`, and `framingQuality` affect whether scoring should be trusted, softened, or paused
 
-### 6.2 캘리브레이션 프로파일 분리
-저장 단위:
-- `desktopProfile`
-- `laptopProfile`
+### 6.2 Why Vertical Relation Is The Primary Signal
+The scoring problem is fundamentally viewpoint-sensitive:
+- A camera above eye level changes facial and neck geometry differently from a camera below eye level
+- The same posture can project differently depending on camera height
+- Looking down can mimic some forward-head signals even without equivalent neck translation
 
-프로파일 포함 값:
+A vertical-relation model is closer to the distortion source than a device-type model.
+
+## 7. Calibration And Scoring Architecture
+### 7.1 Calibration Profiles
+Store calibration by vertical relation, not by device type.
+
+Profile units:
+- `aboveEyeProfile`
+- `eyeLevelProfile`
+- `belowEyeProfile`
+
+Each profile stores:
 - baseline CVA
-- baseline faceSize
-- baseline faceY
-- 품질 지표(프레이밍 안정도)
-- 마지막 갱신 시각
+- baseline face size
+- baseline face vertical position
+- short-window stability statistics
+- framing quality markers
+- last updated timestamp
+- optional supporting metadata: observed `deviceType`
 
-### 6.3 점수 계산 파이프라인
-1. 프레이밍 품질 게이트 평가
-2. 컨텍스트 추론(자동 또는 사용자 override)
-3. 해당 컨텍스트 프로파일 로드
-4. 상대 변화 계산
-5. severity 판단 + 히스테리시스 적용
-6. UI/알림 상태 반영
+### 7.2 Scoring Pipeline
+1. Evaluate framing quality
+2. Infer `verticalRelation` and confidence
+3. Load the matching relation profile if confidence is sufficient
+4. Compute relative change against that profile
+5. Detect disagreement between viewpoint shift and posture shift
+6. Apply severity logic and hysteresis
+7. Publish UI state only when outputs materially change
 
-핵심:
-- `desktop` 또는 `unknown(low confidence)`는 기존 스코어러 그대로 사용
-- `laptop(high confidence)`에서만 보정 스코어러 적용
+Fallback rules:
+- `unknown` or low-confidence relation uses the current legacy scorer
+- invalid framing pauses posture conclusions instead of forcing unstable scores
 
-## 7. 분류/보정 로직 제안
-### 7.1 context 추론
-입력 후보:
-- faceY 통계
-- faceSize 통계
-- 프레임 내 얼굴 박스 위치 안정성
-- 카메라 장치 메타(가능하면)
+### 7.3 Relation-Aware Interpretation
+Expected behavior by relation:
+- `above_eye`: downward gaze can more easily resemble forward collapse; require stronger evidence of neck translation
+- `eye_level`: Good vs forward head can separate somewhat already and should be the cleanest baseline for future tuning
+- `below_eye`: looking-down patterns are especially likely to collapse into `forwardHead` and require additional guarding
 
-정책:
-- confidence 높음: 자동 결정
-- confidence 낮음: `unknown` 처리 후 기존 로직 유지
-- 사용자 수동 선택 시 manual 우선
+### 7.4 Looking-Down Guard
+The current experiment indicates a structural failure mode: `lookingDown` often collapses into `forwardHead`.
 
-### 7.2 laptop 하위 분류
-신호:
-- baseline 대비 faceSize 변화
-- baseline 대비 faceY 변화
-- 짧은 시간 창(1~2초) 안정성
+Design implication:
+- The system should not treat all head-angle change as forward-head evidence
+- It needs a guard layer that distinguishes forward translation from downward viewing when possible
 
-출력:
-- `tilt_back` 또는 `too_far` 탐지 시 mild 임계값 민감도 보정
-- 프레이밍 이탈이면 posture 판단 보류 + 재정렬 안내
+Initial rule direction:
+- If head orientation changes in a way consistent with downward viewing but forward-translation evidence is weak or inconsistent, soften or withhold forward-head escalation
+- If both downward orientation and forward translation rise together, allow normal posture escalation
 
-### 7.3 점수 보정(개념)
-- 기존 raw score를 완전히 대체하지 않고 보정 계층으로 추가
-- 예시 개념:
-  - `effectiveDrop = cvaDrop - k1*distanceBias - k2*viewpointBias`
-  - `distanceBias`는 faceSize 기반
-  - `viewpointBias`는 faceY 기반
-- mild 구간에서만 보정 강도 크게, severe 구간은 보정 최소화
+This should start as a conservative guard, not a fully separate classifier.
 
-### 7.4 히스테리시스
-- 진입 임계값과 해제 임계값 분리
-- 경계 구간 score 흔들림에서 UI 상태 토글 억제
+Detailed first-pass rule draft lives in:
+- [eye_level_forward_vs_looking_down_rules_2026-03-06.md](/Users/ilwonyoon/Documents/PT_turtle/docs/eye_level_forward_vs_looking_down_rules_2026-03-06.md)
 
-## 8. 모니터 비회귀 보장 전략
-1. feature flag: `adaptive_scoring_v1` 기본 OFF
-2. `desktop` 경로는 기존 계산식 그대로 유지
-3. 모니터 리플레이 로그에서 기존 대비 차이 허용치 정의
-4. 허용치 초과 시 adaptive 즉시 비활성 fallback
+## 8. Inference Strategy
+### 8.1 Inputs
+Candidate inputs for inference:
+- face vertical position over a short window
+- face size over a short window
+- baseline-relative landmark geometry
+- head pitch/yaw trends
+- framing stability
+- optional device metadata from camera source and known setup history
 
-## 9. 단계별 적용 계획
-Phase 1 (log-only):
-- 컨텍스트/하위컨텍스트 추론 결과만 로그 저장
-- 사용자 노출 점수는 기존과 동일
+### 8.2 Decision Policy
+1. High-confidence relation inference applies automatically.
+2. Low-confidence inference falls back to `unknown` and preserves legacy behavior.
+3. User override can set `above_eye`, `eye_level`, or `below_eye` manually.
+4. Device type can be shown in the UI as supporting context, but should not override the primary relation unless the user explicitly chooses it.
 
-Phase 2 (laptop-only scoring):
-- laptop + high confidence에서만 보정 적용
-- desktop/unknown은 기존 유지
+### 8.3 Secondary State Handling
+- `distanceState` and `tiltState` do not change the primary relation by themselves
+- They modify trust in the current calibration and can trigger recalibration guidance
+- `framingQuality=invalid` suppresses scoring updates entirely
 
-Phase 3 (quality gate + recalibration):
-- 프레이밍 불량 시 posture 판단 보류
-- 자동 재캘리브레이션 유도
+## 9. Performance And Regression Guardrails
+This design must preserve the existing performance framing. Context adaptation is only acceptable if it does not worsen runtime stability.
 
-## 10. 사용자 시나리오
-### 시나리오 A: 데스크탑 모니터 고정 사용자
-- 흐름: 기존처럼 캘리브레이션 후 사용
-- 시스템: `cameraContext=desktop`, 기존 스코어러 유지
-- 기대 결과: 업데이트 전후 체감 차이 최소, 회귀 없음
+Guardrails:
+1. Vertical-relation inference runs in log-only mode first.
+2. Legacy scoring remains the fallback for low-confidence or invalid-framing cases.
+3. UI updates must be gated to material state changes only.
+4. No new high-frequency logging or main-thread work should be added without profiling.
+5. Monitor/stand setups that already work must remain within a tight score-drift envelope.
 
-### 시나리오 B: 랩탑 기본 사용자
-- 흐름: 랩탑 카메라 캘리브레이션 후 Good/FWD 반복
-- 시스템: `cameraContext=laptop`, laptopProfile 기반 계산
-- 기대 결과: mild FWD 분리 안정성 개선
+Runtime risks already seen in adjacent investigation:
+- Main-thread analysis work can freeze preview responsiveness
+- Repeated observed-object invalidation can amplify SwiftUI redraw cost
+- Extra context logic is acceptable only if it is computationally cheap and publish-throttled
 
-### 시나리오 C: 랩탑 각도/거리 자주 변경 사용자
-- 흐름: 사용 중 화면 틸트/거리 변화
-- 시스템: `laptopSubcontext` 전환 감지, 민감도 보정 또는 재보정 요청
-- 기대 결과: 점수 튐 감소, 잘못된 상향 평준화 완화
+## 10. User Scenarios
+### Scenario A: External Monitor With Camera Above Eye Level
+- Flow: user calibrates once on a typical top-mounted webcam
+- System: infers `above_eye`, stores an `aboveEyeProfile`
+- Expected result: current good monitor behavior remains stable, with no forced change if confidence is weak
 
-### 시나리오 D: 모니터/랩탑 번갈아 사용하는 사용자
-- 흐름: 장치 전환 반복
-- 시스템: 컨텍스트별 프로파일 자동 전환, 필요 시 빠른 재캘리브레이션
-- 기대 결과: 장치 바뀌어도 점수 기준 일관성 유지
+### Scenario B: Laptop On Stand At Eye Level
+- Flow: user places laptop so the camera is roughly eye level and calibrates
+- System: infers `eye_level`, stores an `eyeLevelProfile`
+- Expected result: Good vs forward head should separate better than in the below-eye laptop case
 
-### 시나리오 E: 자동 판정 불확실 사용자
-- 흐름: 조명/구도 불안정
-- 시스템: confidence 낮으면 `unknown` + 기존 로직 유지, 수동 선택 제안
-- 기대 결과: 잘못된 자동 보정으로 성능 붕괴 방지
+### Scenario C: Laptop On Desk Below Eye Level
+- Flow: user works directly on a laptop without a stand
+- System: infers `below_eye`, stores a `belowEyeProfile`
+- Expected result: scoring becomes more conservative around downward-looking states, reducing false forward-head escalation
 
-### 시나리오 F: 얼굴 프레이밍 불량 사용자
-- 흐름: 너무 멀거나 얼굴 일부만 프레임에 존재
-- 시스템: quality gate 동작, 점수 업데이트 보류 + 위치 가이드
-- 기대 결과: 노이즈 기반 오탐/미탐 감소
+### Scenario D: User Looks Down Frequently Without Strong Neck Translation
+- Flow: user reads or types while maintaining mostly acceptable neck position
+- System: detects a pattern more consistent with downward viewing than true forward translation
+- Expected result: avoid collapsing immediately into `forwardHead` when evidence is insufficient
 
-### 시나리오 G: 회귀 민감 모니터 사용자
-- 흐름: 기존 모니터 환경에서 업데이트 적용
-- 시스템: desktop 경로 고정 + regression guard
-- 기대 결과: "모니터에서 잘 되던 것" 유지
+### Scenario E: User Alternates Between Monitor And Laptop Stand
+- Flow: morning on an external monitor, afternoon on a raised laptop
+- System: relation may remain the same (`above_eye` or `eye_level`) even though device type changes
+- Expected result: calibration reuse is possible when geometry matches, which is exactly why device type should not be primary
 
-## 11. 검증 지표
-필수 지표:
-- desktop 데이터에서 기존 대비 점수 편차
-- laptop 데이터에서 mild FWD 분리도 개선폭
-- severe FWD recall 유지 또는 개선
-- state flicker(초당 상태 전환 빈도) 감소
+### Scenario F: User Changes Tilt Or Distance Mid-Session
+- Flow: laptop screen tilts back, or the user moves farther away
+- System: preserves the same primary relation if camera height relative to eyes is unchanged, but marks distance/tilt as degraded context
+- Expected result: either soften scoring confidence or request recalibration instead of pretending the top-level context changed
 
-권장 합격 기준(초안):
-- desktop 평균 score 편차 절대값 <= 2
-- laptop mild FWD median score gap( good - mild ) >= 10
-- severe FWD miss rate 0에 근접
+### Scenario G: Ambiguous Or Poor Framing
+- Flow: face is partly cropped, too small, or unstable in frame
+- System: relation confidence drops and framing quality degrades
+- Expected result: fall back to legacy scoring or suppress updates rather than produce noisy adaptive behavior
 
-## 12. 즉시 실행 항목
-1. Phase 1(log-only) 구현
-2. 분석 스크립트 자동화(세션별 분리도, 지연 프레임, 권장 임계값)
-3. 동일 프로토콜의 외부 모니터 데이터 1세트 확보
-4. 모니터 비회귀 리플레이 테스트 추가
+## 11. Validation Plan
+### 11.1 Core Questions
+1. Does vertical relation explain score variation better than device type?
+2. Does `eye_level` improve Good vs forward-head separation compared with `below_eye`?
+3. Can we reduce `lookingDown -> forwardHead` collapse without harming true forward-head recall?
+4. Can we do this without regressing existing monitor setups?
 
-## 13. 최종 요약
-- 현재 데이터로 확인된 문제는 "랩탑 카메라 기하 변화에서 mild FWD 일관성 저하"다.
-- 설계 방향은 `상위 컨텍스트(desktop/laptop) + 하위 laptop 상태(tilt/distance)` 구조가 맞다.
-- 모니터 경로는 기존 로직 고정과 단계적 롤아웃으로 보호한다.
+### 11.2 Required Datasets
+Longer-term desired coverage:
+- `above_eye`: Good / lookingDown / mild forward head / severe forward head
+- `eye_level`: Good / lookingDown / mild forward head / severe forward head
+- `below_eye`: Good / lookingDown / mild forward head / severe forward head
 
-## 14. UI 반영 상태 (2026-03-06 구현)
-이번 반영은 Phase 1 범위(log-only) 내에서 사용자 가시성을 확보하는 데 목적이 있다.
+Supporting metadata to retain:
+- device type
+- distance bucket
+- tilt notes if known
+- framing quality
 
-적용 위치:
-1. Settings > Camera 섹션
-2. Menu bar popover 배지
+Immediate post-redesign minimum:
+- do not collect the full matrix first
+- collect only the smallest validation packs needed to answer the next risk:
+  - `eye_level` separation pack
+  - desktop regression pack
 
-추가된 UX 요소:
-1. `Context Mode` 선택기
-- `Auto (Recommended)`
-- `Desktop (Manual)`
-- `Laptop (Manual)`
+Detailed minimal collection plan lives in:
+- [minimal_additional_data_plan_2026-03-06.md](/Users/ilwonyoon/Documents/PT_turtle/docs/minimal_additional_data_plan_2026-03-06.md)
 
-2. `Detected Context` 표시
-- 예: `Laptop (Auto, 82%)`
-- 자동/수동 source와 confidence를 함께 노출
+### 11.3 Success Criteria
+Initial acceptance targets:
+- Existing good monitor setups stay within a score drift envelope of `<= 2` average points under legacy-equivalent conditions
+- `eye_level` shows measurable separation between Good and forward head
+- `lookingDown` false escalation rate drops meaningfully, especially in `below_eye`
+- Severe forward-head recall is not degraded
+- State flicker does not increase
+- Runtime responsiveness does not worsen
 
-3. `Laptop State` 표시
-- `Neutral`, `Tilt Back`, `Too Near`, `Too Far`
-- laptop이 아닌 경우 `—`
+## 12. Rollout Plan
+### Phase 1: Log-Only Vertical Relation Inference
+- infer `verticalRelation`, `deviceType`, and secondary states
+- do not change scoring yet
+- log relation confidence and disagreement cases such as `lookingDown` vs `forwardHead`
 
-4. Menu bar 배지
-- `Desktop A`, `Laptop M` 형태로 현재 컨텍스트를 짧게 표시
-- `A`=Auto, `M`=Manual
+### Phase 2: Relation-Specific Calibration Profiles
+- keep legacy scoring as the user-visible path
+- store and validate relation-specific baselines in parallel
+- compare legacy scores against relation-aware offline analysis
 
-비회귀 보장:
-1. score/severity 계산식은 변경하지 않음
-2. 컨텍스트는 표시/로그 용도로만 반영 (log-only)
-3. 기존 모니터 경로의 posture scoring 동작은 유지
+### Phase 3: Conservative Adaptive Scoring
+- enable relation-aware scoring only for high-confidence cases
+- keep legacy fallback for `unknown`, degraded framing, or unstable geometry
+- activate the looking-down guard conservatively first
+
+### Phase 4: Recalibration And UX Refinement
+- add lightweight user guidance when tilt/distance changes make calibration stale
+- expose manual override for `above_eye`, `eye_level`, `below_eye`
+- keep device type visible only as supporting information
+
+## 13. UX Implications
+The UX should reflect the new abstraction directly.
+
+Recommended presentation:
+1. Primary label: `Camera Height Relation`
+2. Values: `Above Eye`, `Eye Level`, `Below Eye`, `Unknown`
+3. Secondary metadata: `Device: Laptop` or `Device: External Monitor`
+4. Support states: `Distance`, `Tilt`, `Framing Quality`
+
+UX rule:
+- The primary label explains why scoring behaves differently
+- Device type is informative, but not the thing the user is calibrating against
+
+Implementation note:
+- current shipped UI still uses `Desktop/Laptop` language in several places
+- that terminology should be treated as transitional until the vertical-relation UX is implemented
+
+## 14. Summary
+- The observed instability is better explained by camera geometry than by hardware category.
+- `desktop vs laptop` is too coarse to be the primary adaptive-scoring abstraction.
+- The primary context should be `above_eye`, `eye_level`, `below_eye`.
+- Device type remains useful as metadata, analytics, and a fallback hint.
+- The most important unresolved posture failure mode is that `lookingDown` currently collapses into `forwardHead`, especially outside eye-level geometry.
+- Rollout should remain conservative, log-first, and regression-protected.
+
+## 15. Open Questions
+1. Which feature combination best separates `lookingDown` from true forward translation at `below_eye`?
+2. How stable is `verticalRelation` inference across real users without explicit setup instructions?
+3. When relation confidence is low, should the product surface manual override immediately or stay silent and fall back?
+4. How much calibration can be reused across different devices when the inferred vertical relation is the same?
