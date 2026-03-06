@@ -86,7 +86,7 @@ final class PostureEngine: ObservableObject {
     // MARK: - Computed
 
     var postureScore: Int {
-        PostureAnalyzer.cvaToScore(postureState.currentCVA)
+        postureState.score
     }
 
     private var sensitivityMode: SensitivityMode {
@@ -165,8 +165,8 @@ final class PostureEngine: ObservableObject {
     private let worsenFollowUpHold: TimeInterval = 0.5
     private let improveInitialHold: TimeInterval = 2.0
     private let improveFollowUpHold: TimeInterval = 1.0
-    private let cvaBoundaryBuffer: CGFloat = 2.0
-    private let cvaTransitionCrossover: CGFloat = 3.0
+    private let scoreBoundaryBuffer: Int = 3
+    private let scoreTransitionCrossover: Int = 5
 
     #if DEBUG
     // MARK: - Debug Capture
@@ -792,9 +792,10 @@ final class PostureEngine: ObservableObject {
                 sustainedBadStart = nil
             }
         } else {
-            // No calibration yet - still show live CVA and severity from detection
+            // No calibration yet - show neutral score until calibration completes
+            let preCalibScore = 50
             let severity = PostureAnalyzer.classifySeverity(
-                metrics.neckEarAngle,
+                score: preCalibScore,
                 mode: sensitivityMode
             )
             let previousSeverity = postureState.severity
@@ -806,19 +807,20 @@ final class PostureEngine: ObservableObject {
                 severity: severity,
                 classification: .normal,
                 currentCVA: metrics.neckEarAngle,
-                baselineCVA: 0
+                baselineCVA: 0,
+                score: preCalibScore
             )
             trackSlouchTransition(from: previousSeverity, to: severity, at: now)
         }
 
         // Record score for rolling average (works with or without calibration)
-        let score = PostureAnalyzer.cvaToScore(postureState.currentCVA)
+        let score = postureState.score
         scoreHistory.append((date: now, score: score))
         recordSessionSample(score: score, cva: postureState.currentCVA)
         // Debug: log smoothed CVA, score, and severity every 3rd frame
         if Int.random(in: 0..<3) == 0 {
             let source = usingMediaPipe ? "MP" : "Vision"
-            engineLog(String(format: "[SCORE/%@] rawCVA=%.1f smoothedCVA=%.1f score=%d severity=%@ menuBar=%@ pitch=%.1f",
+            engineLog(String(format: "[SCORE/%@] rawCVA=%.1f smoothedCVA=%.1f relScore=%d severity=%@ menuBar=%@ pitch=%.1f",
                 source, rawCVA, smoothed, score, postureState.severity.rawValue, menuBarSeverity.rawValue, lastMediaPipeHeadPitch))
         }
         // Prune entries older than 2 minutes
@@ -826,7 +828,7 @@ final class PostureEngine: ObservableObject {
         scoreHistory.removeAll { $0.date < pruneDate }
 
         // Update menu bar held severity with hold timer
-        updateMenuBarSeverity(newSeverity: postureState.severity, currentCVA: postureState.currentCVA, now: now)
+        updateMenuBarSeverity(newSeverity: postureState.severity, currentScore: score, now: now)
 
         lastError = nil
     }
@@ -1258,7 +1260,7 @@ final class PostureEngine: ObservableObject {
     /// Updates the held menu bar severity with asymmetric and stepped hold times:
     /// - Worsening: first change in ~1.5s, then shorter follow-up steps
     /// - Improving: first change in ~4.0s, then eased follow-up steps
-    private func updateMenuBarSeverity(newSeverity: Severity, currentCVA: CGFloat, now: Date) {
+    private func updateMenuBarSeverity(newSeverity: Severity, currentScore: Int, now: Date) {
         menuBarIsIdle = false
 
         guard newSeverity != menuBarSeverity else {
@@ -1269,7 +1271,7 @@ final class PostureEngine: ObservableObject {
             return
         }
 
-        guard shouldStartTransition(from: menuBarSeverity, toward: newSeverity, cva: currentCVA) else {
+        guard shouldStartTransition(from: menuBarSeverity, toward: newSeverity, score: currentScore) else {
             pendingSeverity = nil
             pendingSeverityStart = nil
             pendingTransitionStepCount = 0
@@ -1340,32 +1342,33 @@ final class PostureEngine: ObservableObject {
         return stepCount == 0 ? improveInitialHold : improveFollowUpHold
     }
 
-    private func shouldStartTransition(from current: Severity, toward target: Severity, cva: CGFloat) -> Bool {
-        guard let threshold = transitionThreshold(from: current, toward: target) else { return true }
-        if abs(cva - threshold) <= cvaBoundaryBuffer { return false }
+    private func shouldStartTransition(from current: Severity, toward target: Severity, score: Int) -> Bool {
+        guard let threshold = transitionScoreThreshold(from: current, toward: target) else { return true }
+        if abs(score - threshold) <= scoreBoundaryBuffer { return false }
         if target > current {
-            return cva <= threshold - cvaTransitionCrossover
+            return score <= threshold - scoreTransitionCrossover  // score dropped below threshold
         }
-        return cva >= threshold + cvaTransitionCrossover
+        return score >= threshold + scoreTransitionCrossover      // score recovered above threshold
     }
 
-    private func transitionThreshold(from current: Severity, toward target: Severity) -> CGFloat? {
+    private func transitionScoreThreshold(from current: Severity, toward target: Severity) -> Int? {
+        let mode = sensitivityMode
         guard current != target else { return nil }
 
         if target > current {
             switch current {
-            case .good: return PostureAnalyzer.cvaGood(for: sensitivityMode)
-            case .correction: return PostureAnalyzer.cvaCorrection(for: sensitivityMode)
-            case .bad: return PostureAnalyzer.cvaBad(for: sensitivityMode)
+            case .good: return mode.goodThreshold
+            case .correction: return mode.correctionThreshold
+            case .bad: return mode.badThreshold
             case .away: return nil
             }
         }
 
         switch current {
         case .good: return nil
-        case .correction: return PostureAnalyzer.cvaGood(for: sensitivityMode)
-        case .bad: return PostureAnalyzer.cvaCorrection(for: sensitivityMode)
-        case .away: return PostureAnalyzer.cvaBad(for: sensitivityMode)
+        case .correction: return mode.goodThreshold
+        case .bad: return mode.correctionThreshold
+        case .away: return mode.badThreshold
         }
     }
 

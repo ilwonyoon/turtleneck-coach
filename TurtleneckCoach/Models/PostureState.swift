@@ -50,6 +50,7 @@ struct PostureState {
     var classification: PostureClassification
     var currentCVA: CGFloat
     var baselineCVA: CGFloat
+    var score: Int              // 0-100 composite relative score
 
     static let initial = PostureState(
         badPostureStart: nil,
@@ -59,6 +60,7 @@ struct PostureState {
         severity: .good,
         classification: .normal,
         currentCVA: 0,
-        baselineCVA: 0
+        baselineCVA: 0,
+        score: 90
     )
 }

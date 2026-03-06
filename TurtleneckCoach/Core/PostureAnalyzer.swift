@@ -62,20 +62,6 @@ struct PostureAnalyzer {
         currentSensitivityMode.badThreshold
     }
 
-    // CVA boundaries used for menu bar transition hysteresis.
-    // Derived from the score mapping curve (CVA 20-65° -> score 5-98).
-    static var cvaGood: CGFloat {
-        cvaGood(for: currentSensitivityMode)
-    }
-
-    static var cvaCorrection: CGFloat {
-        cvaCorrection(for: currentSensitivityMode)
-    }
-
-    static var cvaBad: CGFloat {
-        cvaBad(for: currentSensitivityMode)
-    }
-
     /// Evaluate current posture metrics against calibration baseline.
     /// Returns a new PostureState (immutable pattern - creates new state each call).
     static func evaluate(
@@ -95,7 +81,8 @@ struct PostureAnalyzer {
                 severity: .good,
                 classification: .unknown,
                 currentCVA: 0,
-                baselineCVA: baseline.neckEarAngle
+                baselineCVA: baseline.neckEarAngle,
+                score: 90
             )
         }
 
@@ -113,17 +100,60 @@ struct PostureAnalyzer {
             baselineIrisGaze: baseline.irisGazeOffset
         )
 
+        let adjustedCVA: CGFloat
+        if classification == .lookingDown {
+            let drop = baseline.neckEarAngle - metrics.neckEarAngle
+            adjustedCVA = metrics.neckEarAngle + drop * 0.5  // recover 50% of CVA drop
+        } else {
+            adjustedCVA = metrics.neckEarAngle
+        }
+
+        let useFallback = !metrics.earsVisible
+
+        // Compute relative score (camera-invariant)
+        let computedScore: Int
+        let deviationValue: CGFloat
+
+        if useFallback {
+            // Face fallback: use CVA-only relative score
+            computedScore = relativeScore(currentCVA: adjustedCVA, baselineCVA: baseline.neckEarAngle)
+            let effectiveCVADrop = baseline.neckEarAngle - adjustedCVA
+            deviationValue = baseline.neckEarAngle > 1e-6 ? max(0, effectiveCVADrop / baseline.neckEarAngle) : 0.0
+        } else {
+            // Body pose: composite relative score with auxiliary signals
+            computedScore = compositeRelativeScore(
+                currentCVA: adjustedCVA, baselineCVA: baseline.neckEarAngle,
+                currentPitch: metrics.headPitch, baselinePitch: baseline.headPitch,
+                currentFaceSize: metrics.faceSizeNormalized, baselineFaceSize: baseline.baselineFaceSize,
+                classification: classification
+            )
+            let forwardDeviation = relativeChange(
+                baseline: baseline.headForwardRatio,
+                current: metrics.headForwardRatio
+            )
+            if cameraPosition.isSideView {
+                let vertScore = evaluateSideView(
+                    metrics: metrics, baseline: baseline,
+                    cameraPosition: cameraPosition, useFallback: useFallback
+                )
+                deviationValue = vertScore + max(0, forwardDeviation) * 0.3
+            } else {
+                let vertScore = evaluateCenterView(
+                    metrics: metrics, baseline: baseline, useFallback: useFallback
+                )
+                deviationValue = vertScore + max(0, forwardDeviation)
+            }
+        }
+
+        let severity = classifySeverity(score: computedScore, mode: sensitivityMode)
+
         #if DEBUG
-        // Debug: log classifier inputs every ~3s
         let pitchDelta = metrics.headPitch - baseline.headPitch
         let fsc = baseline.baselineFaceSize > 0 ? (metrics.faceSizeNormalized - baseline.baselineFaceSize) / baseline.baselineFaceSize : 0
-        let debugLine = String(format: "[CLASSIFY] pitch=%.2f base=%.2f Δ=%.3f faceSize=%.4f base=%.4f Δ=%.1f%% cvaDrop=%.1f yaw=%.1f fwdZ=%.4f baseZ=%.4f iris=%.3f baseIris=%.3f → %@",
-            metrics.headPitch, baseline.headPitch, pitchDelta,
-            metrics.faceSizeNormalized, baseline.baselineFaceSize, fsc * 100,
-            cvaDrop, abs(yawDegrees),
-            metrics.forwardDepth, baseline.forwardDepth,
-            metrics.irisGazeOffset, baseline.irisGazeOffset,
-            classification.rawValue)
+        let debugLine = String(format: "[EVAL] rawCVA=%.1f adj=%.1f base=%.1f class=%@ relScore=%d sev=%@ pitchΔ=%.2f faceΔ=%.1f%%",
+            metrics.neckEarAngle, adjustedCVA, baseline.neckEarAngle,
+            classification.rawValue, computedScore, severity.rawValue,
+            pitchDelta, fsc * 100)
         if let data = (debugLine + "\n").data(using: .utf8) {
             let url = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
             if let fh = try? FileHandle(forWritingTo: url) {
@@ -134,74 +164,7 @@ struct PostureAnalyzer {
         }
         #endif
 
-        let adjustedCVA: CGFloat
-        if classification == .lookingDown {
-            let drop = baseline.neckEarAngle - metrics.neckEarAngle
-            adjustedCVA = metrics.neckEarAngle + drop * 0.5  // recover 50% of CVA drop
-        } else {
-            adjustedCVA = metrics.neckEarAngle
-        }
-
-        #if DEBUG
-        // Debug: log adjusted CVA and score
-        let t = FHPTuning.shared
-        let adjDebug = String(format: "[ADJUST] rawCVA=%.1f adjustedCVA=%.1f baseline=%.1f class=%@ score=%d [tuning: shrink=%.1f%% scale=%.0f pitch=%.1f°]",
-            metrics.neckEarAngle, adjustedCVA, baseline.neckEarAngle,
-            classification.rawValue, Int(Self.cvaToScore(adjustedCVA)),
-            t.faceShrinkThreshold * 100, t.depthPenaltyScale, t.pitchGateDegrees)
-        if let adjData = (adjDebug + "\n").data(using: .utf8) {
-            let adjUrl = URL(fileURLWithPath: "/tmp/turtle_cvadebug.log")
-            if let fh = try? FileHandle(forWritingTo: adjUrl) {
-                fh.seekToEndOfFile()
-                fh.write(adjData)
-                fh.closeFile()
-            }
-        }
-        #endif
-
-        let severity = classifySeverity(adjustedCVA, mode: sensitivityMode)
-        let useFallback = !metrics.earsVisible
-
-        // When using face fallback, shoulder positions are estimated from face bbox
-        // so distance-based deviation doesn't work. Use CVA drop as primary signal.
-        let isCurrentlyBad: Bool
-        let score: CGFloat
-
-        if useFallback {
-            // Face fallback mode: use CVA difference from baseline as the deviation signal
-            let effectiveCVADrop = baseline.neckEarAngle - adjustedCVA
-            // Normalize: 10° drop = moderate concern, 20° drop = severe
-            score = baseline.neckEarAngle > 1e-6 ? max(0, effectiveCVADrop / baseline.neckEarAngle) : 0.0
-            // Bad if CVA dropped below "good" threshold or dropped significantly from baseline
-            isCurrentlyBad = severity != .good || effectiveCVADrop > 8.0
-        } else {
-            // Body pose mode: use original distance-based deviation
-            let forwardDeviation = relativeChange(
-                baseline: baseline.headForwardRatio,
-                current: metrics.headForwardRatio
-            )
-
-            if cameraPosition.isSideView {
-                let vertScore = evaluateSideView(
-                    metrics: metrics,
-                    baseline: baseline,
-                    cameraPosition: cameraPosition,
-                    useFallback: useFallback
-                )
-                score = vertScore + max(0, forwardDeviation) * 0.3
-            } else {
-                let vertScore = evaluateCenterView(
-                    metrics: metrics,
-                    baseline: baseline,
-                    useFallback: useFallback
-                )
-                score = vertScore + max(0, forwardDeviation)
-            }
-
-            let threshold = (Self.forwardRatioThreshold + Self.earShoulderThreshold) * 0.5
-            isCurrentlyBad = score > threshold
-        }
-
+        let isCurrentlyBad = severity != .good
         let now = Date()
 
         if isCurrentlyBad {
@@ -211,34 +174,74 @@ struct PostureAnalyzer {
             return PostureState(
                 badPostureStart: start,
                 isTurtleNeck: isTurtle,
-                deviationScore: score,
+                deviationScore: deviationValue,
                 usingFallback: useFallback,
                 severity: severity,
                 classification: classification,
                 currentCVA: adjustedCVA,
-                baselineCVA: baseline.neckEarAngle
+                baselineCVA: baseline.neckEarAngle,
+                score: computedScore
             )
         }
 
         return PostureState(
             badPostureStart: nil,
             isTurtleNeck: false,
-            deviationScore: score,
+            deviationScore: deviationValue,
             usingFallback: useFallback,
             severity: severity,
             classification: classification,
             currentCVA: adjustedCVA,
-            baselineCVA: baseline.neckEarAngle
+            baselineCVA: baseline.neckEarAngle,
+            score: computedScore
         )
+    }
+
+    // MARK: - Relative Scoring (camera-invariant)
+
+    /// Convert CVA deviation from baseline to a 0-100 score.
+    /// Uses absolute deviation — any direction away from baseline reduces score.
+    /// 0% deviation = 95, ~15% = ~72, ~30% = ~50, 50%+ = ~20.
+    static func relativeScore(currentCVA: CGFloat, baselineCVA: CGFloat) -> Int {
+        guard baselineCVA > 1e-6 else { return 50 }
+        let deviation = abs(baselineCVA - currentCVA) / baselineCVA
+        let score = 95.0 - deviation * 150.0
+        return Int(round(min(98, max(2, score))))
+    }
+
+    /// Fuse multiple relative signals into a single 0-100 score.
+    static func compositeRelativeScore(
+        currentCVA: CGFloat, baselineCVA: CGFloat,
+        currentPitch: CGFloat, baselinePitch: CGFloat,
+        currentFaceSize: CGFloat, baselineFaceSize: CGFloat,
+        classification: PostureClassification
+    ) -> Int {
+        let cvaScore = relativeScore(currentCVA: currentCVA, baselineCVA: baselineCVA)
+
+        // Pitch contribution (looking down penalty)
+        let pitchDelta = max(0, currentPitch - baselinePitch)
+        let pitchPenalty = min(15.0, pitchDelta * 1.0)
+
+        // Face size contribution (leaning forward = face gets bigger)
+        let faceSizeChange = baselineFaceSize > 0 ? (currentFaceSize - baselineFaceSize) / baselineFaceSize : 0
+        let facePenalty = min(10.0, max(0, faceSizeChange) * 50.0)
+
+        var composite = CGFloat(cvaScore) - pitchPenalty - facePenalty
+
+        // Boost back if looking down (CVA drop is partly from neck flexion, not FHP)
+        if classification == .lookingDown {
+            composite += pitchPenalty * 0.5
+        }
+
+        return Int(round(min(98, max(2, composite))))
     }
 
     // MARK: - Severity Classification
 
     static func classifySeverity(
-        _ cva: CGFloat,
+        score: Int,
         mode: SensitivityMode = currentSensitivityMode
     ) -> Severity {
-        let score = cvaToScore(cva)
         if score >= mode.goodThreshold { return .good }
         if score >= mode.correctionThreshold { return .correction }
         if score >= mode.badThreshold { return .bad }
@@ -312,15 +315,6 @@ struct PostureAnalyzer {
 
     // MARK: - Score Mapping
 
-    /// Convert CVA angle to a 0-100 posture score.
-    /// Narrower input range for MediaPipe: CVA 20-65° → score 5-98.
-    /// More sensitive to posture changes with accurate landmarks.
-    static func cvaToScore(_ cva: CGFloat) -> Int {
-        if cva <= 20 { return 5 }
-        if cva >= 65 { return 98 }
-        return Int(round(5 + (cva - 20) * (93.0 / 45.0)))
-    }
-
     /// Map posture score to emoji using the 4-zone posture model.
     static func scoreToEmoji(
         _ score: Int,
@@ -332,23 +326,7 @@ struct PostureAnalyzer {
         return "\u{2615}\u{FE0F}"  // hot beverage (break)
     }
 
-    static func cvaGood(for mode: SensitivityMode) -> CGFloat {
-        cvaForScoreThreshold(mode.goodThreshold)
-    }
-
-    static func cvaCorrection(for mode: SensitivityMode) -> CGFloat {
-        cvaForScoreThreshold(mode.correctionThreshold)
-    }
-
-    static func cvaBad(for mode: SensitivityMode) -> CGFloat {
-        cvaForScoreThreshold(mode.badThreshold)
-    }
-
     // MARK: - Helpers
-
-    private static func cvaForScoreThreshold(_ score: Int) -> CGFloat {
-        20 + (CGFloat(score) - 5) * (45.0 / 93.0)
-    }
 
     private static func relativeChange(baseline: CGFloat, current: CGFloat) -> CGFloat {
         guard baseline != 0 else { return 0 }

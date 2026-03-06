@@ -5,8 +5,12 @@ import Foundation
 final class CalibrationManager {
 
     static let requiredSamples = 20
-    static let minCalibrationCVA: CGFloat = 40.0
     private static let userDefaultsKey = "calibrationData"
+
+    // Quality gates for calibration validation
+    private static let maxCVAStdDev: CGFloat = 3.0       // reject if too much movement
+    private static let minLandmarkConfidence: CGFloat = 0.7 // reject if detection too sparse
+    private static let minPlausibleCVA: CGFloat = 5.0     // reject if CVA unmeasurable
 
     private(set) var samples: [PostureMetrics] = []
     private(set) var isCalibrating = false
@@ -92,10 +96,27 @@ final class CalibrationManager {
         UserDefaults.standard.removeObject(forKey: userDefaultsKey)
     }
 
+    // MARK: - Helpers
+
+    private func median(_ values: [CGFloat]) -> CGFloat {
+        let sorted = values.sorted()
+        let count = sorted.count
+        if count == 0 { return 0 }
+        if count % 2 == 0 {
+            return (sorted[count / 2 - 1] + sorted[count / 2]) / 2
+        }
+        return sorted[count / 2]
+    }
+
+    private func stdDev(_ values: [CGFloat], median med: CGFloat) -> CGFloat {
+        guard !values.isEmpty else { return 0 }
+        let variance = values.map { ($0 - med) * ($0 - med) }.reduce(0, +) / CGFloat(values.count)
+        return sqrt(variance)
+    }
+
     // MARK: - Core Algorithm
 
-    /// Average samples into baseline and validate posture quality.
-    /// Port of collect_calibration() from calibration.py.
+    /// Collect median baseline from samples and validate calibration quality.
     private func collectCalibration(
         samples: [PostureMetrics],
         headPitchSamples: [CGFloat] = [],
@@ -113,70 +134,72 @@ final class CalibrationManager {
             )
         }
 
-        let n = CGFloat(valid.count)
         let earsVisibleCount = valid.filter { $0.earsVisible }.count
         let earsMostlyVisible = earsVisibleCount > valid.count / 2
 
-        let avgCVA = valid.map(\.neckEarAngle).reduce(0, +) / n
+        // Median aggregation (outlier-robust)
+        let cvaValues = valid.map(\.neckEarAngle)
+        let medianCVA = median(cvaValues)
+        let cvaSD = stdDev(cvaValues, median: medianCVA)
+        let confidence = CGFloat(valid.count) / CGFloat(samples.count)
 
-        let avgHeadPitch: CGFloat
-        if !headPitchSamples.isEmpty {
-            avgHeadPitch = headPitchSamples.reduce(0, +) / CGFloat(headPitchSamples.count)
-        } else {
-            avgHeadPitch = 0
-        }
-
-        let avgFaceSize: CGFloat
-        if !faceSizeSamples.isEmpty {
-            avgFaceSize = faceSizeSamples.reduce(0, +) / CGFloat(faceSizeSamples.count)
-        } else {
-            avgFaceSize = 0
-        }
-
-        let avgForwardDepth: CGFloat
-        if !forwardDepthSamples.isEmpty {
-            avgForwardDepth = forwardDepthSamples.reduce(0, +) / CGFloat(forwardDepthSamples.count)
-        } else {
-            avgForwardDepth = 0
-        }
-
-        let avgIrisGaze: CGFloat
-        if !irisGazeSamples.isEmpty {
-            avgIrisGaze = irisGazeSamples.reduce(0, +) / CGFloat(irisGazeSamples.count)
-        } else {
-            avgIrisGaze = 0
-        }
+        let medianHeadPitch = headPitchSamples.isEmpty ? CGFloat(0) : median(headPitchSamples)
+        let medianFaceSize = faceSizeSamples.isEmpty ? CGFloat(0) : median(faceSizeSamples)
+        let medianForwardDepth = forwardDepthSamples.isEmpty ? CGFloat(0) : median(forwardDepthSamples)
+        let medianIrisGaze = irisGazeSamples.isEmpty ? CGFloat(0) : median(irisGazeSamples)
 
         let data = CalibrationData(
-            earShoulderDistanceLeft: valid.map(\.earShoulderDistanceLeft).reduce(0, +) / n,
-            earShoulderDistanceRight: valid.map(\.earShoulderDistanceRight).reduce(0, +) / n,
-            eyeShoulderDistanceLeft: valid.map(\.eyeShoulderDistanceLeft).reduce(0, +) / n,
-            eyeShoulderDistanceRight: valid.map(\.eyeShoulderDistanceRight).reduce(0, +) / n,
-            headForwardRatio: valid.map(\.headForwardRatio).reduce(0, +) / n,
-            headTiltAngle: valid.map(\.headTiltAngle).reduce(0, +) / n,
-            neckEarAngle: avgCVA,
-            shoulderEvenness: valid.map(\.shoulderEvenness).reduce(0, +) / n,
+            earShoulderDistanceLeft: median(valid.map(\.earShoulderDistanceLeft)),
+            earShoulderDistanceRight: median(valid.map(\.earShoulderDistanceRight)),
+            eyeShoulderDistanceLeft: median(valid.map(\.eyeShoulderDistanceLeft)),
+            eyeShoulderDistanceRight: median(valid.map(\.eyeShoulderDistanceRight)),
+            headForwardRatio: median(valid.map(\.headForwardRatio)),
+            headTiltAngle: median(valid.map(\.headTiltAngle)),
+            neckEarAngle: medianCVA,
+            shoulderEvenness: median(valid.map(\.shoulderEvenness)),
             earsWereVisible: earsMostlyVisible,
-            headPitch: avgHeadPitch,
-            baselineFaceSize: avgFaceSize,
-            forwardDepth: avgForwardDepth,
-            irisGazeOffset: avgIrisGaze
+            headPitch: medianHeadPitch,
+            baselineFaceSize: medianFaceSize,
+            forwardDepth: medianForwardDepth,
+            irisGazeOffset: medianIrisGaze,
+            cvaStdDev: cvaSD,
+            landmarkConfidence: confidence,
+            schemaVersion: 2
         )
 
-        if avgCVA < Self.minCalibrationCVA {
+        // Quality gates (variance-based, not absolute CVA)
+        if cvaSD > Self.maxCVAStdDev {
             return CalibrationResult(
                 data: data,
                 isValid: false,
-                message: String(format: "Posture too far forward (CVA ~%.0f\u{00B0}). Sit up straight: ears over shoulders, chin slightly tucked.", avgCVA),
-                measuredCVA: avgCVA
+                message: "Too much movement. Hold still during calibration.",
+                measuredCVA: medianCVA
+            )
+        }
+
+        if confidence < Self.minLandmarkConfidence {
+            return CalibrationResult(
+                data: data,
+                isValid: false,
+                message: "Couldn't detect your pose reliably. Check lighting and camera angle.",
+                measuredCVA: medianCVA
+            )
+        }
+
+        if medianCVA < Self.minPlausibleCVA {
+            return CalibrationResult(
+                data: data,
+                isValid: false,
+                message: "Couldn't measure your neck angle. Make sure face and shoulders are visible.",
+                measuredCVA: medianCVA
             )
         }
 
         return CalibrationResult(
             data: data,
             isValid: true,
-            message: String(format: "Calibration successful! (CVA ~%.0f\u{00B0})", avgCVA),
-            measuredCVA: avgCVA
+            message: String(format: "Calibrated! (baseline CVA ~%.0f\u{00B0})", medianCVA),
+            measuredCVA: medianCVA
         )
     }
 }

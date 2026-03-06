@@ -16,8 +16,11 @@ struct CalibrationData: Codable {
     let baselineFaceSize: CGFloat   // Face size at calibration time
     let forwardDepth: CGFloat  // baseline nose-shoulder Z-depth
     let irisGazeOffset: CGFloat  // baseline iris gaze position
+    let cvaStdDev: CGFloat       // standard deviation of CVA samples during calibration
+    let landmarkConfidence: CGFloat // fraction of valid samples (0.0–1.0)
+    let schemaVersion: Int       // 1 = legacy absolute, 2 = relative baseline-deviation
 
-    /// Decode with backward compatibility — headPitch/baselineFaceSize default to 0 if missing.
+    /// Decode with backward compatibility — new fields default safely if missing.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         earShoulderDistanceLeft = try c.decode(CGFloat.self, forKey: .earShoulderDistanceLeft)
@@ -33,6 +36,9 @@ struct CalibrationData: Codable {
         baselineFaceSize = try c.decodeIfPresent(CGFloat.self, forKey: .baselineFaceSize) ?? 0
         forwardDepth = try c.decodeIfPresent(CGFloat.self, forKey: .forwardDepth) ?? 0
         irisGazeOffset = try c.decodeIfPresent(CGFloat.self, forKey: .irisGazeOffset) ?? 0
+        cvaStdDev = try c.decodeIfPresent(CGFloat.self, forKey: .cvaStdDev) ?? 0
+        landmarkConfidence = try c.decodeIfPresent(CGFloat.self, forKey: .landmarkConfidence) ?? 0
+        schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
     }
 
     init(
@@ -48,7 +54,10 @@ struct CalibrationData: Codable {
         headPitch: CGFloat = 0,
         baselineFaceSize: CGFloat = 0,
         forwardDepth: CGFloat = 0,
-        irisGazeOffset: CGFloat = 0
+        irisGazeOffset: CGFloat = 0,
+        cvaStdDev: CGFloat = 0,
+        landmarkConfidence: CGFloat = 0,
+        schemaVersion: Int = 1
     ) {
         self.earShoulderDistanceLeft = earShoulderDistanceLeft
         self.earShoulderDistanceRight = earShoulderDistanceRight
@@ -63,6 +72,9 @@ struct CalibrationData: Codable {
         self.baselineFaceSize = baselineFaceSize
         self.forwardDepth = forwardDepth
         self.irisGazeOffset = irisGazeOffset
+        self.cvaStdDev = cvaStdDev
+        self.landmarkConfidence = landmarkConfidence
+        self.schemaVersion = schemaVersion
     }
 }
 
