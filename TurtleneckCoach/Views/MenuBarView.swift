@@ -108,12 +108,6 @@ struct MenuBarView: View {
                     // Controls
                     controlButtons
 
-                    // Debug capture buttons
-                    #if DEBUG
-                    if engine.isMonitoring && engine.calibrationData != nil && !engine.isCalibrating {
-                        debugCaptureButtons
-                    }
-                    #endif
                 }
                 .padding(DS.Space.lg)
             }
@@ -459,113 +453,6 @@ struct MenuBarView: View {
             }
         }
     }
-
-    #if DEBUG
-    // MARK: - Debug Capture
-
-    @ObservedObject private var tuning = FHPTuning.shared
-
-    private var debugCaptureButtons: some View {
-        VStack(spacing: 6) {
-            // Tuning sliders
-            debugSliders
-
-            if let label = engine.debugCaptureLabel {
-                HStack(spacing: 6) {
-                    ProgressView()
-                        .controlSize(.small)
-                    Text("Recording: \(label)...")
-                        .font(DS.Font.caption)
-                        .foregroundColor(.orange)
-                }
-            } else {
-                HStack(spacing: 6) {
-                    Button {
-                        engine.startDebugCapture(label: "GOOD_POSTURE")
-                    } label: {
-                        Label("Good", systemImage: "checkmark.circle")
-                            .font(DS.Font.caption)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.green)
-
-                    Button {
-                        engine.startDebugCapture(label: "FORWARD_HEAD")
-                    } label: {
-                        Label("FHP", systemImage: "exclamationmark.triangle")
-                            .font(DS.Font.caption)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.orange)
-
-                    Button {
-                        engine.startDebugCapture(label: "LOOKING_DOWN")
-                    } label: {
-                        Label("Down", systemImage: "arrow.down.circle")
-                            .font(DS.Font.caption)
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.blue)
-                }
-            }
-        }
-    }
-
-    // MARK: - Debug Sliders
-
-    private var debugSliders: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("FHP Tuning")
-                .font(DS.Font.caption)
-                .foregroundColor(.secondary)
-
-            HStack {
-                Text("Face shrink")
-                    .font(DS.Font.micro)
-                    .frame(width: 65, alignment: .leading)
-                Slider(value: $tuning.faceShrinkThreshold, in: -0.10...(-0.01), step: 0.005)
-                Text(String(format: "%.1f%%", tuning.faceShrinkThreshold * 100))
-                    .font(DS.Font.mono)
-                    .frame(width: 45)
-            }
-
-            HStack {
-                Text("Depth scale")
-                    .font(DS.Font.micro)
-                    .frame(width: 65, alignment: .leading)
-                Slider(value: $tuning.depthPenaltyScale, in: 50...500, step: 10)
-                Text(String(format: "%.0f", tuning.depthPenaltyScale))
-                    .font(DS.Font.mono)
-                    .frame(width: 45)
-            }
-
-            HStack {
-                Text("Pitch gate")
-                    .font(DS.Font.micro)
-                    .frame(width: 65, alignment: .leading)
-                Slider(value: $tuning.pitchGateDegrees, in: 0...15, step: 0.5)
-                Text(String(format: "%.1f°", tuning.pitchGateDegrees))
-                    .font(DS.Font.mono)
-                    .frame(width: 45)
-            }
-            HStack(spacing: DS.Space.xs) {
-                Text("Iris gate")
-                    .font(DS.Font.micro)
-                    .frame(width: 65, alignment: .leading)
-                Slider(value: $tuning.irisGazeThreshold, in: 0.05...0.6, step: 0.05)
-                Text(String(format: "%.2f", tuning.irisGazeThreshold))
-                    .font(DS.Font.mono)
-                    .frame(width: 45)
-            }
-        }
-        .padding(DS.Space.sm)
-        .background(DS.Surface.card)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-    }
-    #endif
 
     // MARK: - Error Banner
 
