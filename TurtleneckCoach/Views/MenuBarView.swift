@@ -570,11 +570,21 @@ struct MenuBarView: View {
     // MARK: - Error Banner
 
     private func errorBanner(_ message: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.red)
-            Text(message)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.red)
+                Text(message)
+                    .font(DS.Font.caption)
+            }
+            if message.contains("Camera access denied") {
+                Button("Open System Settings") {
+                    if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
                 .font(DS.Font.caption)
+            }
         }
         .padding(8)
         .frame(maxWidth: .infinity, alignment: .leading)

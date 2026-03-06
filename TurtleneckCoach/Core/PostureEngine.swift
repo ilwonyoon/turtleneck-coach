@@ -388,12 +388,16 @@ final class PostureEngine: ObservableObject {
                 // Auto-calibrate on every start so baseline matches current session
                 startCalibration()
             } catch CameraManager.CameraError.notAuthorized {
-                lastError = "Camera access denied. Enable in System Settings > Privacy."
+                lastError = "Camera access denied. Open System Settings → Privacy & Security → Camera and enable Turtleneck Coach."
                 isMonitoring = false
+                isCalibrating = false
+                calibrationManager.cancelCalibration()
                 resetSessionTracking()
             } catch {
                 lastError = "Camera error: \(error.localizedDescription)"
                 isMonitoring = false
+                isCalibrating = false
+                calibrationManager.cancelCalibration()
                 resetSessionTracking()
             }
         }
