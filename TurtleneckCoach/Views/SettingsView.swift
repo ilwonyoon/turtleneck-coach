@@ -87,6 +87,44 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
+                LabeledContent("Source Mode") {
+                    valueColumn {
+                        Picker("", selection: $engine.cameraSourceMode) {
+                            Text("Auto (Recommended)").tag(CameraSourceMode.auto)
+                            Text("Manual").tag(CameraSourceMode.manual)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: menuWidth, alignment: .trailing)
+                    }
+                }
+
+                if engine.cameraSourceMode == .manual {
+                    LabeledContent("Camera Device") {
+                        valueColumn {
+                            Picker("", selection: $engine.manualCameraDeviceID) {
+                                Text("Select Camera").tag("")
+                                ForEach(engine.availableCameraDevices) { option in
+                                    Text(engine.cameraDeviceDisplayName(for: option))
+                                        .tag(engine.cameraDeviceID(for: option))
+                                }
+                            }
+                            .labelsHidden()
+                            .pickerStyle(.menu)
+                            .frame(width: menuWidth, alignment: .trailing)
+                            .disabled(engine.availableCameraDevices.isEmpty)
+                        }
+                    }
+                }
+
+                LabeledContent("Active Camera") {
+                    valueColumn {
+                        Text(engine.activeCameraDisplayName)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
                 LabeledContent("Camera Position") {
                     valueColumn {
                         Picker("", selection: $engine.cameraPosition) {
@@ -102,7 +140,7 @@ struct SettingsView: View {
             } header: {
                 Text("Camera")
             } footer: {
-                Text("Choose where your camera is placed for posture analysis.")
+                Text("Auto picks the recommended camera. Manual locks monitoring to your selected device. Camera Position controls posture-angle interpretation.")
             }
 
             Section {
@@ -306,11 +344,15 @@ struct SettingsView: View {
         .padding(DS.Space.xl)
         .frame(minWidth: 540, minHeight: 460)
         .onAppear {
+            engine.refreshCameraDevices()
             UNUserNotificationCenter.current().getNotificationSettings { settings in
                 DispatchQueue.main.async {
                     systemNotificationStatus = settings.authorizationStatus
                 }
             }
+        }
+        .onChange(of: engine.cameraSourceMode) {
+            engine.refreshCameraDevices()
         }
     }
 

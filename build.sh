@@ -52,6 +52,7 @@ swiftc \
   TurtleneckCoach/Core/PostureEngine.swift \
   TurtleneckCoach/Core/VisionPoseDetector.swift \
   TurtleneckCoach/Models/CalibrationData.swift \
+  TurtleneckCoach/Models/CameraSourceMode.swift \
   TurtleneckCoach/Models/CameraPosition.swift \
   TurtleneckCoach/Models/PostureMetrics.swift \
   TurtleneckCoach/Models/PostureState.swift \

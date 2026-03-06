@@ -1,6 +1,7 @@
 import AVFoundation
 import AppKit
 import CoreImage
+import os.log
 
 /// Manages AVCaptureSession for continuous camera feed with periodic frame analysis.
 /// Provides frame callbacks for pose detection and display.
@@ -9,46 +10,158 @@ final class CameraManager: NSObject, @unchecked Sendable {
     private let output = AVCaptureVideoDataOutput()
     private let queue = DispatchQueue(label: "camera.capture", qos: .userInitiated)
     private var isConfigured = false
+    private var activeInput: AVCaptureDeviceInput?
     private let ciContext = CIContext()
+    private let logger = Logger(subsystem: "com.turtleneck.detector", category: "Camera")
 
     /// Called on each new frame with the CGImage (already rotated to landscape if needed).
     var onFrame: ((CGImage) -> Void)?
+    private(set) var activeDevice: CameraDeviceOption?
 
     enum CameraError: Error {
         case notAuthorized
         case configurationFailed
     }
 
-    /// Request camera permission. Returns true if granted.
-    static func requestPermission() async -> Bool {
-        let status = AVCaptureDevice.authorizationStatus(for: .video)
-        switch status {
-        case .authorized:
-            return true
-        case .notDetermined:
-            return await AVCaptureDevice.requestAccess(for: .video)
-        default:
-            return false
-        }
+    private struct DeviceScore {
+        let device: AVCaptureDevice
+        let score: Int
     }
 
-    /// Configure the capture session (called once).
-    func configure() throws {
-        guard !isConfigured else { return }
+    private static func discoveryDeviceTypes() -> [AVCaptureDevice.DeviceType] {
+        [.builtInWideAngleCamera, .external]
+    }
 
-        // Prefer built-in camera over virtual cameras (e.g. Insta360, OBS)
-        let device: AVCaptureDevice
-        let discoverySession = AVCaptureDevice.DiscoverySession(
-            deviceTypes: [.builtInWideAngleCamera],
+    private static func discoveredVideoDevices() -> [AVCaptureDevice] {
+        let discovery = AVCaptureDevice.DiscoverySession(
+            deviceTypes: discoveryDeviceTypes(),
             mediaType: .video,
             position: .unspecified
         )
-        if let builtIn = discoverySession.devices.first {
-            device = builtIn
-        } else if let fallback = AVCaptureDevice.default(for: .video) {
-            device = fallback
-        } else {
+
+        var devices = discovery.devices
+        if let fallback = AVCaptureDevice.default(for: .video),
+           !devices.contains(where: { $0.uniqueID == fallback.uniqueID }) {
+            devices.append(fallback)
+        }
+
+        return devices
+    }
+
+    private static func isVirtualDevice(_ device: AVCaptureDevice) -> Bool {
+        let name = device.localizedName.lowercased()
+        let model = device.modelID.lowercased()
+        return name.contains("virtual") || model.contains("virtual")
+    }
+
+    private static func scoreForAutoSelection(_ device: AVCaptureDevice) -> Int {
+        let name = device.localizedName.lowercased()
+        let isFaceTime = name.contains("facetime")
+        let isBuiltIn = device.deviceType == .builtInWideAngleCamera
+        let isVirtual = isVirtualDevice(device)
+
+        var score = 0
+        if isFaceTime { score += 100 }
+        if isBuiltIn { score += 50 }
+        // De-prioritize virtual devices in auto mode, but do not exclude them.
+        if isVirtual { score -= 1_000 }
+        return score
+    }
+
+    private static func orderedVideoDevicesForAutoSelection() -> [DeviceScore] {
+        discoveredVideoDevices()
+            .map { DeviceScore(device: $0, score: scoreForAutoSelection($0)) }
+            .sorted { $0.score > $1.score }
+    }
+
+    private static func makeDeviceOption(from device: AVCaptureDevice) -> CameraDeviceOption {
+        CameraDeviceOption(
+            uniqueID: device.uniqueID,
+            displayName: device.localizedName,
+            modelID: device.modelID,
+            isVirtual: isVirtualDevice(device)
+        )
+    }
+
+    static func discoverVideoDevices() -> [CameraDeviceOption] {
+        orderedVideoDevicesForAutoSelection().map { makeDeviceOption(from: $0.device) }
+    }
+
+    /// Prefer user-selected camera first. Without a user preference, favor physical cameras.
+    private func selectPreferredVideoDevice() -> AVCaptureDevice? {
+        let scoredDevices = Self.orderedVideoDevicesForAutoSelection()
+        guard !scoredDevices.isEmpty else {
+            return AVCaptureDevice.default(for: .video)
+        }
+
+        if #available(macOS 14.0, *) {
+            if let preferred = AVCaptureDevice.userPreferredCamera,
+               scoredDevices.contains(where: { $0.device.uniqueID == preferred.uniqueID }) {
+                logger.log(
+                    "Selected user preferred camera: \(preferred.localizedName, privacy: .public) (model: \(preferred.modelID, privacy: .public))"
+                )
+                return preferred
+            }
+        }
+
+        if let first = scoredDevices.first {
+            logger.log(
+                "Selected auto camera: \(first.device.localizedName, privacy: .public) (model: \(first.device.modelID, privacy: .public), score: \(first.score, privacy: .public))"
+            )
+            return first.device
+        }
+
+        return AVCaptureDevice.default(for: .video)
+    }
+
+    private func selectDevice(sourceMode: CameraSourceMode, manualDeviceID: String?) -> AVCaptureDevice? {
+        if sourceMode == .manual,
+           let manualDeviceID,
+           !manualDeviceID.isEmpty {
+            if let manualDevice = Self.discoveredVideoDevices().first(where: { $0.uniqueID == manualDeviceID }) {
+                logger.log(
+                    "Selected manual camera: \(manualDevice.localizedName, privacy: .public) (model: \(manualDevice.modelID, privacy: .public))"
+                )
+                return manualDevice
+            }
+            logger.log("Manual camera id \(manualDeviceID, privacy: .public) not found. Falling back to auto selection.")
+        }
+
+        return selectPreferredVideoDevice()
+    }
+
+    private func switchInputIfNeeded(to device: AVCaptureDevice) throws {
+        if activeInput?.device.uniqueID == device.uniqueID {
+            activeDevice = Self.makeDeviceOption(from: device)
+            return
+        }
+
+        let newInput = try AVCaptureDeviceInput(device: device)
+
+        session.beginConfiguration()
+        let previousInput = activeInput
+        if let previousInput {
+            session.removeInput(previousInput)
+        }
+
+        guard session.canAddInput(newInput) else {
+            if let previousInput, session.canAddInput(previousInput) {
+                session.addInput(previousInput)
+            }
+            session.commitConfiguration()
             throw CameraError.configurationFailed
+        }
+
+        session.addInput(newInput)
+        session.commitConfiguration()
+        activeInput = newInput
+        activeDevice = Self.makeDeviceOption(from: device)
+    }
+
+    private func configure(for device: AVCaptureDevice) throws {
+        if isConfigured {
+            try switchInputIfNeeded(to: device)
+            return
         }
 
         let input = try AVCaptureDeviceInput(device: device)
@@ -61,6 +174,8 @@ final class CameraManager: NSObject, @unchecked Sendable {
             throw CameraError.configurationFailed
         }
         session.addInput(input)
+        activeInput = input
+        activeDevice = Self.makeDeviceOption(from: device)
 
         output.alwaysDiscardsLateVideoFrames = true
         output.videoSettings = [
@@ -81,13 +196,44 @@ final class CameraManager: NSObject, @unchecked Sendable {
         isConfigured = true
     }
 
-    /// Start the continuous camera session.
-    func start() async throws {
+    /// Request camera permission. Returns true if granted.
+    static func requestPermission() async -> Bool {
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        switch status {
+        case .authorized:
+            return true
+        case .notDetermined:
+            return await AVCaptureDevice.requestAccess(for: .video)
+        default:
+            return false
+        }
+    }
+
+    /// Configure the capture session using auto selection.
+    func configure() throws {
+        guard let device = selectPreferredVideoDevice() else {
+            throw CameraError.configurationFailed
+        }
+        try configure(for: device)
+    }
+
+    /// Start the continuous camera session with source policy.
+    func start(sourceMode: CameraSourceMode, manualDeviceID: String?) async throws {
         guard await CameraManager.requestPermission() else {
             throw CameraError.notAuthorized
         }
-        try configure()
+
+        guard let device = selectDevice(sourceMode: sourceMode, manualDeviceID: manualDeviceID) else {
+            throw CameraError.configurationFailed
+        }
+
+        try configure(for: device)
         startSession()
+    }
+
+    /// Start the continuous camera session (backwards compatible).
+    func start() async throws {
+        try await start(sourceMode: .auto, manualDeviceID: nil)
     }
 
     /// Stop the camera session.

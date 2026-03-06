@@ -18,6 +18,11 @@ enum PowerSavingSettings {
     static let maxInactiveTimeoutSeconds: Double = 300
 }
 
+enum CameraSelectionSettings {
+    static let cameraSourceModeKey = "cameraSourceMode"
+    static let manualCameraDeviceIDKey = "manualCameraDeviceID"
+}
+
 /// Main orchestrator: continuous camera -> periodic analysis -> UI + notifications.
 @MainActor
 final class PostureEngine: ObservableObject {
@@ -42,8 +47,30 @@ final class PostureEngine: ObservableObject {
     @Published var currentJoints: DetectedJoints?
     @Published var bodyDetected = false
     @Published var powerState: MonitoringPowerState = .active
+    @Published var cameraSourceMode: CameraSourceMode = .auto {
+        didSet {
+            persistCameraSourceModeIfNeeded()
+            applyCameraSelectionIfMonitoring()
+        }
+    }
+    @Published var manualCameraDeviceID = "" {
+        didSet {
+            persistManualCameraDeviceIDIfNeeded()
+            applyCameraSelectionIfMonitoring()
+        }
+    }
+    @Published var availableCameraDevices: [CameraDeviceOption] = []
+    @Published var activeCameraDisplayName = "No active camera"
     @AppStorage(SensitivityMode.storageKey)
     private var sensitivityModeRawValue = SensitivityMode.defaultMode.rawValue
+    @AppStorage(CameraSelectionSettings.cameraSourceModeKey)
+    private var cameraSourceModeRawValue = CameraSourceMode.auto.rawValue {
+        didSet { syncCameraSourceModeFromStorage() }
+    }
+    @AppStorage(CameraSelectionSettings.manualCameraDeviceIDKey)
+    private var storedManualCameraDeviceID = "" {
+        didSet { syncManualCameraDeviceIDFromStorage() }
+    }
     @AppStorage(PowerSavingSettings.autoPauseWhenAwayKey)
     private var autoPauseEnabled = PowerSavingSettings.defaultAutoPauseWhenAway {
         didSet { handleAutoPauseSettingChanged() }
@@ -285,6 +312,7 @@ final class PostureEngine: ObservableObject {
     private var sessionResetCount = 0
     private var sessionLongestSlouchSeconds: TimeInterval = 0
     private var sessionCurrentSlouchStart: Date?
+    private var isSyncingCameraSelectionState = false
 
     // MARK: - Init
 
@@ -292,7 +320,9 @@ final class PostureEngine: ObservableObject {
         UNUserNotificationCenter.current().delegate = notificationService
         UserDefaults.standard.register(defaults: [
             PowerSavingSettings.autoPauseWhenAwayKey: PowerSavingSettings.defaultAutoPauseWhenAway,
-            PowerSavingSettings.inactiveTimeoutSecondsKey: PowerSavingSettings.defaultInactiveTimeoutSeconds
+            PowerSavingSettings.inactiveTimeoutSecondsKey: PowerSavingSettings.defaultInactiveTimeoutSeconds,
+            CameraSelectionSettings.cameraSourceModeKey: CameraSourceMode.auto.rawValue,
+            CameraSelectionSettings.manualCameraDeviceIDKey: ""
         ])
         handleInactiveTimeoutChanged()
 
@@ -314,6 +344,8 @@ final class PostureEngine: ObservableObject {
            let pos = CameraPosition(rawValue: saved) {
             cameraPosition = pos
         }
+        loadCameraSelectionSettings()
+        refreshCameraDevices()
         // Notification permission is requested after camera starts in OnboardingView.
 
         // Frame callback runs on camera's background queue
@@ -355,6 +387,105 @@ final class PostureEngine: ObservableObject {
         return frame
     }
 
+    private var resolvedManualCameraDeviceID: String? {
+        let trimmed = manualCameraDeviceID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    func refreshCameraDevices() {
+        availableCameraDevices = CameraManager.discoverVideoDevices()
+
+        if let manualID = resolvedManualCameraDeviceID,
+           !availableCameraDevices.contains(where: { $0.id == manualID }) {
+            manualCameraDeviceID = ""
+        }
+        refreshActiveCameraDisplayName()
+    }
+
+    func cameraDeviceID(for option: CameraDeviceOption) -> String {
+        option.id
+    }
+
+    func cameraDeviceDisplayName(for option: CameraDeviceOption) -> String {
+        option.displayName
+    }
+
+    private func persistCameraSourceModeIfNeeded() {
+        guard !isSyncingCameraSelectionState else { return }
+        if cameraSourceModeRawValue != cameraSourceMode.rawValue {
+            cameraSourceModeRawValue = cameraSourceMode.rawValue
+        }
+        refreshActiveCameraDisplayName()
+    }
+
+    private func persistManualCameraDeviceIDIfNeeded() {
+        guard !isSyncingCameraSelectionState else { return }
+        if storedManualCameraDeviceID != manualCameraDeviceID {
+            storedManualCameraDeviceID = manualCameraDeviceID
+        }
+        refreshActiveCameraDisplayName()
+    }
+
+    private func syncCameraSourceModeFromStorage() {
+        guard !isSyncingCameraSelectionState else { return }
+        let resolvedMode = CameraSourceMode(rawValue: cameraSourceModeRawValue) ?? .auto
+        guard cameraSourceMode != resolvedMode else { return }
+        isSyncingCameraSelectionState = true
+        cameraSourceMode = resolvedMode
+        isSyncingCameraSelectionState = false
+        refreshActiveCameraDisplayName()
+    }
+
+    private func syncManualCameraDeviceIDFromStorage() {
+        guard !isSyncingCameraSelectionState else { return }
+        guard manualCameraDeviceID != storedManualCameraDeviceID else { return }
+        isSyncingCameraSelectionState = true
+        manualCameraDeviceID = storedManualCameraDeviceID
+        isSyncingCameraSelectionState = false
+        refreshActiveCameraDisplayName()
+    }
+
+    private func loadCameraSelectionSettings() {
+        isSyncingCameraSelectionState = true
+        cameraSourceMode = CameraSourceMode(rawValue: cameraSourceModeRawValue) ?? .auto
+        manualCameraDeviceID = storedManualCameraDeviceID
+        isSyncingCameraSelectionState = false
+
+        if cameraSourceModeRawValue != cameraSourceMode.rawValue {
+            cameraSourceModeRawValue = cameraSourceMode.rawValue
+        }
+    }
+
+    private func refreshActiveCameraDisplayName() {
+        if let active = camera.activeDevice {
+            activeCameraDisplayName = active.displayName
+            return
+        }
+
+        if let manualID = resolvedManualCameraDeviceID,
+           let selected = availableCameraDevices.first(where: { $0.id == manualID }) {
+            activeCameraDisplayName = "\(selected.displayName) (selected)"
+            return
+        }
+
+        activeCameraDisplayName = "No active camera"
+    }
+
+    private func applyCameraSelectionIfMonitoring() {
+        guard isMonitoring else { return }
+        Task {
+            do {
+                try await camera.start(
+                    sourceMode: cameraSourceMode,
+                    manualDeviceID: resolvedManualCameraDeviceID
+                )
+                refreshCameraDevices()
+            } catch {
+                lastError = "Camera error: \(error.localizedDescription)"
+            }
+        }
+    }
+
     // MARK: - Monitoring
 
     func startMonitoring() {
@@ -364,11 +495,13 @@ final class PostureEngine: ObservableObject {
         lastError = nil
         resetMenuBarForIdle()
         startSessionTracking()
+        refreshCameraDevices()
         engineLog("startMonitoring called")
 
         Task {
             do {
-                try await camera.start()
+                try await camera.start(sourceMode: cameraSourceMode, manualDeviceID: resolvedManualCameraDeviceID)
+                refreshActiveCameraDisplayName()
                 // Small delay for camera warmup
                 try? await Task.sleep(nanoseconds: 300_000_000)
 
@@ -391,12 +524,14 @@ final class PostureEngine: ObservableObject {
                 lastError = "Camera access denied. Open System Settings → Privacy & Security → Camera and enable Turtleneck Coach."
                 isMonitoring = false
                 isCalibrating = false
+                refreshActiveCameraDisplayName()
                 calibrationManager.cancelCalibration()
                 resetSessionTracking()
             } catch {
                 lastError = "Camera error: \(error.localizedDescription)"
                 isMonitoring = false
                 isCalibrating = false
+                refreshActiveCameraDisplayName()
                 calibrationManager.cancelCalibration()
                 resetSessionTracking()
             }
@@ -411,6 +546,7 @@ final class PostureEngine: ObservableObject {
         analysisTimer = nil
         resetPowerManagementState()
         camera.stopSession()
+        refreshActiveCameraDisplayName()
         mediaPipeClient.disconnect()
         mediaPipeConnectAttempted = false
         currentFrame = nil
