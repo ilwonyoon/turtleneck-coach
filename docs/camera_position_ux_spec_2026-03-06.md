@@ -1,4 +1,4 @@
-# TurtleNeckCoach Camera Height UX Spec
+# TurtleNeckCoach Camera Position UX Spec
 Date: 2026-03-06
 Owner: PT_turtle experiment session
 
@@ -16,7 +16,7 @@ The UX problem is therefore:
 4. Avoid exposing unstable internals, especially around `lookingDown` vs `forwardHead` while that logic is still being tuned.
 
 ## 2. UX Goals
-1. Make the user-facing model simple: camera height relative to eyes.
+1. Make the user-facing model simple: camera position relative to eyes.
 2. Preserve current lightweight menu bar/sidebar interaction.
 3. Give users a clear place to inspect or override camera-height assumptions.
 4. Explain recalibration only when it is useful.
@@ -25,12 +25,12 @@ The UX problem is therefore:
 
 ## 3. Terminology
 Primary term:
-- `Camera Height`
+- `Camera Position`
 
 Primary values:
-- `Above Eye`
+- `Above Eye Level`
 - `Eye Level`
-- `Below Eye`
+- `Below Eye Level`
 - `Unknown`
 
 Secondary term:
@@ -53,7 +53,7 @@ Terms to avoid on user-facing compact surfaces:
 - `eye-level narrow helper`
 
 Rationale:
-- `Camera Height` is understandable and directly tied to setup.
+- `Camera Position` is understandable and directly tied to setup.
 - `Device` is still useful in Settings and diagnostics, but should not be framed as the main reason scores behave differently.
 
 ## 4. Surface Model
@@ -69,15 +69,15 @@ They should not attempt to explain scoring theory.
 
 ### 4.2 Settings
 Settings is the main place for:
-1. Viewing detected `Camera Height`
+1. Viewing detected `Camera Position`
 2. Overriding it manually if needed
 3. Seeing supporting `Device` metadata
 4. Understanding when recalibration is recommended
 
 ### 4.3 Calibration Flow
 Calibration is the right moment to explain:
-1. Why camera height matters
-2. That calibration is stored against the current camera height
+1. Why camera position matters
+2. That calibration is stored against the current camera position
 3. When setup changes may require recalibration
 
 ### 4.4 Help / Learn More
@@ -89,7 +89,7 @@ Help copy can carry the deeper explanation:
 ## 5. Settings Surface Spec
 ### 5.1 Section Title
 Use:
-- `Camera Height`
+- `Camera Position`
 
 Do not use:
 - `Camera Context`
@@ -97,23 +97,22 @@ Do not use:
 
 ### 5.2 Read-Only Summary Row
 Show:
-- `Camera Height: Eye Level`
+- `Camera Position: Eye Level`
 - `Source: Auto`
 
 If confidence is low:
-- `Camera Height: Unknown`
+- `Camera Position: Unknown`
 - `Source: Auto`
 - secondary helper text: `If this looks wrong, choose it manually below.`
 
 ### 5.3 Manual Override Control
 Control label:
-- `Camera Height Mode`
+- `Camera Position`
 
 Options:
-- `Auto`
-- `Above Eye`
+- `Above Eye Level`
 - `Eye Level`
-- `Below Eye`
+- `Below Eye Level`
 
 Behavior:
 - `Auto` is default
@@ -126,7 +125,7 @@ Settings may show a secondary row:
 - `Device: External Monitor`
 
 This row is informational only.
-It must not appear above `Camera Height` in visual hierarchy.
+It must not appear above `Camera Position` in visual hierarchy.
 
 ### 5.5 Setup Quality Rows
 Settings may show short health rows when available:
@@ -139,22 +138,22 @@ These are setup quality indicators, not posture states.
 ### 6.1 Pre-Calibration Copy
 Short copy near the calibration CTA:
 - `Sit naturally and look at your screen.`
-- `We'll calibrate for your current camera height.`
+- `We'll calibrate for your current camera position.`
 
 Optional secondary copy:
 - `If you move your camera higher or lower later, recalibration may help.`
 
 ### 6.2 Completion Copy
 On success:
-- `Calibrated for Eye Level camera height.`
+- `Calibrated for Eye Level camera position.`
 - `You can change this in Settings if needed.`
 
 If height is unknown:
 - `Calibration saved for your current setup.`
-- `If scores feel off, check Camera Height in Settings.`
+- `If scores feel off, check Camera Position in Settings.`
 
 ### 6.3 Recalibration Prompt Copy
-When setup quality or camera height changes enough to matter:
+When setup quality or camera position changes enough to matter:
 - `Camera setup changed. Recalibration recommended.`
 
 Do not say:
@@ -183,21 +182,21 @@ The menu bar must stay short.
 3. Posture summary
 - existing posture message system remains primary
 
-### 7.2 Compact Camera-Height Labels
+### 7.2 Compact Camera-Position Labels
 Do not show full explanatory phrases in the menu bar.
-If camera height is shown at all, use a compact secondary label only.
+If camera position is shown at all, use a compact secondary label only.
 
 Allowed examples:
-- `Above Eye`
+- `Above Eye Level`
 - `Eye Level`
-- `Below Eye`
+- `Below Eye Level`
 
 Disallowed examples:
 - `Camera is below eye level so scores may over-detect forward head`
 - `Looking down may collapse into forward head here`
 
-### 7.3 When To Show Camera Height In The Menu Bar
-Only show the camera height label when one of these is true:
+### 7.3 When To Show Camera Position In The Menu Bar
+Only show the camera position label when one of these is true:
 1. User just finished calibration
 2. User manually overrode the mode
 3. The app is asking for recalibration because setup changed
@@ -205,7 +204,7 @@ Only show the camera height label when one of these is true:
 Otherwise, keep the compact posture/status UI as it is.
 
 ### 7.4 Sidebar / Popover Rule
-If the sidebar or popover already has a small status chip area, camera height may appear as a single concise chip.
+If the sidebar or popover already has a small status chip area, camera position may appear as a single concise chip.
 Example:
 - `Eye Level`
 
@@ -228,17 +227,17 @@ Reason:
 ## 9. Rollout Phases
 ### Phase 1: Quiet Foundations
 - Keep menu bar/sidebar unchanged except for minimal setup prompts
-- Add `Camera Height` readout and manual override in Settings
-- Add calibration copy that references current camera height
+- Add `Camera Position` readout and manual override in Settings
+- Add calibration copy that references current camera position
 - Keep unstable internals hidden
 
 ### Phase 2: Soft Guidance
-- Show compact `Eye Level` / `Above Eye` / `Below Eye` chip after calibration
+- Show compact `Eye Level` / `Above Eye Level` / `Below Eye Level` chip after calibration
 - Add recalibration prompt when setup meaningfully changes
 - Keep all long explanation in Settings/help only
 
 ### Phase 3: Better Explanation
-- Add concise help entry explaining why camera height matters
+- Add concise help entry explaining why camera position matters
 - Add stronger setup guidance for below-eye users without cluttering live surfaces
 - Still avoid exposing `lookingDown` internals directly
 
@@ -248,14 +247,14 @@ Reason:
 
 ## 10. Copy Principles
 1. Explain setup, not algorithms.
-2. Prefer `Camera Height` over technical model names.
+2. Prefer `Camera Position` over technical model names.
 3. Keep live surfaces terse.
 4. Put longer explanation behind an explicit user action.
 5. Do not expose unstable posture distinctions as if they are final.
 
 ## 11. Acceptance Criteria
 1. Menu bar/sidebar remains as concise as today.
-2. Users can find and override `Camera Height` in Settings without needing support.
+2. Users can find and override `Camera Position` in Settings without needing support.
 3. Calibration copy explains why setup matters in one or two lines max.
 4. Device type appears only as secondary information.
 5. No user-facing surface exposes raw classifier internals or unstable `lookingDown` behavior yet.

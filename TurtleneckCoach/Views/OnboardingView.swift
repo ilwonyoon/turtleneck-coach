@@ -76,7 +76,7 @@ struct OnboardingView: View {
                 cameraDeniedBanner
             }
 
-            Text("When you start, sit upright for a few seconds so Turtleneck Coach can learn your posture.")
+            Text("When you start, sit upright for a few seconds so Turtleneck Coach can learn your posture for your current camera position.")
                 .font(DS.Font.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -145,7 +145,7 @@ struct OnboardingView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Calibration did not complete.")
                             .font(DS.Font.subheadMedium)
-                        Text("Keep your head centered and hold still.")
+                        Text("Look straight ahead in your usual setup and hold still.")
                             .font(DS.Font.subheadMedium)
                             .foregroundStyle(.secondary)
                     }
@@ -163,7 +163,7 @@ struct OnboardingView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Starting calibration...")
                             .font(DS.Font.subheadMedium)
-                        Text("Face the camera and hold still.")
+                        Text("Look straight ahead in your usual setup and hold still.")
                             .font(DS.Font.subheadMedium)
                             .foregroundStyle(.secondary)
                     }

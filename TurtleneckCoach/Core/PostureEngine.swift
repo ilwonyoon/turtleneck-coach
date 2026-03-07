@@ -69,7 +69,7 @@ final class PostureEngine: ObservableObject {
     @Published var activeCameraDisplayName = "No active camera"
     @Published private(set) var inferredCameraContext: CameraContext = .unknown
     @Published private(set) var inferredContextConfidence: CGFloat = 0
-    @Published private(set) var inferredLaptopSubcontext: LaptopSubcontext = .unknown
+    @Published private(set) var inferredFramingState: FramingState = .checking
     @Published private(set) var inferredContextSource: String = "auto"
     @AppStorage(SensitivityMode.storageKey)
     private var sensitivityModeRawValue = SensitivityMode.defaultMode.rawValue
@@ -1239,8 +1239,8 @@ final class PostureEngine: ObservableObject {
         if abs(inferredContextConfidence - inference.confidence) >= 0.01 {
             inferredContextConfidence = inference.confidence
         }
-        if inferredLaptopSubcontext != inference.subcontext {
-            inferredLaptopSubcontext = inference.subcontext
+        if inferredFramingState != inference.framingState {
+            inferredFramingState = inference.framingState
         }
         if inferredContextSource != inference.source {
             inferredContextSource = inference.source
@@ -1254,7 +1254,7 @@ final class PostureEngine: ObservableObject {
         let previous = lastContextInference
         let contextChanged =
             previous?.context != inference.context ||
-            previous?.subcontext != inference.subcontext ||
+            previous?.framingState != inference.framingState ||
             previous?.source != inference.source
         let confidenceChanged = abs((previous?.confidence ?? -1) - inference.confidence) >= 0.15
         let periodicLogDue = now.timeIntervalSince(lastContextLogAt) >= contextLogInterval
@@ -1268,7 +1268,7 @@ final class PostureEngine: ObservableObject {
         let reasonText = inference.reasons.isEmpty ? "none" : inference.reasons.joined(separator: "|")
         engineLog(
             "[CTX] context=\(inference.context.rawValue) conf=\(confText) " +
-            "sub=\(inference.subcontext.rawValue) source=\(inference.source) " +
+            "frame=\(inference.framingState.rawValue) source=\(inference.source) " +
             "faceRatio=\(ratioText) cam=\(camName) model=\(camModel) reasons=\(reasonText)"
         )
         lastContextInference = inference
@@ -1357,38 +1357,55 @@ final class PostureEngine: ObservableObject {
             faceSizeRatio = metrics.faceSizeNormalized / baseline.baselineFaceSize
         }
 
-        var subcontext: LaptopSubcontext = .unknown
+        var framingState: FramingState = .checking
         if faceSizeRatio > 0 {
             if faceSizeRatio > 1.22 {
-                subcontext = .tooNear
+                framingState = .tooNear
                 reasons.append("faceRatio:near")
             } else if faceSizeRatio < 0.82 {
-                subcontext = .tooFar
+                framingState = .tooFar
                 reasons.append("faceRatio:far")
             } else {
-                subcontext = .neutral
+                framingState = .stable
             }
 
             if let baseline,
-               subcontext == .neutral,
+               framingState == .stable,
                abs(metrics.headPitch - baseline.headPitch) > 8,
                faceSizeRatio < 0.95,
                noseY < 0.40 {
-                subcontext = .tiltBack
+                framingState = .tiltedBack
                 reasons.append("tiltBackHeuristic")
             }
         }
 
-        let totalScore = laptopScore + desktopScore
+        var eyeLevelScore: CGFloat = 0
+        if activeModel.contains("macbook") || activeName.contains("facetime") || activeName.contains("built-in") {
+            if faceSizeRatio > 0, faceSizeRatio < 0.96, noseY < 0.46 {
+                eyeLevelScore += 0.55
+                reasons.append("builtInHeuristic:eyeLevel")
+            } else {
+                laptopScore += 0.15
+                reasons.append("builtInHeuristic:belowEye")
+            }
+        }
+
+        let totalScore = laptopScore + desktopScore + eyeLevelScore
         var context: CameraContext = .unknown
         var confidence: CGFloat = 0
         var source = "auto"
 
         if totalScore > 0 {
-            let diff = abs(laptopScore - desktopScore)
-            confidence = min(1, diff / max(totalScore, 0.0001))
-            if confidence >= 0.25 {
-                context = laptopScore >= desktopScore ? .laptop : .desktop
+            let ranked: [(CameraContext, CGFloat)] = [
+                (.aboveEye, desktopScore),
+                (.eyeLevel, eyeLevelScore),
+                (.belowEye, laptopScore)
+            ].sorted { $0.1 > $1.1 }
+            let top = ranked[0]
+            let second = ranked.dropFirst().first?.1 ?? 0
+            confidence = min(1, (top.1 - second) / max(totalScore, 0.0001))
+            if top.1 > 0, confidence >= 0.18 {
+                context = top.0
             } else {
                 reasons.append("lowConfidence")
             }
@@ -1396,23 +1413,21 @@ final class PostureEngine: ObservableObject {
             reasons.append("noStrongHints")
         }
 
-        if cameraContextSelection != .auto {
-            context = cameraContextSelection == .desktop ? .desktop : .laptop
+        if let manualContext = cameraContextSelection.resolvedContext {
+            context = manualContext
             confidence = 1
             source = "manual"
             reasons.append("manualContextOverride")
         }
 
-        if context != .laptop {
-            subcontext = .unknown
-        } else if subcontext == .unknown {
-            subcontext = .neutral
+        if framingState == .checking, context != .unknown {
+            framingState = .stable
         }
 
         return CameraContextInference(
             context: context,
             confidence: confidence,
-            subcontext: subcontext,
+            framingState: framingState,
             source: source,
             faceSizeRatio: faceSizeRatio,
             reasons: reasons

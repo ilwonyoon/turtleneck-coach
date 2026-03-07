@@ -2,47 +2,103 @@ import Foundation
 import CoreGraphics
 
 enum CameraContext: String, Codable, CaseIterable {
-    case desktop
-    case laptop
+    case aboveEye = "desktop"
+    case eyeLevel = "eyeLevel"
+    case belowEye = "laptop"
     case unknown
 
     var displayName: String {
         switch self {
-        case .desktop: return "Raised Camera"
-        case .laptop: return "Screen-Top Camera"
-        case .unknown: return "Checking Setup"
+        case .aboveEye:
+            return "Above Eye Level"
+        case .eyeLevel:
+            return "Eye Level"
+        case .belowEye:
+            return "Below Eye Level"
+        case .unknown:
+            return "Checking"
+        }
+    }
+
+    var compactDisplayName: String {
+        switch self {
+        case .aboveEye:
+            return "Above Eye"
+        case .eyeLevel:
+            return "Eye Level"
+        case .belowEye:
+            return "Below Eye"
+        case .unknown:
+            return "Checking"
+        }
+    }
+
+    var exampleDescription: String {
+        switch self {
+        case .aboveEye:
+            return "Usually a separate monitor or webcam above the screen."
+        case .eyeLevel:
+            return "Usually a raised laptop or monitor near your eye line."
+        case .belowEye:
+            return "Usually a laptop sitting on the desk."
+        case .unknown:
+            return "Choose the closest match for your usual working setup."
         }
     }
 }
 
-enum LaptopSubcontext: String, Codable, CaseIterable {
-    case neutral
-    case tiltBack
+enum FramingState: String, Codable, CaseIterable {
+    case stable
+    case tiltedBack
     case tooNear
     case tooFar
-    case unknown
+    case checking
 
     var displayName: String {
         switch self {
-        case .neutral: return "Stable"
-        case .tiltBack: return "Tilted Back"
-        case .tooNear: return "Too Near"
-        case .tooFar: return "Too Far"
-        case .unknown: return "Checking"
+        case .stable:
+            return "Stable"
+        case .tiltedBack:
+            return "Tilted Back"
+        case .tooNear:
+            return "Too Near"
+        case .tooFar:
+            return "Too Far"
+        case .checking:
+            return "Checking"
         }
     }
 }
 
 enum CameraContextSelection: String, Codable, CaseIterable {
     case auto
-    case desktop
-    case laptop
+    case aboveEye = "desktop"
+    case eyeLevel = "eyeLevel"
+    case belowEye = "laptop"
 
     var displayName: String {
         switch self {
-        case .auto: return "Auto (Recommended)"
-        case .desktop: return "Raised Camera (Manual)"
-        case .laptop: return "Screen-Top Camera (Manual)"
+        case .auto:
+            return "Auto (Recommended)"
+        case .aboveEye:
+            return "Above Eye Level"
+        case .eyeLevel:
+            return "Eye Level"
+        case .belowEye:
+            return "Below Eye Level"
+        }
+    }
+
+    var resolvedContext: CameraContext? {
+        switch self {
+        case .auto:
+            return nil
+        case .aboveEye:
+            return .aboveEye
+        case .eyeLevel:
+            return .eyeLevel
+        case .belowEye:
+            return .belowEye
         }
     }
 }
@@ -50,7 +106,7 @@ enum CameraContextSelection: String, Codable, CaseIterable {
 struct CameraContextInference: Equatable {
     let context: CameraContext
     let confidence: CGFloat
-    let subcontext: LaptopSubcontext
+    let framingState: FramingState
     let source: String
     let faceSizeRatio: CGFloat
     let reasons: [String]

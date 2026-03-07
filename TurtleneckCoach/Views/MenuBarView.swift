@@ -316,7 +316,6 @@ struct MenuBarView: View {
 
     private var badgesRow: some View {
         HStack(spacing: 6) { // DS: one-off
-            badge(engine.cameraPosition.rawValue.capitalized, icon: "camera")
             badge(contextBadgeText, icon: "viewfinder")
 
             if engine.postureState.usingFallback {
@@ -332,21 +331,19 @@ struct MenuBarView: View {
     }
 
     private var contextBadgeText: String {
-        let context = engine.inferredCameraContext
-        let isManual = engine.inferredContextSource == "manual"
-        switch (context, isManual) {
-        case (.desktop, true):
-            return "Desktop Set"
-        case (.laptop, true):
-            return "Laptop Set"
-        case (.desktop, false):
-            return "Desk-like"
-        case (.laptop, false):
-            return "Laptop-like"
-        case (.unknown, true):
-            return "Context Set"
-        case (.unknown, false):
-            return "Context Auto"
+        if let manualContext = engine.cameraContextSelection.resolvedContext {
+            return manualContext.compactDisplayName
+        }
+
+        switch engine.inferredCameraContext {
+        case .aboveEye:
+            return "Above Eye"
+        case .eyeLevel:
+            return "Eye Level"
+        case .belowEye:
+            return "Below Eye"
+        case .unknown:
+            return "Checking"
         }
     }
 

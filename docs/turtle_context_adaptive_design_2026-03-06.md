@@ -95,7 +95,7 @@ Interpretation:
 ### 6.2 Why Vertical Relation Is The Primary Signal
 The scoring problem is fundamentally viewpoint-sensitive:
 - A camera above eye level changes facial and neck geometry differently from a camera below eye level
-- The same posture can project differently depending on camera height
+- The same posture can project differently depending on camera position
 - Looking down can mimic some forward-head signals even without equivalent neck translation
 
 A vertical-relation model is closer to the distortion source than a device-type model.
@@ -217,7 +217,7 @@ Runtime risks already seen in adjacent investigation:
 
 ### Scenario F: User Changes Tilt Or Distance Mid-Session
 - Flow: laptop screen tilts back, or the user moves farther away
-- System: preserves the same primary relation if camera height relative to eyes is unchanged, but marks distance/tilt as degraded context
+- System: preserves the same primary relation if camera position relative to eyes is unchanged, but marks distance/tilt as degraded context
 - Expected result: either soften scoring confidence or request recalibration instead of pretending the top-level context changed
 
 ### Scenario G: Ambiguous Or Poor Framing
@@ -287,7 +287,7 @@ Initial acceptance targets:
 The UX should reflect the new abstraction directly.
 
 Recommended presentation:
-1. Primary label: `Camera Height Relation`
+1. Primary label: `Camera Position Relation`
 2. Values: `Above Eye`, `Eye Level`, `Below Eye`, `Unknown`
 3. Secondary metadata: `Device: Laptop` or `Device: External Monitor`
 4. Support states: `Distance`, `Tilt`, `Framing Quality`

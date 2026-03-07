@@ -81,9 +81,15 @@ struct SettingsView: View {
         return "\(engine.inferredCameraContext.displayName) (\(source), \(confidence)%)"
     }
 
-    private var detectedLaptopSubcontextText: String {
-        guard engine.inferredCameraContext == .laptop else { return "—" }
-        return engine.inferredLaptopSubcontext.displayName
+    private var framingStateText: String {
+        engine.inferredFramingState.displayName
+    }
+
+    private var cameraPositionExampleText: String {
+        if let manualContext = engine.cameraContextSelection.resolvedContext {
+            return manualContext.exampleDescription
+        }
+        return engine.inferredCameraContext.exampleDescription
     }
 
     private let valueColumnWidth: CGFloat = 220
@@ -141,19 +147,6 @@ struct SettingsView: View {
 
                 LabeledContent("Camera Position") {
                     valueColumn {
-                        Picker("", selection: $engine.cameraPosition) {
-                            ForEach(CameraPosition.allCases, id: \.self) { position in
-                                Text(position.rawValue.capitalized).tag(position)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: menuWidth, alignment: .trailing)
-                    }
-                }
-
-                LabeledContent("Setup Hint") {
-                    valueColumn {
                         Picker("", selection: $engine.cameraContextSelection) {
                             ForEach(CameraContextSelection.allCases, id: \.self) { selection in
                                 Text(selection.displayName).tag(selection)
@@ -165,7 +158,7 @@ struct SettingsView: View {
                     }
                 }
 
-                LabeledContent("Detected Setup") {
+                LabeledContent("Detected Position") {
                     valueColumn {
                         Text(detectedContextText)
                             .foregroundStyle(.secondary)
@@ -173,9 +166,18 @@ struct SettingsView: View {
                     }
                 }
 
+                LabeledContent("Typical Setup") {
+                    valueColumn {
+                        Text(cameraPositionExampleText)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.trailing)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
                 LabeledContent("Framing Check") {
                     valueColumn {
-                        Text(detectedLaptopSubcontextText)
+                        Text(framingStateText)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -183,7 +185,7 @@ struct SettingsView: View {
             } header: {
                 Text("Camera")
             } footer: {
-                Text("Scoring depends on camera height and framing. Auto uses setup hints for calibration; manual lets you match the closest camera setup.")
+                Text("Scoring depends on camera position and framing. Auto detects the closest match; manual lets you choose Above Eye Level, Eye Level, or Below Eye Level.")
             }
 
             Section {

@@ -154,7 +154,7 @@ private var calibrateStep: some View {
     VStack(spacing: 16) {
         Text("Sit up straight")
             .font(.title3.weight(.semibold))
-        Text("Face the camera and hold still.")
+        Text("Look straight ahead in your usual setup and hold still.")
             .font(.subheadline)
             .foregroundColor(.secondary)
 
