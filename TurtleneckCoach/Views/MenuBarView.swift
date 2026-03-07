@@ -64,6 +64,7 @@ struct MenuBarView: View {
                                 }
                             }
                         }
+
                     }
 
                     // Calibration overlay (active only)
@@ -76,7 +77,7 @@ struct MenuBarView: View {
 
                     // Unified posture card (score + status + badges)
                     if engine.isMonitoring && !engine.isCalibrating && engine.bodyDetected {
-                        VStack(spacing: 12) {
+                        VStack(spacing: 10) {
                             PostureScoreView(
                                 score: engine.postureScore,
                                 emoji: engine.postureEmoji,
@@ -85,16 +86,19 @@ struct MenuBarView: View {
                             .animation(.easeInOut(duration: 0.8), value: engine.postureScore)
 
                             Divider()
-                            statusCard
+                            postureSummaryBlock
 
-                            Divider()
-                            badgesRow
+                            if hasSupplementalBadges {
+                                Divider()
+                                supplementalBadgesRow
+                            }
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(DS.Space.md)
+                        .padding(.horizontal, DS.Space.md)
+                        .padding(.vertical, DS.Space.sm)
                         .background(DS.Surface.overlay)
                         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-                    } else {
+                    } else if !engine.isCalibrating {
                         section(nil) {
                             statusCard
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -103,6 +107,8 @@ struct MenuBarView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
                         }
                     }
+
+                    cameraPositionMenuRow
 
                     // Controls
                     controlButtons
@@ -225,6 +231,68 @@ struct MenuBarView: View {
         }
     }
 
+    // MARK: - Camera Position
+
+    private var activeCameraPosition: CameraContext {
+        if let manualContext = engine.cameraContextSelection.resolvedContext {
+            return manualContext
+        }
+        return engine.inferredCameraContext
+    }
+
+    private var cameraPositionMenuTitle: String {
+        if engine.cameraContextSelection == .auto {
+            if activeCameraPosition == .unknown {
+                return "Auto"
+            }
+            return "Auto: \(activeCameraPosition.displayName)"
+        }
+        return activeCameraPosition.displayName
+    }
+
+    private var cameraPositionMenuRow: some View {
+        Menu {
+            Button("Auto (Recommended)") {
+                engine.cameraContextSelection = .auto
+            }
+
+            Divider()
+
+            Button("Above Eye Level  •  monitor/webcam above screen") {
+                engine.cameraContextSelection = .aboveEye
+            }
+
+            Button("Eye Level  •  camera roughly aligned with your eyes") {
+                engine.cameraContextSelection = .eyeLevel
+            }
+
+            Button("Below Eye Level  •  laptop below your eye line") {
+                engine.cameraContextSelection = .belowEye
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Text("Camera Position")
+                    .font(DS.Font.caption)
+                    .foregroundColor(.secondary)
+                    .textCase(.uppercase)
+                    .tracking(0.5)
+
+                Spacer()
+
+                Text(cameraPositionMenuTitle)
+                    .font(DS.Font.caption)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+    }
+
     // MARK: - Status Card
 
     private var statusCard: some View {
@@ -314,10 +382,12 @@ struct MenuBarView: View {
 
     // MARK: - Badges
 
-    private var badgesRow: some View {
-        HStack(spacing: 6) { // DS: one-off
-            badge(contextBadgeText, icon: "viewfinder")
+    private var hasSupplementalBadges: Bool {
+        engine.postureState.usingFallback || engine.goodPostureDuration >= 30
+    }
 
+    private var supplementalBadgesRow: some View {
+        HStack(spacing: 6) { // DS: one-off
             if engine.postureState.usingFallback {
                 badge("Eye Mode", icon: "eye")
             }
@@ -327,23 +397,6 @@ struct MenuBarView: View {
             }
 
             Spacer()
-        }
-    }
-
-    private var contextBadgeText: String {
-        if let manualContext = engine.cameraContextSelection.resolvedContext {
-            return manualContext.compactDisplayName
-        }
-
-        switch engine.inferredCameraContext {
-        case .aboveEye:
-            return "Above Eye"
-        case .eyeLevel:
-            return "Eye Level"
-        case .belowEye:
-            return "Below Eye"
-        case .unknown:
-            return "Checking"
         }
     }
 
@@ -361,6 +414,17 @@ struct MenuBarView: View {
         .padding(.vertical, 3) // DS: one-off
         .background(.quaternary.opacity(0.5))
         .clipShape(Capsule())
+    }
+
+    private var postureSummaryBlock: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(statusMainText)
+                .font(DS.Font.subheadMedium)
+            Text(statusSubText)
+                .font(DS.Font.caption)
+                .foregroundColor(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // MARK: - Head Position Widget

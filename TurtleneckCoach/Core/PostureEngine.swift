@@ -62,11 +62,14 @@ final class PostureEngine: ObservableObject {
     }
     @Published var cameraContextSelection: CameraContextSelection = .auto {
         didSet {
+            let previous = oldValue
             persistCameraContextSelectionIfNeeded()
+            handleCameraContextSelectionChanged(from: previous)
         }
     }
     @Published var availableCameraDevices: [CameraDeviceOption] = []
     @Published var activeCameraDisplayName = "No active camera"
+    @Published private(set) var isCalibrationStale = false
     @Published private(set) var inferredCameraContext: CameraContext = .unknown
     @Published private(set) var inferredContextConfidence: CGFloat = 0
     @Published private(set) var inferredFramingState: FramingState = .checking
@@ -570,6 +573,7 @@ final class PostureEngine: ObservableObject {
     private var sessionCurrentSlouchStart: Date?
     private var isSyncingCameraSelectionState = false
     private var isSyncingCameraContextSelectionState = false
+    private let contextSelectionRecalibrationMessage = "Camera Position changed. Recalibrating..."
 
     // MARK: - Init
 
@@ -785,6 +789,22 @@ final class PostureEngine: ObservableObject {
         }
         if cameraContextSelectionRawValue != cameraContextSelection.rawValue {
             cameraContextSelectionRawValue = cameraContextSelection.rawValue
+        }
+    }
+
+    private func handleCameraContextSelectionChanged(from previous: CameraContextSelection) {
+        guard previous != cameraContextSelection else { return }
+        guard !isSyncingCameraContextSelectionState else { return }
+
+        if calibrationData != nil {
+            isCalibrationStale = true
+        }
+
+        if isMonitoring {
+            startCalibration(reasonMessage: contextSelectionRecalibrationMessage)
+            engineLog("camera position selection changed \(previous.rawValue) -> \(cameraContextSelection.rawValue); auto-recalibrating")
+        } else {
+            engineLog("camera position selection changed \(previous.rawValue) -> \(cameraContextSelection.rawValue); calibration marked stale while paused")
         }
     }
 
@@ -1079,6 +1099,9 @@ final class PostureEngine: ObservableObject {
                 calibrationMessage = calResult.message
                 calibrationSuccess = calResult.isValid
                 isCalibrating = false
+                if calResult.isValid {
+                    isCalibrationStale = false
+                }
                 #if DEBUG
                 let now = Date()
                 startupPerfState?.calibrationCompletedAt = now
@@ -1994,11 +2017,11 @@ final class PostureEngine: ObservableObject {
 
     // MARK: - Calibration
 
-    func startCalibration() {
+    func startCalibration(reasonMessage: String? = nil) {
         calibrationManager.startCalibration()
         isCalibrating = true
         calibrationProgress = 0
-        calibrationMessage = ""
+        calibrationMessage = reasonMessage ?? ""
         calibrationSuccess = nil
 
         if !isMonitoring {
@@ -2015,6 +2038,7 @@ final class PostureEngine: ObservableObject {
         calibrationManager.cancelCalibration()
         CalibrationManager.clearSaved()
         calibrationData = nil
+        isCalibrationStale = false
         poseDetector.resetFaceBaseline()
         postureState = .initial
         isCalibrating = false

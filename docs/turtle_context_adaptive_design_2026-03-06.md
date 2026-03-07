@@ -280,25 +280,28 @@ Initial acceptance targets:
 
 ### Phase 4: Recalibration And UX Refinement
 - add lightweight user guidance when tilt/distance changes make calibration stale
-- expose manual override for `above_eye`, `eye_level`, `below_eye`
+- expose manual-first selection for `above_eye`, `eye_level`, `below_eye` directly in the popover
+- keep `auto` available, but visually secondary
 - keep device type visible only as supporting information
 
 ## 13. UX Implications
 The UX should reflect the new abstraction directly.
 
 Recommended presentation:
-1. Primary label: `Camera Position Relation`
-2. Values: `Above Eye`, `Eye Level`, `Below Eye`, `Unknown`
-3. Secondary metadata: `Device: Laptop` or `Device: External Monitor`
-4. Support states: `Distance`, `Tilt`, `Framing Quality`
+1. Primary control: `Camera Position`
+2. Manual-first values: `Above Eye Level`, `Eye Level`, `Below Eye Level`
+3. Secondary option: `Auto`
+4. Secondary metadata: `Device: Laptop` or `Device: External Monitor`
+5. Support states: `Distance`, `Tilt`, `Framing Quality`
 
 UX rule:
-- The primary label explains why scoring behaves differently
+- The primary compact surface should let the user choose the setup directly
 - Device type is informative, but not the thing the user is calibrating against
+- `Auto` should not dominate the control hierarchy
 
 Implementation note:
-- current shipped UI still uses `Desktop/Laptop` language in several places
-- that terminology should be treated as transitional until the vertical-relation UX is implemented
+- compact surfaces can still stay terse if the selector is short and manual-first
+- deeper explanation stays in Settings/help, not in the popover
 
 ## 14. Summary
 - The observed instability is better explained by camera geometry than by hardware category.

@@ -6,13 +6,6 @@ struct PostureScoreView: View {
     let emoji: String
     let scoreColor: Color
 
-    private var scoreLabel: String {
-        if score >= 80 { return "Strong posture" }
-        if score >= 60 { return "Quick adjustment" }
-        if score >= 40 { return "Time to reset" }
-        return "Take a short break"
-    }
-
     var body: some View {
         HStack(spacing: 14) { // DS: one-off
             // Activity Ring with emoji
@@ -46,9 +39,6 @@ struct PostureScoreView: View {
                         .font(DS.Font.callout)
                         .foregroundColor(.secondary)
                 }
-                Text(scoreLabel)
-                    .font(DS.Font.subhead)
-                    .foregroundColor(.secondary)
             }
 
             Spacer()

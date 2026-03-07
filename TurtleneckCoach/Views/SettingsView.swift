@@ -73,12 +73,11 @@ struct SettingsView: View {
     }
 
     private var detectedContextText: String {
-        let confidence = Int((engine.inferredContextConfidence * 100).rounded())
         let source = engine.inferredContextSource.capitalized
         if engine.inferredCameraContext == .unknown {
             return "Checking (\(source))"
         }
-        return "\(engine.inferredCameraContext.displayName) (\(source), \(confidence)%)"
+        return "\(engine.inferredCameraContext.displayName) (\(source))"
     }
 
     private var framingStateText: String {
