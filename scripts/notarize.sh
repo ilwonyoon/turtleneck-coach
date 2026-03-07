@@ -26,6 +26,10 @@ Usage: ./scripts/notarize.sh <DMG_PATH> [KEYCHAIN_PROFILE]
 Examples:
   ./scripts/notarize.sh ./TurtleneckCoach-1.0.0.dmg turtle-notary
   NOTARYTOOL_PROFILE=turtle-notary ./scripts/notarize.sh ./TurtleneckCoach-1.0.0.dmg
+
+Expected input:
+  - DMG created from a Developer ID signed app
+  - app signed with hardened runtime and timestamp
 USAGE
   exit 0
 fi
@@ -33,6 +37,12 @@ fi
 if [[ -z "${DMG_PATH}" ]]; then
   echo "error: missing DMG path." >&2
   echo "Run './scripts/notarize.sh --help' for usage." >&2
+  exit 1
+fi
+
+if [[ "${DMG_PATH}" == *.app ]] || [[ -d "${DMG_PATH}" && "${DMG_PATH}" == *.app/ ]]; then
+  echo "error: expected a DMG path, not an app bundle." >&2
+  echo "hint: run ./scripts/create-dmg.sh ./TurtleneckCoach.app first." >&2
   exit 1
 fi
 

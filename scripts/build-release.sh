@@ -4,6 +4,7 @@ set -euo pipefail
 # Build and sign TurtleneckCoach for distribution.
 # - Default signing is ad-hoc (-) so the script works immediately.
 # - Pass a Developer ID identity to enable hardened runtime automatically.
+# - This is the only supported app build entrypoint for DMG release.
 #
 # Usage:
 #   ./scripts/build-release.sh
@@ -37,6 +38,11 @@ Usage: ./scripts/build-release.sh [SIGNING_IDENTITY]
 Examples:
   ./scripts/build-release.sh
   ./scripts/build-release.sh "Developer ID Application: Your Name (TEAMID)"
+
+Release DMG flow:
+  1) ./scripts/build-release.sh "Developer ID Application: Your Name (TEAMID)"
+  2) ./scripts/create-dmg.sh ./TurtleneckCoach.app
+  3) ./scripts/notarize.sh ./TurtleneckCoach-<version>.dmg <keychain-profile>
 USAGE
   exit 0
 fi
@@ -55,6 +61,9 @@ if [[ ! -f "${ENTITLEMENTS_PATH}" ]]; then
   echo "error: entitlements file not found at ${ENTITLEMENTS_PATH}" >&2
   exit 1
 fi
+
+echo "info: release build entrypoint selected."
+echo "info: use ./build.sh only for local DEBUG development builds."
 
 echo "[1/6] Preparing clean app bundle..."
 rm -rf "${APP_BUNDLE}"
@@ -194,3 +203,8 @@ fi
 echo
 echo "Build complete:"
 echo "  ${APP_BUNDLE}"
+if [[ "${SIGNING_IDENTITY}" == "-" ]]; then
+  echo
+  echo "warning: app is ad-hoc signed and is NOT ready for public DMG distribution."
+  echo "warning: rerun with a Developer ID Application identity before notarization."
+fi

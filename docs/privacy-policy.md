@@ -2,58 +2,90 @@
 
 **Turtleneck Coach** — Posture Monitoring for macOS
 
-*Last updated: March 4, 2026*
+*Last updated: March 6, 2026*
 
 ## Summary
 
-Turtleneck Coach is a privacy-first posture monitoring app. All camera processing happens on your device. No images, video, or personal data are ever transmitted or stored remotely.
+Turtleneck Coach processes posture data on your Mac. The public DMG release does not create an account, does not send analytics, and does not upload camera frames or session data to a remote server.
 
-## Data Collection
+## What the App Uses
 
-### Camera Data
+### Camera
 
-- Camera frames are processed **entirely on-device** using Apple's Vision framework.
-- **No images or video are saved** to disk or transmitted over any network.
-- Frames are analyzed in real time and immediately discarded after processing.
+- The app uses your Mac camera to estimate posture in real time.
+- Camera processing happens locally on your device.
+- The app may use Apple's Vision framework and, when available, a local helper process for MediaPipe-based pose analysis.
+- The helper process communicates only through a local Unix domain socket on your Mac. It is not a cloud service.
+
+### Notifications
+
+- If you allow notifications, the app can show posture reminders through macOS Notification Center.
+- Notification preference and frequency settings are stored locally.
+
+## What the App Stores Locally
+
+### Calibration and Preferences
+
+The app stores a small amount of local settings data in macOS UserDefaults, including:
+
+- calibration baseline values
+- camera/setup preferences
+- sensitivity and notification settings
+- some window and onboarding preferences
 
 ### Session Statistics
 
-- The app stores **aggregate session statistics** locally on your Mac:
-  - Session duration, average posture score, good posture percentage
-  - Slouch event counts and correction counts
-- Statistics are stored in `~/Library/Application Support/TurtleneckCoach/`.
-- Session data is automatically pruned after **90 days**.
+The app stores session summaries locally in:
 
-### Calibration Data
+- `~/Library/Application Support/TurtleneckCoach/`
 
-- A baseline posture angle (CVA) is stored in macOS UserDefaults.
-- Calibration is performed locally each time you start the app.
+Stored session data may include:
+
+- session start and end time
+- monitored duration
+- average posture score
+- good-posture percentage
+- average CVA
+- slouch, reset, and bad-posture summary counts
+
+Session history is currently pruned after about 90 days.
+
+## Camera Frames and Images
+
+### Public DMG Release
+
+- The public DMG release is intended to process camera frames in memory.
+- It is not intended to save camera images or video during normal use.
+
+### Development / Debug Builds
+
+- Internal or debug builds may write temporary debug logs and labeled snapshot images to `/tmp` when diagnostic features are compiled in and used.
+- These debug artifacts are for testing and are not part of normal public use.
 
 ## Data Sharing
 
-- **No data is shared with third parties.**
-- **No analytics, telemetry, or crash reporting** services are used.
-- **No network connections** are made by the app (except the optional local-only MediaPipe server on a Unix socket).
+- No camera frames, posture data, or session summaries are sent to our servers.
+- No third-party analytics, ad SDKs, or crash-reporting services are included.
+- The app does not require sign-in or an online account.
 
-## Data Export
+## Export and User-Initiated File Access
 
-- You can export your session data as a JSON file via Settings > Export Session Data.
-- Export is **entirely user-initiated** — no automatic data collection occurs.
-- Exported data contains session statistics only; no images or personal identifiers.
+- You can export session summaries as a JSON file from Settings.
+- Export happens only when you choose a destination in the standard macOS save panel.
+- Exported files contain session statistics, not camera frames or video.
 
-## Personal Information
+## Privacy Policy Link and Feedback
 
-- Turtleneck Coach does **not** collect any personally identifiable information (PII).
-- No account creation, login, or registration is required.
-- The optional feedback feature uses your default email client — the app does not collect or store your email address.
+- The app includes a link to this privacy policy in Settings.
+- If you use the feedback action, the app opens your default mail app with a draft email. Your message is handled by your mail provider, not by Turtleneck Coach.
 
-## Children's Privacy
+## Children’s Privacy
 
-This app does not knowingly collect data from children under 13.
+Turtleneck Coach is not directed to children under 13, and we do not knowingly collect personal information from children.
 
 ## Changes to This Policy
 
-We may update this policy from time to time. Changes will be posted on this page with an updated revision date.
+We may update this policy from time to time. The latest version will be posted with an updated revision date.
 
 ## Contact
 

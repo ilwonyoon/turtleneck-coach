@@ -55,10 +55,23 @@ final class MediaPipeClient: @unchecked Sendable {
     private var socketFD: Int32 = -1
     private var pythonProcess: Process?
     private let queue = DispatchQueue(label: "mediapipe.client", qos: .userInitiated)
+    private let queueKey = DispatchSpecificKey<UInt8>()
+    private let queueKeyValue: UInt8 = 1
     private var _isConnected = false
     private var lastReliableCVA: CGFloat?
 
-    var isConnected: Bool { queue.sync { _isConnected } }
+    init() {
+        queue.setSpecific(key: queueKey, value: queueKeyValue)
+    }
+
+    private var isOnQueue: Bool {
+        DispatchQueue.getSpecific(key: queueKey) == queueKeyValue
+    }
+
+    var isConnected: Bool {
+        if isOnQueue { return _isConnected }
+        return queue.sync { _isConnected }
+    }
 
     // MARK: - Python Process Management
 
@@ -249,7 +262,7 @@ final class MediaPipeClient: @unchecked Sendable {
     }
 
     /// Disconnect from the server.
-    func disconnect() {
+    private func disconnectOnQueue() {
         _isConnected = false
         lastReliableCVA = nil
         if socketFD >= 0 {
@@ -259,14 +272,40 @@ final class MediaPipeClient: @unchecked Sendable {
         fileHandle = nil
     }
 
+    func disconnect() {
+        if isOnQueue {
+            disconnectOnQueue()
+        } else {
+            queue.sync {
+                self.disconnectOnQueue()
+            }
+        }
+    }
+
     /// Disconnect and stop the Python process.
-    func shutdown() {
+    private func shutdownOnQueue() {
         // Try sending shutdown message
         if _isConnected {
             _ = sendRaw(data: "SHUTDOWN".data(using: .utf8)!)
         }
-        disconnect()
+        disconnectOnQueue()
         stopPythonServer()
+    }
+
+    func shutdown() {
+        if isOnQueue {
+            shutdownOnQueue()
+        } else {
+            queue.sync {
+                self.shutdownOnQueue()
+            }
+        }
+    }
+
+    func shutdownAsync() {
+        queue.async {
+            self.shutdownOnQueue()
+        }
     }
 
     // MARK: - Frame Communication

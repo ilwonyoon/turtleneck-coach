@@ -1,8 +1,29 @@
 #!/bin/bash
-# Build and sign TurtleneckCoach
-set -e
+# Development build only.
+# Produces a local debug app with ad-hoc signing for fast iteration.
+# Do NOT use this script for Developer ID signing, notarization, or DMG release.
+set -euo pipefail
 
-echo "Building TurtleneckCoach..."
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+cat <<'USAGE'
+Usage: ./build.sh
+
+Development-only build:
+  - DEBUG compile
+  - ad-hoc signing (-)
+  - local app launch/testing
+
+Production DMG release:
+  ./scripts/build-release.sh "Developer ID Application: Your Name (TEAMID)"
+  ./scripts/create-dmg.sh ./TurtleneckCoach.app
+  ./scripts/notarize.sh ./TurtleneckCoach-<version>.dmg <keychain-profile>
+USAGE
+exit 0
+fi
+
+echo "Building TurtleneckCoach (development build)..."
+echo "warning: build.sh is dev-only and produces an ad-hoc signed DEBUG app."
+echo "warning: for any public DMG/notarized release, use ./scripts/build-release.sh instead."
 
 # Ensure app bundle structure exists
 mkdir -p TurtleneckCoach.app/Contents/MacOS
@@ -11,35 +32,8 @@ mkdir -p TurtleneckCoach.app/Contents/Resources
 # Copy app icon
 cp TurtleneckCoach/Resources/AppIcon.icns TurtleneckCoach.app/Contents/Resources/AppIcon.icns
 
-# Create Info.plist if missing
-if [ ! -f TurtleneckCoach.app/Contents/Info.plist ]; then
-cat > TurtleneckCoach.app/Contents/Info.plist << 'INFOPLIST'
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleIdentifier</key>
-    <string>com.turtleneck.detector</string>
-    <key>CFBundleName</key>
-    <string>Turtleneck Coach</string>
-    <key>CFBundleExecutable</key>
-    <string>TurtleneckCoach</string>
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleIconFile</key>
-    <string>AppIcon</string>
-    <key>LSUIElement</key>
-    <true/>
-    <key>NSCameraUsageDescription</key>
-    <string>Turtleneck Coach uses the camera to analyze your posture. Images are processed on-device and never stored.</string>
-</dict>
-</plist>
-INFOPLIST
-fi
+# Always copy the canonical plist so local builds match current app metadata.
+cp TurtleneckCoach/Resources/Info.plist TurtleneckCoach.app/Contents/Info.plist
 
 swiftc \
   TurtleneckCoach/DesignSystem/DesignTokens.swift \
@@ -90,4 +84,5 @@ codesign -s - --entitlements /dev/stdin TurtleneckCoach.app <<'ENTITLEMENTS'
 </plist>
 ENTITLEMENTS
 
-echo "Done! Run: open TurtleneckCoach.app"
+echo "Done! Local DEBUG app ready at ./TurtleneckCoach.app"
+echo "Run: open TurtleneckCoach.app"

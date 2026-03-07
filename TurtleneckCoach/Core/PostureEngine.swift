@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Combine
 import os
 import UserNotifications
@@ -574,11 +575,21 @@ final class PostureEngine: ObservableObject {
     private var isSyncingCameraSelectionState = false
     private var isSyncingCameraContextSelectionState = false
     private let contextSelectionRecalibrationMessage = "Camera Position changed. Recalibrating..."
+    private var appWillTerminateObserver: NSObjectProtocol?
 
     // MARK: - Init
 
     init() {
         UNUserNotificationCenter.current().delegate = notificationService
+        appWillTerminateObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleAppWillTerminate()
+            }
+        }
         UserDefaults.standard.register(defaults: [
             PowerSavingSettings.autoPauseWhenAwayKey: PowerSavingSettings.defaultAutoPauseWhenAway,
             PowerSavingSettings.inactiveTimeoutSecondsKey: PowerSavingSettings.defaultInactiveTimeoutSeconds,
@@ -646,10 +657,25 @@ final class PostureEngine: ObservableObject {
         }
     }
 
+    deinit {
+        if let appWillTerminateObserver {
+            NotificationCenter.default.removeObserver(appWillTerminateObserver)
+        }
+        mediaPipeConnectTask?.cancel()
+        mediaPipeClient.shutdown()
+    }
+
     private func engineLog(_ msg: String) {
         #if DEBUG
         DebugLogWriter.append("\(Date()): [ENGINE] \(msg)\n")
         #endif
+    }
+
+    private func handleAppWillTerminate() {
+        mediaPipeConnectTask?.cancel()
+        mediaPipeConnectTask = nil
+        isMediaPipeConnectInFlight = false
+        mediaPipeClient.shutdown()
     }
 
     private func scheduleMediaPipeConnectIfNeeded(logFailure: Bool) {
@@ -896,11 +922,11 @@ final class PostureEngine: ObservableObject {
         resetPowerManagementState()
         camera.stopSession()
         refreshActiveCameraDisplayName()
-        mediaPipeClient.disconnect()
-        mediaPipeConnectAttempted = false
-        isMediaPipeConnectInFlight = false
         mediaPipeConnectTask?.cancel()
         mediaPipeConnectTask = nil
+        mediaPipeClient.shutdownAsync()
+        mediaPipeConnectAttempted = false
+        isMediaPipeConnectInFlight = false
         currentFrame = nil
         currentJoints = nil
         bodyDetected = false
@@ -1025,6 +1051,8 @@ final class PostureEngine: ObservableObject {
                 scheduleMediaPipeConnectIfNeeded(logFailure: false)
             }
         }
+
+        guard isMonitoring || isProbe else { return }
 
         guard let result = detectionResult else {
             setDetectionState(bodyDetected: false, joints: nil)

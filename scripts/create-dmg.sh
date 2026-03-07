@@ -10,6 +10,7 @@ set -euo pipefail
 #   ./scripts/create-dmg.sh ./TurtleneckCoach.app [output_dir]
 # Optional:
 #   DMG_ICON_PATH=/path/to/icon.icns ./scripts/create-dmg.sh ./TurtleneckCoach.app
+#   ALLOW_ADHOC_DMG=1 ./scripts/create-dmg.sh ./TurtleneckCoach.app
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -24,6 +25,11 @@ Usage: ./scripts/create-dmg.sh [APP_PATH] [OUTPUT_DIR]
 Examples:
   ./scripts/create-dmg.sh ./TurtleneckCoach.app
   ./scripts/create-dmg.sh ./TurtleneckCoach.app ./dist
+
+Notes:
+  - For public release, the app should already be Developer ID signed.
+  - Ad-hoc signed apps are blocked by default; override only for local testing:
+      ALLOW_ADHOC_DMG=1 ./scripts/create-dmg.sh ./TurtleneckCoach.app
 USAGE
   exit 0
 fi
@@ -44,12 +50,34 @@ if ! command -v hdiutil >/dev/null 2>&1; then
   exit 1
 fi
 
+if ! command -v codesign >/dev/null 2>&1; then
+  echo "error: codesign not found." >&2
+  exit 1
+fi
+
 mkdir -p "${OUTPUT_DIR}"
 
 plist_get() {
   local key="$1"
   /usr/libexec/PlistBuddy -c "Print :${key}" "${INFO_PLIST}" 2>/dev/null || true
 }
+
+signature_summary="$(codesign -dv --verbose=4 "${APP_PATH}" 2>&1 || true)"
+if grep -q "Signature=adhoc" <<<"${signature_summary}"; then
+  if [[ "${ALLOW_ADHOC_DMG:-0}" != "1" ]]; then
+    cat >&2 <<'ERR'
+error: app bundle is ad-hoc signed.
+
+For public DMG release, first run:
+  ./scripts/build-release.sh "Developer ID Application: Your Name (TEAMID)"
+
+If you intentionally want a local test DMG, rerun with:
+  ALLOW_ADHOC_DMG=1 ./scripts/create-dmg.sh ./TurtleneckCoach.app
+ERR
+    exit 1
+  fi
+  echo "warning: continuing with ad-hoc signed app because ALLOW_ADHOC_DMG=1 was set." >&2
+fi
 
 APP_NAME="$(basename "${APP_PATH}" .app)"
 VERSION="$(plist_get CFBundleShortVersionString)"
@@ -132,3 +160,4 @@ fi
 
 echo "[4/4] Done."
 echo "Created: ${OUTPUT_DMG}"
+echo "Next step for public release: ./scripts/notarize.sh \"${OUTPUT_DMG}\" <keychain-profile>"
