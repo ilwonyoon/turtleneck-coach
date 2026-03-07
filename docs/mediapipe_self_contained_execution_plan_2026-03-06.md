@@ -85,6 +85,10 @@ Cons:
 Choose Option A.
 It is clearer, more deterministic, and easier to document as the official DMG runtime model.
 
+Important policy constraint:
+- do not ship a public DMG with a runtime vendored from Xcode's `Python3.framework`
+- use a separately sourced distributable Python runtime for the final release build
+
 ## Implementation Phases
 
 ### Phase 1: Freeze the public runtime contract
@@ -184,7 +188,7 @@ Exit criteria:
 
 3. Runtime provenance
 - the current vendored runtime is sourced from the local Xcode Python framework behind the development venv
-- this is technically reproducible on the current machine, but public distribution acceptability still needs review
+- this is technically reproducible on the current machine, but should not be treated as acceptable for public redistribution
 
 4. Dependency drift
 - Python dependency versions must be pinned and reproducible
@@ -196,6 +200,6 @@ Exit criteria:
 
 This track should be considered complete only when:
 1. the app bundle contains a fully self-contained MediaPipe runtime
-2. the app runs on a clean Apple Silicon macOS 14+ machine without system Python
+2. that runtime is sourced from a distributable Python build rather than Xcode's bundled Python payload
 3. stop/quit teardown still passes verification
 4. release docs match the packaged runtime exactly

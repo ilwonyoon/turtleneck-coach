@@ -236,7 +236,19 @@ For each landed track, record:
     - `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` when needed
 - Remaining blockers after batch 7:
   - execute clean-account QA against the DMG/app install path
-  - review whether vendoring the local Xcode Python payload is acceptable for public distribution or should be replaced with a separately sourced runtime
+  - replace the currently vendored Xcode Python payload with a separately sourced distributable runtime before public DMG release
+
+### 2026-03-06 (batch 8)
+- Distribution-policy review completed against Apple's official Xcode terms:
+  - current vendored runtime is sourced from Xcode's `Python3.framework`
+  - this should be treated as `No-Go` for public DMG distribution
+- Basis:
+  - the Xcode and Apple SDKs Agreement describes Apple Software as licensed for internal use
+  - the same agreement restricts redistribution of Apple Software, in whole or in part, unless otherwise expressly permitted by Apple in writing
+- Release policy decision:
+  - keep the vendored Xcode-backed runtime only as a local engineering proof-of-concept
+  - do not ship it in a public DMG
+  - replace it with a separately sourced distributable Python runtime before release
 
 ## Batch 1 Verification
 
