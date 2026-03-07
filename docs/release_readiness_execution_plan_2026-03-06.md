@@ -218,6 +218,22 @@ For each landed track, record:
     - `Resources/`
   - strict mode now validates vendoring completeness rather than failing purely because the venv resolves into Xcode
 - Remaining blockers after batch 6:
+  - replace Xcode-runtime provenance with a redistributable standalone runtime source
+  - validate DMG-installed startup on a clean account without repo or shell-PATH help
+
+### 2026-03-06 (batch 7)
+- Track A standalone runtime follow-up landed in clean release worktree:
+  - added `scripts/fetch-python-build-standalone.sh`
+  - added `scripts/prepare-python-packages.sh`
+  - `scripts/build-release.sh` now auto-fetches the pinned standalone runtime when cache is missing
+  - `scripts/build-release.sh` now rebuilds `python_packages/` against the standalone runtime during release staging
+- Local verification completed:
+  - `STRICT_SELF_CONTAINED_MEDIAPIPE=1 ./scripts/build-release.sh` passed using `python-build-standalone`
+  - the built app bundle contained bundled `python_server/`, `python_runtime/`, and `python_packages/`
+  - bundled `pose_server.py` launched successfully using only the bundled runtime and package paths
+- Remaining blockers after batch 7:
+  - clean-account QA still pending
+  - Apple signing/notarization still deferred
   - validate DMG-installed startup on a clean machine without repo or shell-PATH help
   - confirm notarized release behavior with vendored Python runtime once Apple account work is unblocked
 
@@ -236,7 +252,19 @@ For each landed track, record:
     - `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` when needed
 - Remaining blockers after batch 7:
   - execute clean-account QA against the DMG/app install path
-  - review whether vendoring the local Xcode Python payload is acceptable for public distribution or should be replaced with a separately sourced runtime
+  - replace the currently vendored Xcode Python payload with a separately sourced distributable runtime before public DMG release
+
+### 2026-03-06 (batch 8)
+- Distribution-policy review completed against Apple's official Xcode terms:
+  - current vendored runtime is sourced from Xcode's `Python3.framework`
+  - this should be treated as `No-Go` for public DMG distribution
+- Basis:
+  - the Xcode and Apple SDKs Agreement describes Apple Software as licensed for internal use
+  - the same agreement restricts redistribution of Apple Software, in whole or in part, unless otherwise expressly permitted by Apple in writing
+- Release policy decision:
+  - keep the vendored Xcode-backed runtime only as a local engineering proof-of-concept
+  - do not ship it in a public DMG
+  - replace it with a separately sourced distributable Python runtime before release
 
 ## Batch 1 Verification
 

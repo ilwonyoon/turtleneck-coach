@@ -34,7 +34,13 @@ PYTHON_PACKAGES_SOURCE="${PROJECT_ROOT}/python_packages"
 PYTHON_PACKAGES_DEST="${RESOURCES_DIR}/python_packages"
 PYTHON_VENV_SOURCE="${PROJECT_ROOT}/python_server/.venv"
 PREPARE_PYTHON_RUNTIME_SCRIPT="${PROJECT_ROOT}/scripts/prepare-python-runtime.sh"
+PREPARE_PYTHON_PACKAGES_SCRIPT="${PROJECT_ROOT}/scripts/prepare-python-packages.sh"
+FETCH_PYTHON_STANDALONE_SCRIPT="${PROJECT_ROOT}/scripts/fetch-python-build-standalone.sh"
 PREPARED_PYTHON_ROOT="${BUILD_DIR}/prepared_python_bundle"
+PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE="${PYTHON_RUNTIME_SOURCE_ROOT:-}"
+PYTHON_SITE_PACKAGES_SOURCE_OVERRIDE="${PYTHON_SITE_PACKAGES_SOURCE:-}"
+PYTHON_STANDALONE_CACHE_ROOT="${PYTHON_STANDALONE_CACHE_ROOT:-${PROJECT_ROOT}/build/python-build-standalone/current}"
+AUTO_FETCH_PYTHON_STANDALONE="${AUTO_FETCH_PYTHON_STANDALONE:-1}"
 
 STRICT_SELF_CONTAINED_MEDIAPIPE="${STRICT_SELF_CONTAINED_MEDIAPIPE:-0}"
 REQUIRE_COMPLETE_VENDORING="${REQUIRE_COMPLETE_VENDORING:-${STRICT_SELF_CONTAINED_MEDIAPIPE}}"
@@ -141,9 +147,36 @@ else
   echo "warning: ${PYTHON_SERVER_SOURCE} not found; continuing without bundled python_server."
 fi
 
+if [[ -z "${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}" && -d "${PYTHON_STANDALONE_CACHE_ROOT}" ]]; then
+  PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE="${PYTHON_STANDALONE_CACHE_ROOT}"
+  echo "info: using standalone runtime source from ${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}"
+fi
+
+if [[ -z "${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}" && "${AUTO_FETCH_PYTHON_STANDALONE}" == "1" && -x "${FETCH_PYTHON_STANDALONE_SCRIPT}" ]]; then
+  echo "info: standalone runtime cache not found; fetching pinned python-build-standalone runtime..."
+  "${FETCH_PYTHON_STANDALONE_SCRIPT}" "$(dirname "${PYTHON_STANDALONE_CACHE_ROOT}")"
+  if [[ -d "${PYTHON_STANDALONE_CACHE_ROOT}" ]]; then
+    PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE="${PYTHON_STANDALONE_CACHE_ROOT}"
+    echo "info: fetched standalone runtime source from ${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}"
+  fi
+fi
+
+if [[ ! -d "${PYTHON_RUNTIME_SOURCE}" && -n "${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}" && -d "${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}" ]]; then
+  echo "info: using standalone runtime root directly from ${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}"
+  PYTHON_RUNTIME_SOURCE="${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}"
+fi
+
+if [[ ! -d "${PYTHON_PACKAGES_SOURCE}" && -n "${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}" && -x "${PREPARE_PYTHON_PACKAGES_SCRIPT}" ]]; then
+  echo "info: rebuilding Python packages against standalone runtime ${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}"
+  "${PREPARE_PYTHON_PACKAGES_SCRIPT}" "${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}" "${PREPARED_PYTHON_ROOT}"
+  PYTHON_PACKAGES_SOURCE="${PREPARED_PYTHON_ROOT}/python_packages"
+fi
+
 if [[ ( ! -d "${PYTHON_RUNTIME_SOURCE}" || ! -d "${PYTHON_PACKAGES_SOURCE}" ) && -d "${PYTHON_VENV_SOURCE}" && -x "${PREPARE_PYTHON_RUNTIME_SCRIPT}" ]]; then
   echo "info: materializing bundled Python runtime/package layout from ${PYTHON_VENV_SOURCE}"
   REQUIRE_COMPLETE_VENDORING="${REQUIRE_COMPLETE_VENDORING}" \
+  PYTHON_RUNTIME_SOURCE_ROOT="${PYTHON_RUNTIME_SOURCE_ROOT_OVERRIDE}" \
+  PYTHON_SITE_PACKAGES_SOURCE="${PYTHON_SITE_PACKAGES_SOURCE_OVERRIDE}" \
     "${PREPARE_PYTHON_RUNTIME_SCRIPT}" "${PYTHON_VENV_SOURCE}" "${PREPARED_PYTHON_ROOT}"
   PYTHON_RUNTIME_SOURCE="${PREPARED_PYTHON_ROOT}/python_runtime"
   PYTHON_PACKAGES_SOURCE="${PREPARED_PYTHON_ROOT}/python_packages"
@@ -186,9 +219,11 @@ if [[ -f "${PYTHON_RUNTIME_SOURCE}/XCODE_FRAMEWORK_SOURCE.txt" ]]; then
   echo "info: see ${PYTHON_RUNTIME_SOURCE}/XCODE_FRAMEWORK_SOURCE.txt for provenance details."
 fi
 
-if [[ "${REQUIRE_COMPLETE_VENDORING}" == "1" && ! -f "${PYTHON_RUNTIME_SOURCE}/Python3" ]]; then
-  echo "error: strict MediaPipe vendoring requested, but ${PYTHON_RUNTIME_SOURCE}/Python3 is missing." >&2
-  exit 1
+if [[ "${REQUIRE_COMPLETE_VENDORING}" == "1" ]]; then
+  if [[ ! -f "${PYTHON_RUNTIME_SOURCE}/Python3" ]] && ! find "${PYTHON_RUNTIME_SOURCE}/lib" -maxdepth 1 -type f -name 'libpython*.dylib' | grep -q .; then
+    echo "error: strict MediaPipe vendoring requested, but no bundled runtime dylib was found under ${PYTHON_RUNTIME_SOURCE}." >&2
+    exit 1
+  fi
 fi
 
 echo "[3/6] Compiling Swift sources (release optimization)..."
