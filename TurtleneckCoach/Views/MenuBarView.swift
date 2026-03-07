@@ -333,14 +333,20 @@ struct MenuBarView: View {
 
     private var contextBadgeText: String {
         let context = engine.inferredCameraContext
-        let source = engine.inferredContextSource == "manual" ? "M" : "A"
-        switch context {
-        case .desktop:
-            return "Desktop \(source)"
-        case .laptop:
-            return "Laptop \(source)"
-        case .unknown:
-            return "Context ?"
+        let isManual = engine.inferredContextSource == "manual"
+        switch (context, isManual) {
+        case (.desktop, true):
+            return "Desktop Set"
+        case (.laptop, true):
+            return "Laptop Set"
+        case (.desktop, false):
+            return "Desk-like"
+        case (.laptop, false):
+            return "Laptop-like"
+        case (.unknown, true):
+            return "Context Set"
+        case (.unknown, false):
+            return "Context Auto"
         }
     }
 

@@ -8,9 +8,9 @@ enum CameraContext: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .desktop: return "Desktop"
-        case .laptop: return "Laptop"
-        case .unknown: return "Unknown"
+        case .desktop: return "Raised Camera"
+        case .laptop: return "Screen-Top Camera"
+        case .unknown: return "Checking Setup"
         }
     }
 }
@@ -24,11 +24,11 @@ enum LaptopSubcontext: String, Codable, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .neutral: return "Neutral"
-        case .tiltBack: return "Tilt Back"
+        case .neutral: return "Stable"
+        case .tiltBack: return "Tilted Back"
         case .tooNear: return "Too Near"
         case .tooFar: return "Too Far"
-        case .unknown: return "Unknown"
+        case .unknown: return "Checking"
         }
     }
 }
@@ -41,8 +41,8 @@ enum CameraContextSelection: String, Codable, CaseIterable {
     var displayName: String {
         switch self {
         case .auto: return "Auto (Recommended)"
-        case .desktop: return "Desktop (Manual)"
-        case .laptop: return "Laptop (Manual)"
+        case .desktop: return "Raised Camera (Manual)"
+        case .laptop: return "Screen-Top Camera (Manual)"
         }
     }
 }

@@ -76,7 +76,7 @@ struct SettingsView: View {
         let confidence = Int((engine.inferredContextConfidence * 100).rounded())
         let source = engine.inferredContextSource.capitalized
         if engine.inferredCameraContext == .unknown {
-            return "Unknown (\(source))"
+            return "Checking (\(source))"
         }
         return "\(engine.inferredCameraContext.displayName) (\(source), \(confidence)%)"
     }
@@ -152,7 +152,7 @@ struct SettingsView: View {
                     }
                 }
 
-                LabeledContent("Context Mode") {
+                LabeledContent("Setup Hint") {
                     valueColumn {
                         Picker("", selection: $engine.cameraContextSelection) {
                             ForEach(CameraContextSelection.allCases, id: \.self) { selection in
@@ -165,7 +165,7 @@ struct SettingsView: View {
                     }
                 }
 
-                LabeledContent("Detected Context") {
+                LabeledContent("Detected Setup") {
                     valueColumn {
                         Text(detectedContextText)
                             .foregroundStyle(.secondary)
@@ -173,7 +173,7 @@ struct SettingsView: View {
                     }
                 }
 
-                LabeledContent("Laptop State") {
+                LabeledContent("Framing Check") {
                     valueColumn {
                         Text(detectedLaptopSubcontextText)
                             .foregroundStyle(.secondary)
@@ -183,7 +183,7 @@ struct SettingsView: View {
             } header: {
                 Text("Camera")
             } footer: {
-                Text("Auto picks the recommended camera. Manual locks monitoring to your selected device. Context Mode controls camera-type inference (Auto/Desktop/Laptop) for calibration guidance and future adaptive tuning.")
+                Text("Scoring depends on camera height and framing. Auto uses setup hints for calibration; manual lets you match the closest camera setup.")
             }
 
             Section {
