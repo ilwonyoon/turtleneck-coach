@@ -1,6 +1,7 @@
 import AppKit
 import CoreGraphics
 import Foundation
+import os
 
 /// Result from the Python MediaPipe pose server.
 struct MediaPipeResult: Codable {
@@ -49,8 +50,38 @@ struct MediaPipeResult: Codable {
 /// Manages connection to the Python MediaPipe pose server via Unix Domain Socket.
 /// Also handles Python subprocess lifecycle.
 final class MediaPipeClient: @unchecked Sendable {
+    private struct ServerScriptLocation {
+        let script: String
+        let dir: String
+        let source: String
+        let bundled: Bool
+    }
+
+    private struct PythonLaunch {
+        let executable: String
+        let argumentsPrefix: [String]
+        let source: String
+    }
+
+    private struct BundledPythonLayout {
+        let runtimeRoot: String
+        let executable: String
+        let pythonHome: String
+        let pythonPathEntries: [String]
+        let dylibDirectories: [String]
+        let source: String
+    }
 
     private let socketPath = "/tmp/pt_turtle.sock"
+    private let logger = Logger(
+        subsystem: Bundle.main.bundleIdentifier ?? "com.turtleneck.detector",
+        category: "MediaPipeClient"
+    )
+    private let requiredServerRelativePaths = [
+        "pose_server.py",
+        "models/pose_landmarker_lite.task",
+        "models/face_landmarker.task",
+    ]
     private var fileHandle: FileHandle?
     private var socketFD: Int32 = -1
     private var pythonProcess: Process?
@@ -75,37 +106,294 @@ final class MediaPipeClient: @unchecked Sendable {
 
     // MARK: - Python Process Management
 
-    /// Find the pose_server.py script and its directory.
-    /// Uses ~/.pt_turtle/server/ to avoid ~/Documents TCC permission prompts.
-    private func findServerScript() -> (script: String, dir: String)? {
-        let candidates = [
-            // Primary: user-local install (no TCC permission needed)
-            NSHomeDirectory() + "/.pt_turtle/server/pose_server.py",
-            // Dev mode: relative to project source (when launched from Xcode)
-            Bundle.main.bundlePath + "/../python_server/pose_server.py",
-            // Bundled inside .app
-            Bundle.main.bundlePath + "/Contents/Resources/python_server/pose_server.py",
-            // CWD (for development)
-            "./python_server/pose_server.py",
-        ]
+    private var bundledPythonServerScript: String? {
+        Bundle.main.resourceURL?
+            .appendingPathComponent("python_server", isDirectory: true)
+            .appendingPathComponent("pose_server.py")
+            .path
+    }
 
-        for path in candidates {
-            let resolved = (path as NSString).standardizingPath
-            if FileManager.default.fileExists(atPath: resolved) {
-                let dir = (resolved as NSString).deletingLastPathComponent
-                return (resolved, dir)
+    private var bundledPythonRuntime: String? {
+        Bundle.main.resourceURL?
+            .appendingPathComponent("python_runtime", isDirectory: true)
+            .appendingPathComponent("bin", isDirectory: true)
+            .appendingPathComponent("python3")
+            .path
+    }
+
+    private var bundledPythonRuntimeRoot: String? {
+        Bundle.main.resourceURL?
+            .appendingPathComponent("python_runtime", isDirectory: true)
+            .path
+    }
+
+    private var bundledPythonPackagesRoot: String? {
+        Bundle.main.resourceURL?
+            .appendingPathComponent("python_packages", isDirectory: true)
+            .path
+    }
+
+    private func bundledPythonSitePackages() -> String? {
+        guard let packagesRoot = bundledPythonPackagesRoot else { return nil }
+        let libRoot = (packagesRoot as NSString).appendingPathComponent("lib")
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: libRoot) else {
+            return nil
+        }
+
+        for entry in entries.sorted() {
+            guard entry.hasPrefix("python") else { continue }
+            let sitePackages = ((libRoot as NSString).appendingPathComponent(entry) as NSString)
+                .appendingPathComponent("site-packages")
+            if FileManager.default.fileExists(atPath: sitePackages) {
+                return sitePackages
             }
         }
+
         return nil
     }
 
-    /// Find python3 executable — prefer venv next to pose_server.py.
-    private func findPython(serverDir: String) -> String {
+    private func versionedPythonDirectories(in libRoot: String) -> [String] {
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: libRoot) else {
+            return []
+        }
+
+        return entries.sorted().compactMap { entry in
+            guard entry.hasPrefix("python") else { return nil }
+            let candidate = (libRoot as NSString).appendingPathComponent(entry)
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: candidate, isDirectory: &isDirectory), isDirectory.boolValue else {
+                return nil
+            }
+            return (candidate as NSString).standardizingPath
+        }
+    }
+
+    private func versionedPythonZipArchives(in libRoot: String) -> [String] {
+        guard let entries = try? FileManager.default.contentsOfDirectory(atPath: libRoot) else {
+            return []
+        }
+
+        return entries.sorted().compactMap { entry in
+            guard entry.hasPrefix("python"), entry.hasSuffix(".zip") else { return nil }
+            let candidate = (libRoot as NSString).appendingPathComponent(entry)
+            guard FileManager.default.fileExists(atPath: candidate) else { return nil }
+            return (candidate as NSString).standardizingPath
+        }
+    }
+
+    private func bundledDylibDirectories(in runtimeRoot: String) -> [String] {
+        let fileManager = FileManager.default
+        let candidateDirs = [
+            (runtimeRoot as NSString).appendingPathComponent("lib"),
+            (runtimeRoot as NSString).appendingPathComponent("Python.framework/Versions/Current"),
+            (runtimeRoot as NSString).appendingPathComponent("Frameworks/Python.framework/Versions/Current"),
+        ]
+
+        return candidateDirs.compactMap { candidateDir in
+            guard let entries = try? fileManager.contentsOfDirectory(atPath: candidateDir) else { return nil }
+            return entries.contains(where: { $0.hasPrefix("libpython3") && $0.hasSuffix(".dylib") })
+                ? (candidateDir as NSString).standardizingPath
+                : nil
+        }
+    }
+
+    private func uniqueExistingPaths(_ candidates: [String]) -> [String] {
+        var seen = Set<String>()
+        var results: [String] = []
+
+        for candidate in candidates {
+            let resolved = (candidate as NSString).standardizingPath
+            guard FileManager.default.fileExists(atPath: resolved), !seen.contains(resolved) else { continue }
+            seen.insert(resolved)
+            results.append(resolved)
+        }
+
+        return results
+    }
+
+    private func joinedEnvironmentPath(existing: String?, prepending entries: [String]) -> String? {
+        let cleaned = entries.filter { !$0.isEmpty }
+        let existingEntries = (existing ?? "")
+            .split(separator: ":")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+        let allEntries = uniqueExistingPaths(cleaned + existingEntries)
+        return allEntries.isEmpty ? nil : allEntries.joined(separator: ":")
+    }
+
+    private func bundledStdlibEntries(runtimeRoot: String) -> [String] {
+        let libRoot = (runtimeRoot as NSString).appendingPathComponent("lib")
+        let frameworkLibRoots = [
+            (runtimeRoot as NSString).appendingPathComponent("Python.framework/Versions/Current/lib"),
+            (runtimeRoot as NSString).appendingPathComponent("Frameworks/Python.framework/Versions/Current/lib"),
+        ]
+        let stdlibCandidates = [libRoot] + frameworkLibRoots
+        return uniqueExistingPaths(stdlibCandidates.flatMap { candidateRoot in
+            versionedPythonZipArchives(in: candidateRoot) + versionedPythonDirectories(in: candidateRoot)
+        })
+    }
+
+    private func bundledPythonPathEntries(runtimeRoot: String) -> [String] {
+        let stdlibEntries = bundledStdlibEntries(runtimeRoot: runtimeRoot)
+        let runtimeSitePackages = stdlibEntries.compactMap { entry -> String? in
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: entry, isDirectory: &isDirectory), isDirectory.boolValue else {
+                return nil
+            }
+            return (entry as NSString).appendingPathComponent("site-packages")
+        }
+        let packageEntries = bundledPythonSitePackages().map { [$0] } ?? []
+        return uniqueExistingPaths(stdlibEntries + runtimeSitePackages + packageEntries)
+    }
+
+    private func resolveBundledPythonLayout() -> BundledPythonLayout? {
+        guard
+            let runtimeRoot = bundledPythonRuntimeRoot.map({ ($0 as NSString).standardizingPath }),
+            let executable = bundledPythonRuntime.map({ ($0 as NSString).standardizingPath }),
+            FileManager.default.fileExists(atPath: executable)
+        else {
+            return nil
+        }
+
+        let stdlibEntries = bundledStdlibEntries(runtimeRoot: runtimeRoot)
+        let pythonPathEntries = bundledPythonPathEntries(runtimeRoot: runtimeRoot)
+        let dylibDirectories = bundledDylibDirectories(in: runtimeRoot)
+        let hasVendoredStdlib = !stdlibEntries.isEmpty
+
+        guard hasVendoredStdlib else {
+            let checked = [
+                (runtimeRoot as NSString).appendingPathComponent("lib"),
+                (runtimeRoot as NSString).appendingPathComponent("Python.framework/Versions/Current/lib"),
+                (runtimeRoot as NSString).appendingPathComponent("Frameworks/Python.framework/Versions/Current/lib"),
+                bundledPythonPackagesRoot ?? "",
+            ]
+                .filter { !$0.isEmpty }
+                .joined(separator: ", ")
+            log("Bundled Python runtime missing vendored stdlib under python_runtime. Checked: \(checked)")
+            return nil
+        }
+
+        return BundledPythonLayout(
+            runtimeRoot: runtimeRoot,
+            executable: executable,
+            pythonHome: runtimeRoot,
+            pythonPathEntries: pythonPathEntries,
+            dylibDirectories: dylibDirectories,
+            source: "bundled-runtime"
+        )
+    }
+
+    private func missingRelativePaths(in serverDir: String) -> [String] {
+        requiredServerRelativePaths.filter { relativePath in
+            let candidate = (serverDir as NSString).appendingPathComponent(relativePath)
+            return !FileManager.default.fileExists(atPath: candidate)
+        }
+    }
+
+    private func releaseRuntimeCandidates(serverDir: String) -> [String] {
+        var candidates: [String] = []
+        if let bundledRuntime = bundledPythonRuntime {
+            candidates.append((bundledRuntime as NSString).standardizingPath)
+        }
+        if let bundledRoot = bundledPythonRuntimeRoot {
+            candidates.append((bundledRoot as NSString).appendingPathComponent("lib"))
+        }
+        #if DEBUG
+        candidates.append((serverDir as NSString).appendingPathComponent(".venv/bin/python3"))
+        #endif
+        return candidates
+    }
+
+    private func releasePackageCandidates() -> [String] {
+        var candidates: [String] = []
+        if let bundledRoot = bundledPythonRuntimeRoot {
+            candidates.append((bundledRoot as NSString).appendingPathComponent("lib"))
+        }
+        if let bundledSitePackages = bundledPythonSitePackages() {
+            candidates.append((bundledSitePackages as NSString).standardizingPath)
+        } else if let bundledRoot = bundledPythonPackagesRoot {
+            candidates.append((bundledRoot as NSString).standardizingPath)
+        }
+        return candidates
+    }
+
+    private func validateServerLayout(_ serverInfo: ServerScriptLocation) -> Bool {
+        let missing = missingRelativePaths(in: serverInfo.dir)
+        guard missing.isEmpty else {
+            let missingText = missing.joined(separator: ", ")
+            log("MediaPipe helper layout incomplete source=\(serverInfo.source) dir=\(serverInfo.dir) missing=\(missingText)")
+            return false
+        }
+        return true
+    }
+
+    private func logMissingReleaseServerLayout() {
+        let bundledScript = bundledPythonServerScript ?? "Contents/Resources/python_server/pose_server.py"
+        let bundledDir = ((bundledScript as NSString).deletingLastPathComponent as NSString).standardizingPath
+        let expected = requiredServerRelativePaths
+            .map { (bundledDir as NSString).appendingPathComponent($0) }
+            .joined(separator: ", ")
+        log("Bundled MediaPipe helper not found. Release build expects: \(expected)")
+    }
+
+    /// Find the pose_server.py script and its directory.
+    /// Public release should prefer bundled resources first; dev fallbacks stay DEBUG-only.
+    private func findServerScript() -> ServerScriptLocation? {
+        if let bundledScript = bundledPythonServerScript {
+            let resolved = (bundledScript as NSString).standardizingPath
+            if FileManager.default.fileExists(atPath: resolved) {
+                let dir = (resolved as NSString).deletingLastPathComponent
+                return ServerScriptLocation(script: resolved, dir: dir, source: "bundled", bundled: true)
+            }
+        }
+
+        #if DEBUG
+        let devCandidates = [
+            ServerScriptLocation(
+                script: (NSHomeDirectory() + "/.pt_turtle/server/pose_server.py" as NSString).standardizingPath,
+                dir: (NSHomeDirectory() + "/.pt_turtle/server" as NSString).standardizingPath,
+                source: "user-local",
+                bundled: false
+            ),
+            ServerScriptLocation(
+                script: (Bundle.main.bundlePath + "/../python_server/pose_server.py" as NSString).standardizingPath,
+                dir: ((Bundle.main.bundlePath + "/../python_server") as NSString).standardizingPath,
+                source: "bundle-relative-dev",
+                bundled: false
+            ),
+            ServerScriptLocation(
+                script: ("./python_server/pose_server.py" as NSString).standardizingPath,
+                dir: ("./python_server" as NSString).standardizingPath,
+                source: "cwd-dev",
+                bundled: false
+            ),
+        ]
+
+        for candidate in devCandidates where FileManager.default.fileExists(atPath: candidate.script) {
+            return candidate
+        }
+        #endif
+
+        return nil
+    }
+
+    /// Find python3 executable.
+    /// Public release should prefer a bundled runtime; DEBUG builds may fall back to local dev runtimes.
+    private func findPython(serverDir: String, preferBundled: Bool) -> PythonLaunch? {
+        if preferBundled, let bundledLayout = resolveBundledPythonLayout() {
+            return PythonLaunch(executable: bundledLayout.executable, argumentsPrefix: [], source: bundledLayout.source)
+        }
+
+        #if DEBUG
         let venvPython = (serverDir as NSString).appendingPathComponent(".venv/bin/python3")
         if FileManager.default.fileExists(atPath: venvPython) {
-            return venvPython
+            return PythonLaunch(executable: venvPython, argumentsPrefix: [], source: "local-venv")
         }
-        return "/usr/bin/env"
+
+        return PythonLaunch(executable: "/usr/bin/env", argumentsPrefix: ["python3"], source: "system-python3")
+        #else
+        return nil
+        #endif
     }
 
     /// Start the Python MediaPipe server process.
@@ -115,33 +403,96 @@ final class MediaPipeClient: @unchecked Sendable {
         }
 
         guard let serverInfo = findServerScript() else {
-            log("Cannot find pose_server.py")
+            #if DEBUG
+            log("Cannot find pose_server.py in bundled or development locations")
+            #else
+            logMissingReleaseServerLayout()
+            #endif
             return false
         }
 
-        let pythonPath = findPython(serverDir: serverInfo.dir)
-        let process = Process()
-
-        if pythonPath == "/usr/bin/env" {
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-            process.arguments = ["python3", serverInfo.script]
-        } else {
-            process.executableURL = URL(fileURLWithPath: pythonPath)
-            process.arguments = [serverInfo.script]
+        guard validateServerLayout(serverInfo) else {
+            return false
         }
 
+        let bundledLayout = serverInfo.bundled ? resolveBundledPythonLayout() : nil
+        #if !DEBUG
+        if serverInfo.bundled && bundledLayout == nil {
+            let packageCandidates = releasePackageCandidates().joined(separator: ", ")
+            log("Bundled Python runtime/package layout not usable for MediaPipe helper. Checked: \(packageCandidates)")
+            return false
+        }
+        #endif
+
+        guard let pythonLaunch = findPython(serverDir: serverInfo.dir, preferBundled: serverInfo.bundled) else {
+            let runtimeCandidates = releaseRuntimeCandidates(serverDir: serverInfo.dir).joined(separator: ", ")
+            log("No usable Python runtime for pose server source=\(serverInfo.source). Checked: \(runtimeCandidates)")
+            return false
+        }
+        let process = Process()
+        let stderrPipe = Pipe()
+
+        process.executableURL = URL(fileURLWithPath: pythonLaunch.executable)
+        process.arguments = pythonLaunch.argumentsPrefix + [serverInfo.script]
+        process.currentDirectoryURL = URL(fileURLWithPath: serverInfo.dir, isDirectory: true)
+
+        var environment = ProcessInfo.processInfo.environment
+        environment["PYTHONNOUSERSITE"] = "1"
+        if let bundledLayout {
+            environment["PYTHONHOME"] = bundledLayout.pythonHome
+            if let pythonPath = joinedEnvironmentPath(existing: environment["PYTHONPATH"], prepending: bundledLayout.pythonPathEntries) {
+                environment["PYTHONPATH"] = pythonPath
+            }
+            if let dylibPath = joinedEnvironmentPath(existing: environment["DYLD_LIBRARY_PATH"], prepending: bundledLayout.dylibDirectories) {
+                environment["DYLD_LIBRARY_PATH"] = dylibPath
+            }
+            if let dylibFallbackPath = joinedEnvironmentPath(existing: environment["DYLD_FALLBACK_LIBRARY_PATH"], prepending: bundledLayout.dylibDirectories) {
+                environment["DYLD_FALLBACK_LIBRARY_PATH"] = dylibFallbackPath
+            }
+        }
+        process.environment = environment
+
         process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
+        process.standardError = stderrPipe
 
         do {
             try process.run()
             pythonProcess = process
-            log("Started Python server (PID \(process.processIdentifier))")
+            if let bundledLayout {
+                log(
+                    "Started Python server (PID \(process.processIdentifier)) source=\(serverInfo.source) runtime=\(pythonLaunch.source) " +
+                        "pythonHome=\(bundledLayout.pythonHome) pythonPathCount=\(bundledLayout.pythonPathEntries.count) " +
+                        "dylibDirCount=\(bundledLayout.dylibDirectories.count)"
+                )
+            } else {
+                log("Started Python server (PID \(process.processIdentifier)) source=\(serverInfo.source) runtime=\(pythonLaunch.source)")
+            }
             // Give server time to start listening
             Thread.sleep(forTimeInterval: 1.5)
+            if !process.isRunning {
+                let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+                let stderrText = String(data: stderrData, encoding: .utf8)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if let stderrText, !stderrText.isEmpty {
+                    log("Python server exited during startup source=\(serverInfo.source) runtime=\(pythonLaunch.source) stderr=\(stderrText)")
+                } else if let reason = process.terminationReason as Process.TerminationReason? {
+                    log("Python server exited during startup source=\(serverInfo.source) runtime=\(pythonLaunch.source) status=\(process.terminationStatus) reason=\(reason.rawValue)")
+                } else {
+                    log("Python server exited during startup source=\(serverInfo.source) runtime=\(pythonLaunch.source)")
+                }
+                pythonProcess = nil
+                return false
+            }
             return true
         } catch {
-            log("Failed to start Python server: \(error)")
+            let stderrData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+            let stderrText = String(data: stderrData, encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if let stderrText, !stderrText.isEmpty {
+                log("Failed to start Python server source=\(serverInfo.source) runtime=\(pythonLaunch.source): \(error) stderr=\(stderrText)")
+            } else {
+                log("Failed to start Python server source=\(serverInfo.source) runtime=\(pythonLaunch.source): \(error)")
+            }
             return false
         }
     }
@@ -409,6 +760,7 @@ final class MediaPipeClient: @unchecked Sendable {
     }
 
     private func log(_ msg: String) {
+        logger.log("\(msg, privacy: .public)")
         #if DEBUG
         let line = "\(Date()): [MediaPipeClient] \(msg)\n"
         DebugLogWriter.append(line)

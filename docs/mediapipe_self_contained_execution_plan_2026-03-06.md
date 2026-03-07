@@ -167,6 +167,7 @@ Exit criteria:
 - [ ] socket path connects successfully
 - [ ] stop/quit tears helper down
 - [ ] Vision fallback remains functional
+- [x] vendored runtime smoke-imports `mediapipe` and `cv2` using bundled `PYTHONHOME` + `PYTHONPATH` on the development machine
 
 ### Release behavior
 - [ ] no debug-only data capture required for normal operation
@@ -181,10 +182,14 @@ Exit criteria:
 2. Signing/runtime issues
 - bundled executables and packages must work under the final signing/notarization flow
 
-3. Dependency drift
+3. Runtime provenance
+- the current vendored runtime is sourced from the local Xcode Python framework behind the development venv
+- this is technically reproducible on the current machine, but public distribution acceptability still needs review
+
+4. Dependency drift
 - Python dependency versions must be pinned and reproducible
 
-4. Operational complexity
+5. Operational complexity
 - release build script becomes more complex and must be treated as the single supported release path
 
 ## Rollout Gate
