@@ -1141,6 +1141,7 @@ final class PostureEngine: ObservableObject {
                 baseline: baseline,
                 previousState: postureState,
                 cameraPosition: cameraPosition,
+                cameraContext: cameraContextSelection.resolvedContext ?? inferredCameraContext,
                 yawDegrees: abs(currentHeadYaw),
                 sensitivityMode: sensitivityMode
             )

@@ -268,7 +268,8 @@ struct TestRunner {
             currentCVA: 55, baselineCVA: 55,
             currentPitch: 5, baselinePitch: 5,
             currentFaceSize: 0.1, baselineFaceSize: 0.1,
-            classification: .normal
+            classification: .normal,
+            cameraContext: .eyeLevel
         )
         let perfectOk = perfectScore >= 90
         print("  Perfect: \(perfectScore) (expect >=90): \(perfectOk ? "PASS" : "FAIL")")
@@ -281,7 +282,8 @@ struct TestRunner {
             currentPitch: 6, baselinePitch: 5,
             currentFaceSize: 0.086, baselineFaceSize: 0.1,
             currentForwardDepth: 0.05, baselineForwardDepth: 0.02,
-            classification: .forwardHead
+            classification: .forwardHead,
+            cameraContext: .eyeLevel
         )
         let mildFhpOk = mildFhpScore <= 60
         print("  Mild FHP: \(mildFhpScore) (expect <=60): \(mildFhpOk ? "PASS" : "FAIL")")
@@ -294,7 +296,8 @@ struct TestRunner {
             currentPitch: 8, baselinePitch: 5,
             currentFaceSize: 0.12, baselineFaceSize: 0.1,
             currentForwardDepth: 0.08, baselineForwardDepth: 0.02,
-            classification: .forwardHead
+            classification: .forwardHead,
+            cameraContext: .eyeLevel
         )
         let fhpOk = fhpScore < 60
         print("  FHP: \(fhpScore) (expect <60): \(fhpOk ? "PASS" : "FAIL")")
@@ -306,7 +309,8 @@ struct TestRunner {
             currentCVA: 38, baselineCVA: 55,
             currentPitch: 20, baselinePitch: 5,
             currentFaceSize: 0.1, baselineFaceSize: 0.1,
-            classification: .lookingDown
+            classification: .lookingDown,
+            cameraContext: .eyeLevel
         )
         let downVsFhp = downScore > fhpScore  // looking down should score higher than same CVA with FHP
         print("  LookingDown: \(downScore) vs FHP: \(fhpScore) (expect down > fhp): \(downVsFhp ? "PASS" : "FAIL")")
@@ -316,6 +320,32 @@ struct TestRunner {
         let goodVsMildOk = perfectScore - mildFhpScore >= 30
         print("  Good vs Mild FHP gap: \(perfectScore - mildFhpScore) (expect >=30): \(goodVsMildOk ? "PASS" : "FAIL")")
         if goodVsMildOk { totalPassed += 1 }
+
+        totalTests += 1
+        let belowEyeMildFhpScore = PostureAnalyzer.compositeRelativeScore(
+            currentCVA: 55, baselineCVA: 55,
+            currentPitch: 1, baselinePitch: 6,
+            currentFaceSize: 0.104, baselineFaceSize: 0.1,
+            currentForwardDepth: 0.10, baselineForwardDepth: 0.02,
+            classification: .forwardHead,
+            cameraContext: .belowEye
+        )
+        let belowEyeMildFhpOk = belowEyeMildFhpScore <= 78
+        print("  Below-eye mild FHP: \(belowEyeMildFhpScore) (expect <=78): \(belowEyeMildFhpOk ? "PASS" : "FAIL")")
+        if belowEyeMildFhpOk { totalPassed += 1 }
+
+        totalTests += 1
+        let belowEyeDownScore = PostureAnalyzer.compositeRelativeScore(
+            currentCVA: 60, baselineCVA: 62,
+            currentPitch: 10, baselinePitch: 5,
+            currentFaceSize: 0.099, baselineFaceSize: 0.1,
+            currentForwardDepth: 0.025, baselineForwardDepth: 0.02,
+            classification: .lookingDown,
+            cameraContext: .belowEye
+        )
+        let belowEyeDownOk = belowEyeDownScore >= 88 && belowEyeDownScore > belowEyeMildFhpScore
+        print("  Below-eye lookingDown: \(belowEyeDownScore) (expect >=88 and > below-eye mild FHP): \(belowEyeDownOk ? "PASS" : "FAIL")")
+        if belowEyeDownOk { totalPassed += 1 }
 
         // ===== Test 7: Eye-level narrow helper (log-only) =====
         print("\n=== Test 7: Eye-Level Narrow Helper ===")

@@ -69,6 +69,7 @@ struct PostureAnalyzer {
         baseline: CalibrationData,
         previousState: PostureState,
         cameraPosition: CameraPosition,
+        cameraContext: CameraContext = .unknown,
         yawDegrees: CGFloat = 0,
         sensitivityMode: SensitivityMode = currentSensitivityMode
     ) -> PostureState {
@@ -132,7 +133,8 @@ struct PostureAnalyzer {
                 currentPitch: metrics.headPitch, baselinePitch: baseline.headPitch,
                 currentFaceSize: metrics.faceSizeNormalized, baselineFaceSize: baseline.baselineFaceSize,
                 currentForwardDepth: metrics.forwardDepth, baselineForwardDepth: baseline.forwardDepth,
-                classification: classification
+                classification: classification,
+                cameraContext: cameraContext
             )
             let forwardDeviation = relativeChange(
                 baseline: baseline.headForwardRatio,
@@ -233,7 +235,8 @@ struct PostureAnalyzer {
         currentFaceSize: CGFloat, baselineFaceSize: CGFloat,
         currentForwardDepth: CGFloat = 0,
         baselineForwardDepth: CGFloat = 0,
-        classification: PostureClassification
+        classification: PostureClassification,
+        cameraContext: CameraContext = .unknown
     ) -> Int {
         let cvaScore = relativeScore(currentCVA: currentCVA, baselineCVA: baselineCVA)
         let cvaDrop = max(0, baselineCVA - currentCVA)
@@ -242,10 +245,12 @@ struct PostureAnalyzer {
         // Pitch contribution (looking down penalty)
         let pitchDelta = max(0, currentPitch - baselinePitch)
         let pitchPenalty = min(15.0, pitchDelta * 1.0)
+        let pitchDrop = max(0, baselinePitch - currentPitch)
 
         // Face size contribution (legacy near-camera lean)
         let faceSizeChange = baselineFaceSize > 0 ? (currentFaceSize - baselineFaceSize) / baselineFaceSize : 0
         let facePenalty = min(10.0, max(0, faceSizeChange) * 50.0)
+        let depthIncrease = currentForwardDepth - baselineForwardDepth
 
         var composite = CGFloat(cvaScore) - pitchPenalty - facePenalty
 
@@ -253,8 +258,7 @@ struct PostureAnalyzer {
         // This widens Good vs mild FHP separation without touching normal/lookingDown paths.
         if classification == .forwardHead {
             let faceShrinkPenalty = min(18.0, max(0, (-faceSizeChange) - 0.03) * 120.0)
-            let depthIncrease = max(0, currentForwardDepth - baselineForwardDepth)
-            let depthPenalty = min(12.0, depthIncrease * 120.0)
+            let depthPenalty = min(12.0, max(0, depthIncrease) * 120.0)
             let forwardHeadPenalty =
                 min(8.0, cvaDropRatio * 12.0) +
                 faceShrinkPenalty +
@@ -268,6 +272,17 @@ struct PostureAnalyzer {
         // Boost back if looking down (CVA drop is partly from neck flexion, not FHP)
         if classification == .lookingDown {
             composite += pitchPenalty * 0.5
+        }
+
+        if cameraContext == .belowEye && classification == .forwardHead {
+            let belowEyeForwardPenalty =
+                min(12.0, max(0, depthIncrease - 0.02) * 160.0) +
+                min(8.0, max(0, pitchDrop - 3.0) * 1.1)
+            composite -= belowEyeForwardPenalty
+
+            if cvaDropRatio < 0.05 && depthIncrease > 0.05 {
+                composite -= 3.0
+            }
         }
 
         return Int(round(min(98, max(2, composite))))
