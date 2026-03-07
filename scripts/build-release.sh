@@ -28,6 +28,16 @@ INFO_PLIST_DEST="${CONTENTS_DIR}/Info.plist"
 ENTITLEMENTS_PATH="${PROJECT_ROOT}/TurtleneckCoach/Resources/TurtleneckCoach.entitlements"
 PYTHON_SERVER_SOURCE="${PROJECT_ROOT}/python_server"
 PYTHON_SERVER_DEST="${RESOURCES_DIR}/python_server"
+PYTHON_RUNTIME_SOURCE="${PROJECT_ROOT}/python_runtime"
+PYTHON_RUNTIME_DEST="${RESOURCES_DIR}/python_runtime"
+PYTHON_PACKAGES_SOURCE="${PROJECT_ROOT}/python_packages"
+PYTHON_PACKAGES_DEST="${RESOURCES_DIR}/python_packages"
+PYTHON_VENV_SOURCE="${PROJECT_ROOT}/python_server/.venv"
+PREPARE_PYTHON_RUNTIME_SCRIPT="${PROJECT_ROOT}/scripts/prepare-python-runtime.sh"
+PREPARED_PYTHON_ROOT="${BUILD_DIR}/prepared_python_bundle"
+
+STRICT_SELF_CONTAINED_MEDIAPIPE="${STRICT_SELF_CONTAINED_MEDIAPIPE:-0}"
+REQUIRE_COMPLETE_VENDORING="${REQUIRE_COMPLETE_VENDORING:-${STRICT_SELF_CONTAINED_MEDIAPIPE}}"
 
 SIGNING_IDENTITY="${1:-${SIGNING_IDENTITY:--}}"
 
@@ -64,6 +74,10 @@ fi
 
 echo "info: release build entrypoint selected."
 echo "info: use ./build.sh only for local DEBUG development builds."
+
+if [[ "${REQUIRE_COMPLETE_VENDORING}" == "1" ]]; then
+  echo "info: strict MediaPipe vendoring enabled (release build will fail if vendored runtime layout is incomplete)."
+fi
 
 echo "[1/6] Preparing clean app bundle..."
 rm -rf "${APP_BUNDLE}"
@@ -125,6 +139,56 @@ if [[ -d "${PYTHON_SERVER_SOURCE}" ]]; then
   fi
 else
   echo "warning: ${PYTHON_SERVER_SOURCE} not found; continuing without bundled python_server."
+fi
+
+if [[ ( ! -d "${PYTHON_RUNTIME_SOURCE}" || ! -d "${PYTHON_PACKAGES_SOURCE}" ) && -d "${PYTHON_VENV_SOURCE}" && -x "${PREPARE_PYTHON_RUNTIME_SCRIPT}" ]]; then
+  echo "info: materializing bundled Python runtime/package layout from ${PYTHON_VENV_SOURCE}"
+  REQUIRE_COMPLETE_VENDORING="${REQUIRE_COMPLETE_VENDORING}" \
+    "${PREPARE_PYTHON_RUNTIME_SCRIPT}" "${PYTHON_VENV_SOURCE}" "${PREPARED_PYTHON_ROOT}"
+  PYTHON_RUNTIME_SOURCE="${PREPARED_PYTHON_ROOT}/python_runtime"
+  PYTHON_PACKAGES_SOURCE="${PREPARED_PYTHON_ROOT}/python_packages"
+fi
+
+if [[ -d "${PYTHON_RUNTIME_SOURCE}" ]]; then
+  echo "info: bundling python runtime from ${PYTHON_RUNTIME_SOURCE}"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude '__pycache__' \
+      --exclude '.DS_Store' \
+      "${PYTHON_RUNTIME_SOURCE}/" "${PYTHON_RUNTIME_DEST}/"
+  else
+    rm -rf "${PYTHON_RUNTIME_DEST}"
+    mkdir -p "${PYTHON_RUNTIME_DEST}"
+    ditto "${PYTHON_RUNTIME_SOURCE}" "${PYTHON_RUNTIME_DEST}"
+  fi
+else
+  echo "warning: ${PYTHON_RUNTIME_SOURCE} not found; release build is not yet MediaPipe self-contained." >&2
+fi
+
+if [[ -d "${PYTHON_PACKAGES_SOURCE}" ]]; then
+  echo "info: bundling python packages from ${PYTHON_PACKAGES_SOURCE}"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude '__pycache__' \
+      --exclude '.DS_Store' \
+      "${PYTHON_PACKAGES_SOURCE}/" "${PYTHON_PACKAGES_DEST}/"
+  else
+    rm -rf "${PYTHON_PACKAGES_DEST}"
+    mkdir -p "${PYTHON_PACKAGES_DEST}"
+    ditto "${PYTHON_PACKAGES_SOURCE}" "${PYTHON_PACKAGES_DEST}"
+  fi
+else
+  echo "warning: ${PYTHON_PACKAGES_SOURCE} not found; release build is not yet MediaPipe self-contained." >&2
+fi
+
+if [[ -f "${PYTHON_RUNTIME_SOURCE}/XCODE_FRAMEWORK_SOURCE.txt" ]]; then
+  echo "info: prepared Python runtime was vendored from the local Xcode Python framework source."
+  echo "info: see ${PYTHON_RUNTIME_SOURCE}/XCODE_FRAMEWORK_SOURCE.txt for provenance details."
+fi
+
+if [[ "${REQUIRE_COMPLETE_VENDORING}" == "1" && ! -f "${PYTHON_RUNTIME_SOURCE}/Python3" ]]; then
+  echo "error: strict MediaPipe vendoring requested, but ${PYTHON_RUNTIME_SOURCE}/Python3 is missing." >&2
+  exit 1
 fi
 
 echo "[3/6] Compiling Swift sources (release optimization)..."

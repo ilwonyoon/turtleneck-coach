@@ -33,6 +33,9 @@ These items are intentionally deferred and are not blockers for the current engi
 4. Final notarization submission to Apple
 5. Clean-machine QA execution until a suitable test Mac or fresh macOS account is available
 
+Fallback guidance when no second Mac is available:
+- `docs/clean_machine_qa_fallback_2026-03-06.md`
+
 ## Track Ownership
 
 Track A: Release docs and distribution flow
@@ -121,6 +124,13 @@ Master-only integration files:
 - [ ] Notarization handoff section written for later execution.
 - [ ] Go/No-Go status updated after each track lands.
 
+### E. MediaPipe self-contained packaging prep
+- [x] A reproducible prep script exists for materializing bundled Python layout from `python_server/.venv`.
+- [x] Release build path can consume prepared Python runtime/package layout.
+- [x] Prepared runtime now vendors the interpreter, `Python3` dylib, stdlib, and framework resources from the Xcode Python framework source backing the local venv.
+- [ ] Bundled MediaPipe runtime is validated on a clean machine after DMG install.
+- [ ] Clean-machine startup is validated with bundled MediaPipe assets only.
+
 ## Verification Notes Template
 
 For each landed track, record:
@@ -174,6 +184,60 @@ For each landed track, record:
   - write clean-machine release QA checklist
   - execute clean-machine release QA once a suitable environment is available
 
+### 2026-03-06 (batch 4, in progress)
+- MediaPipe self-contained phase 1 started:
+  - release runtime now prefers bundled `python_server` and bundled `python_runtime`
+  - dev-oriented runtime/script fallbacks are constrained to DEBUG paths
+  - release build script now has explicit hooks for bundling `python_runtime/` and `python_packages/`
+- Verification so far:
+  - `./build.sh` passed
+  - `test_logic.swift` passed (`71/71`)
+- Remaining work inside this track:
+  - provide actual bundled runtime/package layout
+  - validate clean-machine startup without system Python
+
+### 2026-03-06 (batch 5)
+- Track A MediaPipe packaging prep landed:
+  - added `scripts/prepare-python-runtime.sh`
+  - release build can now materialize `python_runtime/` + `python_packages/` from local `python_server/.venv`
+  - release build warns if the prepared runtime provenance is the local Xcode Python framework
+  - strict mode added: `STRICT_SELF_CONTAINED_MEDIAPIPE=1`
+- Current limitation discovered from local assets:
+  - `python_server/.venv/bin/python3` resolves to Xcode's bundled Python
+  - this means the vendored release runtime currently derives from local Xcode assets and still needs clean-machine validation before public release
+- Remaining blockers after batch 5:
+  - validate DMG-installed startup on a clean machine without repo or shell-PATH help
+
+### 2026-03-06 (batch 6)
+- Track A MediaPipe vendoring follow-up landed:
+  - `scripts/prepare-python-runtime.sh` now vendors the Xcode Python framework payload behind the local venv instead of copying only the resolved executable
+  - prepared `python_runtime/` now includes:
+    - `bin/python3`
+    - `Python3`
+    - `lib/python3.9/` stdlib
+    - `Resources/`
+  - strict mode now validates vendoring completeness rather than failing purely because the venv resolves into Xcode
+- Remaining blockers after batch 6:
+  - validate DMG-installed startup on a clean machine without repo or shell-PATH help
+  - confirm notarized release behavior with vendored Python runtime once Apple account work is unblocked
+
+### 2026-03-06 (batch 7)
+- Track A/Track C integration landed:
+  - vendored runtime prep now runs a smoke import against the prepared runtime using:
+    - `PYTHONHOME=<python_runtime>`
+    - `PYTHONPATH=<python_packages>/lib/python3.9/site-packages`
+  - strict prep verification passed locally with:
+    - `REQUIRE_COMPLETE_VENDORING=1 ./scripts/prepare-python-runtime.sh`
+  - strict release build path passed locally with:
+    - `STRICT_SELF_CONTAINED_MEDIAPIPE=1 ./scripts/build-release.sh`
+  - `MediaPipeClient` now launches the bundled helper with explicit bundled runtime environment:
+    - `PYTHONHOME`
+    - `PYTHONPATH`
+    - `DYLD_LIBRARY_PATH` / `DYLD_FALLBACK_LIBRARY_PATH` when needed
+- Remaining blockers after batch 7:
+  - execute clean-account QA against the DMG/app install path
+  - review whether vendoring the local Xcode Python payload is acceptable for public distribution or should be replaced with a separately sourced runtime
+
 ## Batch 1 Verification
 
 ### Integrated verification
@@ -201,6 +265,42 @@ For each landed track, record:
 
 ## Next Batch
 
-1. Implement MediaPipe self-contained packaging/runtime from `docs/mediapipe_self_contained_execution_plan_2026-03-06.md`.
-2. Write the clean-machine DMG smoke checklist.
-3. Execute clean-machine release QA once a suitable environment is available.
+1. Re-run `scripts/prepare-python-runtime.sh` and confirm `VALIDATION.txt` shows a complete vendored runtime layout.
+2. Re-run `scripts/build-release.sh` with `STRICT_SELF_CONTAINED_MEDIAPIPE=1`.
+3. Write the clean-machine DMG smoke checklist.
+4. Execute clean-machine release QA once a suitable environment is available.
+5. Confirm whether the vendored Xcode Python payload is acceptable for public distribution or needs replacement with a separately sourced runtime.
+
+## Operator Steps For Current MediaPipe Packaging Prep
+
+These steps now vendor the currently available Xcode-backed Python framework assets into a bundle-shaped runtime layout. They do not yet replace clean-machine QA or final distribution-policy review.
+
+1. Prepare bundled Python layout from the local venv:
+   - `./scripts/prepare-python-runtime.sh`
+2. Review the output:
+   - `build/python_bundle_prep/python_runtime/`
+   - `build/python_bundle_prep/python_packages/`
+   - `build/python_bundle_prep/VALIDATION.txt`
+3. Confirm the vendored runtime payload exists:
+   - `build/python_bundle_prep/python_runtime/bin/python3`
+   - `build/python_bundle_prep/python_runtime/Python3`
+   - `build/python_bundle_prep/python_runtime/lib/python3.9/`
+   - `build/python_bundle_prep/python_runtime/Resources/`
+4. Review provenance and validation notes:
+   - `build/python_bundle_prep/python_runtime/XCODE_FRAMEWORK_SOURCE.txt`
+   - `build/python_bundle_prep/VALIDATION.txt`
+5. If you want the prep step to fail unless the vendored runtime layout is complete:
+   - `REQUIRE_COMPLETE_VENDORING=1 ./scripts/prepare-python-runtime.sh`
+6. Build the release app:
+   - `./scripts/build-release.sh "Developer ID Application: Your Name (TEAMID)"`
+7. To enforce strict failure for incomplete vendoring during the release build:
+   - `STRICT_SELF_CONTAINED_MEDIAPIPE=1 ./scripts/build-release.sh "Developer ID Application: Your Name (TEAMID)"`
+8. Before public release, still require:
+   - DMG-installed startup validation on a clean machine
+   - final signing/notarization once Apple account setup is unblocked
+
+## Current Limitations
+
+1. The vendored runtime currently derives from the local Xcode Python framework source, so public-distribution acceptability still needs an explicit policy decision.
+2. Clean-machine behavior is still unproven until the DMG-installed app is validated without repo, PATH, or local developer-tool assistance.
+3. Apple signing/notarization execution is still deferred for this planning phase.
