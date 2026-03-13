@@ -27,6 +27,7 @@ final class CalibrationManager {
         faceSizeSamples = []
         forwardDepthSamples = []
         irisGazeSamples = []
+        headYawSamples = []
         isCalibrating = true
     }
 
@@ -38,9 +39,11 @@ final class CalibrationManager {
     private var forwardDepthSamples: [CGFloat] = []
     // Iris gaze offset samples
     private var irisGazeSamples: [CGFloat] = []
+    // Head yaw samples (horizontal rotation)
+    private var headYawSamples: [CGFloat] = []
 
     /// Add a sample during calibration. Returns CalibrationResult when enough samples collected.
-    func addSample(_ metrics: PostureMetrics, headPitch: CGFloat = 0) -> CalibrationResult? {
+    func addSample(_ metrics: PostureMetrics, headPitch: CGFloat = 0, headYaw: CGFloat = 0) -> CalibrationResult? {
         guard isCalibrating, metrics.landmarksDetected else { return nil }
 
         samples.append(metrics)
@@ -48,16 +51,18 @@ final class CalibrationManager {
         faceSizeSamples.append(metrics.faceSizeNormalized)
         forwardDepthSamples.append(metrics.forwardDepth)
         irisGazeSamples.append(metrics.irisGazeOffset)
+        headYawSamples.append(headYaw)
 
         guard samples.count >= Self.requiredSamples else { return nil }
 
         isCalibrating = false
-        let result = collectCalibration(samples: samples, headPitchSamples: headPitchSamples, faceSizeSamples: faceSizeSamples, forwardDepthSamples: forwardDepthSamples, irisGazeSamples: irisGazeSamples)
+        let result = collectCalibration(samples: samples, headPitchSamples: headPitchSamples, faceSizeSamples: faceSizeSamples, forwardDepthSamples: forwardDepthSamples, irisGazeSamples: irisGazeSamples, headYawSamples: headYawSamples)
         samples = []
         headPitchSamples = []
         faceSizeSamples = []
         forwardDepthSamples = []
         irisGazeSamples = []
+        headYawSamples = []
 
         if result.isValid, let data = result.data {
             save(data)
@@ -74,6 +79,7 @@ final class CalibrationManager {
         faceSizeSamples = []
         forwardDepthSamples = []
         irisGazeSamples = []
+        headYawSamples = []
     }
 
     /// Load saved calibration from UserDefaults.
@@ -122,7 +128,8 @@ final class CalibrationManager {
         headPitchSamples: [CGFloat] = [],
         faceSizeSamples: [CGFloat] = [],
         forwardDepthSamples: [CGFloat] = [],
-        irisGazeSamples: [CGFloat] = []
+        irisGazeSamples: [CGFloat] = [],
+        headYawSamples: [CGFloat] = []
     ) -> CalibrationResult {
         let valid = samples.filter { $0.landmarksDetected }
         guard !valid.isEmpty else {
@@ -147,6 +154,7 @@ final class CalibrationManager {
         let medianFaceSize = faceSizeSamples.isEmpty ? CGFloat(0) : median(faceSizeSamples)
         let medianForwardDepth = forwardDepthSamples.isEmpty ? CGFloat(0) : median(forwardDepthSamples)
         let medianIrisGaze = irisGazeSamples.isEmpty ? CGFloat(0) : median(irisGazeSamples)
+        let medianYaw = headYawSamples.isEmpty ? CGFloat(0) : median(headYawSamples)
 
         let data = CalibrationData(
             earShoulderDistanceLeft: median(valid.map(\.earShoulderDistanceLeft)),
@@ -164,6 +172,7 @@ final class CalibrationManager {
             irisGazeOffset: medianIrisGaze,
             cvaStdDev: cvaSD,
             landmarkConfidence: confidence,
+            baselineYaw: medianYaw,
             schemaVersion: 2
         )
 

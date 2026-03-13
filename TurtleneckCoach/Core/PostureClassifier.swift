@@ -212,8 +212,8 @@ struct PostureClassifier {
         //
         // Face shrink magnitude is the most reliable separator.
         // Iris gaze and pitch are similar between the two postures.
-        let significantFaceShrink = faceSizeChange < -0.08  // >8% shrink = confident FHP
-        let depthUp = baselineForwardDepth > 0 && depthIncrease > 0.06
+        let significantFaceShrink = faceSizeChange < -0.05  // >5% shrink = confident FHP
+        let depthUp = baselineForwardDepth > 0 && depthIncrease > 0.035
 
         // FHP: large face shrink OR significant depth increase → head translated forward
         if significantFaceShrink || depthUp {
@@ -231,6 +231,12 @@ struct PostureClassifier {
         }
 
         if cvaDrop < -3.0 && faceSizeChange < tuning.faceShrinkThreshold {
+            return .forwardHead
+        }
+
+        // Pitch drop alone can indicate FHP (e.g. looking at side monitor with forward head)
+        // When face size barely changes but head tilts forward significantly
+        if pitchDrop > 3.0 && abs(faceSizeChange) < 0.03 {
             return .forwardHead
         }
 

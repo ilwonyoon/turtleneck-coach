@@ -1217,7 +1217,7 @@ final class PostureEngine: ObservableObject {
 
         // Calibration mode
         if calibrationManager.isCalibrating {
-            if let calResult = calibrationManager.addSample(metrics, headPitch: metrics.headPitch) {
+            if let calResult = calibrationManager.addSample(metrics, headPitch: metrics.headPitch, headYaw: currentHeadYaw) {
                 calibrationMessage = calResult.message
                 calibrationSuccess = calResult.isValid
                 isCalibrating = false
@@ -1243,6 +1243,8 @@ final class PostureEngine: ObservableObject {
                     resetSuppressionState()
                     postureState = .initial
                     goodPostureStart = Date()
+                    engineLog(String(format: "[CALIB] baselineYaw=%.1f pitch=%.1f faceSize=%.3f depth=%.3f CVA=%.1f",
+                        data.baselineYaw, data.headPitch, data.baselineFaceSize, data.forwardDepth, data.neckEarAngle))
                 }
 
                 // Restore normal analysis interval

@@ -162,10 +162,10 @@ struct PostureAnalyzer {
         let fsc = baseline.baselineFaceSize > 0 ? (metrics.faceSizeNormalized - baseline.baselineFaceSize) / baseline.baselineFaceSize : 0
         let depthIncrease = metrics.forwardDepth - baseline.forwardDepth
         let irisDelta = metrics.irisGazeOffset - baseline.irisGazeOffset
-        var debugLine = String(format: "[EVAL] rawCVA=%.1f adj=%.1f base=%.1f class=%@ relScore=%d sev=%@ pitchΔ=%.2f faceΔ=%.1f%%",
+        var debugLine = String(format: "[EVAL] rawCVA=%.1f adj=%.1f base=%.1f class=%@ relScore=%d sev=%@ yaw=%.1f pitchΔ=%.2f faceΔ=%.1f%%",
             metrics.neckEarAngle, adjustedCVA, baseline.neckEarAngle,
             classification.rawValue, computedScore, severity.rawValue,
-            pitchDelta, fsc * 100)
+            yawDegrees, pitchDelta, fsc * 100)
         if let eyeLevelDebug {
             debugLine += String(
                 format: " eye=active eyeClass=%@ eyeConf=%.2f eyeFwd=%.2f eyeDown=%.2f eyePitchDrop=%.2f depthΔ=%.3f irisΔ=%.3f",
@@ -257,12 +257,18 @@ struct PostureAnalyzer {
         // Apply extra penalty only when the classifier already believes this is FHP.
         // This widens Good vs mild FHP separation without touching normal/lookingDown paths.
         if classification == .forwardHead {
-            let faceShrinkPenalty = min(18.0, max(0, (-faceSizeChange) - 0.03) * 120.0)
-            let depthPenalty = min(12.0, max(0, depthIncrease) * 120.0)
+            // Two FHP profiles observed:
+            //   Side monitor: pitchDrop ~4.5°, faceΔ ~-3%, depthΔ ~0.05
+            //   Front laptop:  pitchDrop ~3.8°, faceΔ ~-10%, depthΔ ~0.09
+            // Both must reach ≤70. pitchDrop is the universal signal.
+            let faceShrinkPenalty = min(15.0, max(0, (-faceSizeChange) - 0.02) * 100.0)
+            let depthPenalty = min(8.0, max(0, depthIncrease) * 80.0)
+            let pitchDropPenalty = min(20.0, max(0, pitchDrop - 1.5) * 5.5)
             let forwardHeadPenalty =
                 min(8.0, cvaDropRatio * 12.0) +
                 faceShrinkPenalty +
-                depthPenalty
+                depthPenalty +
+                pitchDropPenalty
             composite -= forwardHeadPenalty
             if cvaDropRatio > 0.12 {
                 composite -= 1.0
@@ -275,14 +281,10 @@ struct PostureAnalyzer {
         }
 
         if cameraContext == .belowEye && classification == .forwardHead {
-            let belowEyeForwardPenalty =
-                min(12.0, max(0, depthIncrease - 0.02) * 160.0) +
-                min(8.0, max(0, pitchDrop - 3.0) * 1.1)
-            composite -= belowEyeForwardPenalty
-
-            if cvaDropRatio < 0.05 && depthIncrease > 0.05 {
-                composite -= 3.0
-            }
+            let belowEyeFacePenalty = min(8.0, max(0, (-faceSizeChange) - 0.04) * 60.0)
+            let belowEyeDepthPenalty = min(5.0, max(0, depthIncrease - 0.02) * 80.0)
+            let belowEyePitchPenalty = min(8.0, max(0, pitchDrop - 2.0) * 2.0)
+            composite -= (belowEyeFacePenalty + belowEyeDepthPenalty + belowEyePitchPenalty)
         }
 
         return Int(round(min(98, max(2, composite))))

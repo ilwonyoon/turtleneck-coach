@@ -18,6 +18,7 @@ struct CalibrationData: Codable {
     let irisGazeOffset: CGFloat  // baseline iris gaze position
     let cvaStdDev: CGFloat       // standard deviation of CVA samples during calibration
     let landmarkConfidence: CGFloat // fraction of valid samples (0.0–1.0)
+    let baselineYaw: CGFloat     // head yaw at calibration (0=front, >0=looking right)
     let schemaVersion: Int       // 1 = legacy absolute, 2 = relative baseline-deviation
 
     /// Decode with backward compatibility — new fields default safely if missing.
@@ -38,6 +39,7 @@ struct CalibrationData: Codable {
         irisGazeOffset = try c.decodeIfPresent(CGFloat.self, forKey: .irisGazeOffset) ?? 0
         cvaStdDev = try c.decodeIfPresent(CGFloat.self, forKey: .cvaStdDev) ?? 0
         landmarkConfidence = try c.decodeIfPresent(CGFloat.self, forKey: .landmarkConfidence) ?? 0
+        baselineYaw = try c.decodeIfPresent(CGFloat.self, forKey: .baselineYaw) ?? 0
         schemaVersion = try c.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
     }
 
@@ -57,6 +59,7 @@ struct CalibrationData: Codable {
         irisGazeOffset: CGFloat = 0,
         cvaStdDev: CGFloat = 0,
         landmarkConfidence: CGFloat = 0,
+        baselineYaw: CGFloat = 0,
         schemaVersion: Int = 1
     ) {
         self.earShoulderDistanceLeft = earShoulderDistanceLeft
@@ -74,6 +77,7 @@ struct CalibrationData: Codable {
         self.irisGazeOffset = irisGazeOffset
         self.cvaStdDev = cvaStdDev
         self.landmarkConfidence = landmarkConfidence
+        self.baselineYaw = baselineYaw
         self.schemaVersion = schemaVersion
     }
 }
