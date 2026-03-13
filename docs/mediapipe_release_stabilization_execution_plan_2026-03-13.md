@@ -2,7 +2,7 @@
 
 Date: 2026-03-13
 Goal: MediaPipe 유지한 채로 성능/안정성/보안 관점에서 런칭 블로커를 해결
-Status: Draft — 리뷰 후 실행
+Status: Phase 1–5 완료 (2026-03-13), Phase 6은 v1.0.1 대상
 
 ---
 
