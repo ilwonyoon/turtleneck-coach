@@ -102,42 +102,40 @@ struct SkeletonOverlay: View {
                     let maxZ = hasDepth ? (mesh.depthValues.max() ?? 1) : 1
                     let zRange = max(0.001, maxZ - minZ)
 
-                    // Draw tessellation edges with depth-based opacity and line width
-                    // Closer edges are brighter/thicker, far edges (back of head) are culled
+                    // Draw tessellation edges with depth-based opacity and line width.
+                    // Batch edges into 3 depth bands to minimize stroke calls.
                     var tessPath = Path()
                     var featurePath = Path()
+                    // Depth bands: near (0–0.3), mid (0.3–0.6), far (0.6–0.85)
+                    var tessNear = Path()
+                    var tessMid = Path()
+                    var tessFar = Path()
+                    var featNear = Path()
+                    var featMid = Path()
+                    var featFar = Path()
 
                     for (a, b) in FaceMeshData.tessellationEdges {
                         guard a < screenPts.count, b < screenPts.count else { continue }
 
-                        // Depth-based back-face culling: skip edges on far side of face
                         if hasDepth, a < mesh.depthValues.count, b < mesh.depthValues.count {
                             let avgZ = (mesh.depthValues[a] + mesh.depthValues[b]) / 2
-                            let depthNorm = (avgZ - minZ) / zRange  // 0=closest, 1=farthest
+                            let depthNorm = (avgZ - minZ) / zRange
                             if depthNorm > 0.85 { continue }
 
                             let p1 = screenPts[a]
                             let p2 = screenPts[b]
+                            let isFeature = Self.featureEdges.contains(Self.edgeKey(a, b))
 
-                            if Self.featureEdges.contains(Self.edgeKey(a, b)) {
-                                // Feature edges: depth modulates opacity (0.4–0.8)
-                                let opacity = 0.4 + (1.0 - depthNorm) * 0.4
-                                let lineWidth = 0.8 + (1.0 - depthNorm) * 0.6
-                                var path = Path()
-                                path.move(to: p1)
-                                path.addLine(to: p2)
-                                context.stroke(path, with: .color(Color.cyan.opacity(opacity)), lineWidth: lineWidth)
+                            if isFeature {
+                                if depthNorm < 0.3 { featNear.move(to: p1); featNear.addLine(to: p2) }
+                                else if depthNorm < 0.6 { featMid.move(to: p1); featMid.addLine(to: p2) }
+                                else { featFar.move(to: p1); featFar.addLine(to: p2) }
                             } else {
-                                // Tessellation edges: depth modulates opacity (0.1–0.35)
-                                let opacity = 0.1 + (1.0 - depthNorm) * 0.25
-                                let lineWidth = 0.3 + (1.0 - depthNorm) * 0.4
-                                var path = Path()
-                                path.move(to: p1)
-                                path.addLine(to: p2)
-                                context.stroke(path, with: .color(Color.cyan.opacity(opacity)), lineWidth: lineWidth)
+                                if depthNorm < 0.3 { tessNear.move(to: p1); tessNear.addLine(to: p2) }
+                                else if depthNorm < 0.6 { tessMid.move(to: p1); tessMid.addLine(to: p2) }
+                                else { tessFar.move(to: p1); tessFar.addLine(to: p2) }
                             }
                         } else {
-                            // No depth data — fall back to flat rendering
                             let p1 = screenPts[a]
                             let p2 = screenPts[b]
                             if Self.featureEdges.contains(Self.edgeKey(a, b)) {
@@ -150,13 +148,16 @@ struct SkeletonOverlay: View {
                         }
                     }
 
-                    // Render any remaining flat paths (fallback when no depth)
-                    if !tessPath.isEmpty {
-                        context.stroke(tessPath, with: .color(Color.cyan.opacity(0.25)), lineWidth: 0.5)
-                    }
-                    if !featurePath.isEmpty {
-                        context.stroke(featurePath, with: .color(Color.cyan.opacity(0.7)), lineWidth: 1.2)
-                    }
+                    // Render depth-banded paths (6 stroke calls instead of ~2600)
+                    if !tessNear.isEmpty { context.stroke(tessNear, with: .color(Color.cyan.opacity(0.35)), lineWidth: 0.7) }
+                    if !tessMid.isEmpty { context.stroke(tessMid, with: .color(Color.cyan.opacity(0.22)), lineWidth: 0.5) }
+                    if !tessFar.isEmpty { context.stroke(tessFar, with: .color(Color.cyan.opacity(0.12)), lineWidth: 0.35) }
+                    if !featNear.isEmpty { context.stroke(featNear, with: .color(Color.cyan.opacity(0.8)), lineWidth: 1.4) }
+                    if !featMid.isEmpty { context.stroke(featMid, with: .color(Color.cyan.opacity(0.6)), lineWidth: 1.0) }
+                    if !featFar.isEmpty { context.stroke(featFar, with: .color(Color.cyan.opacity(0.45)), lineWidth: 0.8) }
+                    // Flat fallback paths
+                    if !tessPath.isEmpty { context.stroke(tessPath, with: .color(Color.cyan.opacity(0.25)), lineWidth: 0.5) }
+                    if !featurePath.isEmpty { context.stroke(featurePath, with: .color(Color.cyan.opacity(0.7)), lineWidth: 1.2) }
 
                     // Body skeleton — styled to match face mesh aesthetic
                     let bodyConnections: [(from: String, to: String)] = [
