@@ -23,6 +23,8 @@ Important:
 - Entitlements source: [`TurtleneckCoach/Resources/TurtleneckCoach.entitlements`](../TurtleneckCoach/Resources/TurtleneckCoach.entitlements)
 - Info.plist source: [`TurtleneckCoach/Resources/Info.plist`](../TurtleneckCoach/Resources/Info.plist)
 - Optional Python server source: `./python_server`
+- MediaPipe is a product requirement for shipped turtle-neck tracking quality.
+- Vision-only public releases are out of scope unless the product requirement changes explicitly.
 
 This is not a universal build today. Intel Macs are out of scope for the current release path unless the build scripts are updated accordingly.
 
@@ -74,6 +76,8 @@ This is not a universal build today. Intel Macs are out of scope for the current
   - `../python_server/pose_server.py` (dev mode)
   - `Contents/Resources/python_server/pose_server.py` (bundled mode)
 - Release builds should bundle `python_server` into `Contents/Resources` to avoid dependency on repo layout.
+- Release builds should also preserve bundled `python_runtime` and `python_packages` so MediaPipe remains functional after distribution.
+- Do not respond to release issues by switching the public build to Vision-only; fix the bundled MediaPipe path instead.
 
 ### Hardened Runtime implications
 
@@ -81,7 +85,7 @@ This is not a universal build today. Intel Macs are out of scope for the current
 - If Python runtime behavior breaks under hardened runtime:
   - [ ] Verify subprocess invocation path and execute permissions.
   - [ ] Prefer bundling/runtime pinning over reliance on user shell environment.
-  - [ ] Consider native Vision-only mode fallback when Python server unavailable.
+  - [ ] Treat broken bundled MediaPipe as a release blocker, not a reason to remove MediaPipe from the shipped build.
 
 ### Data and permissions
 
