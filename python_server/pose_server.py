@@ -16,6 +16,7 @@ Special messages:
 """
 
 import json
+import logging
 import math
 import os
 import signal
@@ -480,12 +481,18 @@ def send_response(conn: socket.socket, payload: bytes):
 
 def run_server():
     """Main server loop."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="[pose_server] %(levelname)s %(message)s",
+    )
+
     if os.path.exists(SOCKET_PATH):
         os.unlink(SOCKET_PATH)
 
     server = PoseServer()
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.bind(SOCKET_PATH)
+    os.chmod(SOCKET_PATH, 0o600)
     sock.listen(1)
     sock.settimeout(None)
 
@@ -536,9 +543,9 @@ def run_server():
                     print("[pose_server] Client disconnected", flush=True)
                     break
                 except Exception as e:
-                    print(f"[pose_server] Error processing frame: {e}", flush=True)
+                    logging.error(f"Error processing frame: {e}")
                     try:
-                        error_resp = json.dumps({"error": str(e)}).encode("utf-8")
+                        error_resp = json.dumps({"error": "frame processing failed"}).encode("utf-8")
                         send_response(conn, error_resp)
                     except Exception:
                         break

@@ -499,9 +499,15 @@ final class MediaPipeClient: @unchecked Sendable {
 
     /// Stop the Python server process.
     private func stopPythonServer() {
-        guard let process = pythonProcess, process.isRunning else { return }
+        guard let process = pythonProcess, process.isRunning else {
+            pythonProcess = nil
+            return
+        }
         process.terminate()
+        process.waitUntilExit()
         pythonProcess = nil
+        // Clean up stale socket file
+        try? FileManager.default.removeItem(atPath: socketPath)
         log("Stopped Python server")
     }
 
@@ -547,7 +553,8 @@ final class MediaPipeClient: @unchecked Sendable {
 
         if result < 0 {
             close(fd)
-            // Try starting server and retrying
+            // Remove stale socket file and try starting server fresh
+            try? FileManager.default.removeItem(atPath: socketPath)
             if startPythonServer() {
                 return retryConnect()
             }
@@ -785,7 +792,7 @@ final class MediaPipeClient: @unchecked Sendable {
             var depths = [CGFloat]()
             landmarks.reserveCapacity(478)
             depths.reserveCapacity(478)
-            for i in stride(from: 0, to: 1434, by: 3) {
+            for i in stride(from: 0, to: flat.count - 2, by: 3) {
                 landmarks.append(CGPoint(x: flat[i], y: flat[i + 1]))
                 depths.append(CGFloat(flat[i + 2]))
             }

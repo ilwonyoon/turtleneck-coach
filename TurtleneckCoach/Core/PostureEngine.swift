@@ -672,10 +672,15 @@ final class PostureEngine: ObservableObject {
     }
 
     private func handleAppWillTerminate() {
+        isMonitoring = false
+        analysisTimer?.invalidate()
+        analysisTimer = nil
+        stopProbeTimer()
         mediaPipeConnectTask?.cancel()
         mediaPipeConnectTask = nil
         isMediaPipeConnectInFlight = false
         mediaPipeClient.shutdown()
+        camera.stopSession()
     }
 
     private func scheduleMediaPipeConnectIfNeeded(logFailure: Bool) {
@@ -914,11 +919,18 @@ final class PostureEngine: ObservableObject {
     }
 
     func stopMonitoring() {
-        persistSessionSnapshot(endDate: Date())
-        resetSessionTracking()
         isMonitoring = false
+
+        // Invalidate all timers synchronously before any other cleanup
         analysisTimer?.invalidate()
         analysisTimer = nil
+        stopProbeTimer()
+        #if DEBUG
+        stopDebugCapture()
+        #endif
+
+        persistSessionSnapshot(endDate: Date())
+        resetSessionTracking()
         resetPowerManagementState()
         camera.stopSession()
         refreshActiveCameraDisplayName()
@@ -995,6 +1007,7 @@ final class PostureEngine: ObservableObject {
     // MARK: - Analyze
 
     private func analyzeLatestFrame(isProbe: Bool = false) async {
+        guard isMonitoring else { return }
         guard !isAnalysisInFlight else {
             #if DEBUG
             startupPerfState?.analysisDrops += 1
