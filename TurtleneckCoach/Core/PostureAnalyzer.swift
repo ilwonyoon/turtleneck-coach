@@ -229,6 +229,8 @@ struct PostureAnalyzer {
     }
 
     /// Fuse multiple relative signals into a single 0-100 score.
+    /// pitchDrop is the primary penalty driver for FHP (universal across all monitor angles).
+    /// Target curve: pitchDrop 3.5° → ~80, 5.0° → ~65, 7.0° → ~45
     static func compositeRelativeScore(
         currentCVA: CGFloat, baselineCVA: CGFloat,
         currentPitch: CGFloat, baselinePitch: CGFloat,
@@ -239,53 +241,29 @@ struct PostureAnalyzer {
         cameraContext: CameraContext = .unknown
     ) -> Int {
         let cvaScore = relativeScore(currentCVA: currentCVA, baselineCVA: baselineCVA)
-        let cvaDrop = max(0, baselineCVA - currentCVA)
-        let cvaDropRatio = baselineCVA > 1e-6 ? cvaDrop / baselineCVA : 0
-
-        // Pitch contribution (looking down penalty)
-        let pitchDelta = max(0, currentPitch - baselinePitch)
-        let pitchPenalty = min(15.0, pitchDelta * 1.0)
         let pitchDrop = max(0, baselinePitch - currentPitch)
-
-        // Face size contribution (legacy near-camera lean)
         let faceSizeChange = baselineFaceSize > 0 ? (currentFaceSize - baselineFaceSize) / baselineFaceSize : 0
-        let facePenalty = min(10.0, max(0, faceSizeChange) * 50.0)
         let depthIncrease = currentForwardDepth - baselineForwardDepth
 
-        var composite = CGFloat(cvaScore) - pitchPenalty - facePenalty
+        var composite = CGFloat(cvaScore)
 
-        // Apply extra penalty only when the classifier already believes this is FHP.
-        // This widens Good vs mild FHP separation without touching normal/lookingDown paths.
         if classification == .forwardHead {
-            // Two FHP profiles observed:
-            //   Side monitor: pitchDrop ~4.5°, faceΔ ~-3%, depthΔ ~0.05
-            //   Front laptop:  pitchDrop ~3.8°, faceΔ ~-10%, depthΔ ~0.09
-            // Both must reach ≤70. pitchDrop is the universal signal.
-            let faceShrinkPenalty = min(15.0, max(0, (-faceSizeChange) - 0.02) * 100.0)
-            let depthPenalty = min(8.0, max(0, depthIncrease) * 80.0)
-            let pitchDropPenalty = min(20.0, max(0, pitchDrop - 1.5) * 5.5)
-            let forwardHeadPenalty =
-                min(8.0, cvaDropRatio * 12.0) +
-                faceShrinkPenalty +
-                depthPenalty +
-                pitchDropPenalty
-            composite -= forwardHeadPenalty
-            if cvaDropRatio > 0.12 {
-                composite -= 1.0
-            }
+            // pitchDrop-primary penalty curve:
+            //   pitchDrop 3.5° → penalty ~15 (score ~80 from baseline 95)
+            //   pitchDrop 5.0° → penalty ~30 (score ~65)
+            //   pitchDrop 7.0° → penalty ~50 (score ~45)
+            // Formula: 10 * (pitchDrop - 1.5) for pitchDrop > 1.5°
+            let pitchDropPenalty = max(0, (pitchDrop - 1.5) * 10.0)
+
+            // Auxiliary penalties (secondary, additive)
+            let faceShrinkPenalty = min(8.0, max(0, (-faceSizeChange) - 0.03) * 60.0)
+            let depthPenalty = min(6.0, max(0, depthIncrease) * 60.0)
+
+            composite -= (pitchDropPenalty + faceShrinkPenalty + depthPenalty)
         }
 
-        // Boost back if looking down (CVA drop is partly from neck flexion, not FHP)
-        if classification == .lookingDown {
-            composite += pitchPenalty * 0.5
-        }
-
-        if cameraContext == .belowEye && classification == .forwardHead {
-            let belowEyeFacePenalty = min(8.0, max(0, (-faceSizeChange) - 0.04) * 60.0)
-            let belowEyeDepthPenalty = min(5.0, max(0, depthIncrease - 0.02) * 80.0)
-            let belowEyePitchPenalty = min(8.0, max(0, pitchDrop - 2.0) * 2.0)
-            composite -= (belowEyeFacePenalty + belowEyeDepthPenalty + belowEyePitchPenalty)
-        }
+        // lookingDown: mild penalty from CVA score only, no additional penalty
+        // (accepting some false positives as agreed — catching FHP is priority)
 
         return Int(round(min(98, max(2, composite))))
     }

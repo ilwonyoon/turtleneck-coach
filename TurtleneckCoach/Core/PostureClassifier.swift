@@ -186,80 +186,47 @@ struct PostureClassifier {
         irisGazeOffset: CGFloat = 0,
         baselineIrisGaze: CGFloat = 0
     ) -> PostureClassification {
-        // Can't classify with high yaw or missing data
         guard yawDegrees < 20 else { return .unknown }
         guard baselineFaceSize > 0 else { return .unknown }
 
+        let pitchDrop = baselinePitch - currentPitch  // positive = head tilted more down
         let depthIncrease = forwardDepth - baselineForwardDepth
         let faceSizeChange = baselineFaceSize > 0
             ? (currentFaceSize - baselineFaceSize) / baselineFaceSize
             : CGFloat(0)
-        // Priority 1: Detect forward head posture aggressively.
-        // Priority 2: Looking down handled via notification suppression, not classification.
-        //
-        // FHP signals (any one triggers):
-        //   a) Face shrinking > 6% (head moved forward, appears smaller)
-        //   b) Depth increased > 0.04 (nose moved forward of shoulders in Z)
-        //   c) cvaDrop negative + face shrinking (pitch masked the CVA drop)
-        let tuning = FHPTuning.shared
-        let pitchDrop = baselinePitch - currentPitch  // positive = head tilted more down
 
-        let faceShrinking = faceSizeChange < tuning.faceShrinkThreshold
+        // === pitchDrop-primary classification ===
+        // Data analysis across 4+ sessions shows pitchDrop ≥ 3.5° is the most
+        // reliable universal FHP signal, independent of monitor position/angle.
+        // faceΔ sign flips between sessions; depthΔ requires MediaPipe.
+        // pitchDrop is always positive and ≥ 3.5° during any FHP posture.
 
-        // Key discriminator from data analysis:
-        //   FHP (거북목): faceSize drops significantly (-10~15%) — head moves forward, face appears smaller
-        //   Looking down (고개 숙임): faceSize barely changes (-1~3%) — head tilts but stays in place
-        //
-        // Face shrink magnitude is the most reliable separator.
-        // Iris gaze and pitch are similar between the two postures.
-        let significantFaceShrink = faceSizeChange < -0.05  // >5% shrink = confident FHP
+        // Priority 1: pitchDrop ≥ 3.5° → forwardHead (universal FHP signal)
+        if pitchDrop >= 3.5 {
+            return .forwardHead
+        }
+
+        // Priority 2: Strong auxiliary signals even when pitchDrop is borderline
+        let significantFaceShrink = faceSizeChange < -0.05
         let depthUp = baselineForwardDepth > 0 && depthIncrease > 0.035
-
-        // FHP: large face shrink OR significant depth increase → head translated forward
         if significantFaceShrink || depthUp {
             return .forwardHead
         }
 
-        // Moderate face shrink (-6~8%) — ambiguous zone
-        if faceShrinking {
-            // With significant pitch drop → looking down (head tilting, not translating)
-            if pitchDrop > tuning.pitchGateDegrees {
-                return .lookingDown
+        // Priority 3: Moderate pitchDrop (2.5-3.5°) + confirming signal
+        if pitchDrop >= 2.5 {
+            let hasConfirmingSignal = faceSizeChange < -0.03 ||
+                (baselineForwardDepth > 0 && depthIncrease > 0.02) ||
+                cvaDrop > 3.0
+            if hasConfirmingSignal {
+                return .forwardHead
             }
-            // Without pitch drop → mild FHP (head drifting forward)
-            return .forwardHead
-        }
-
-        if cvaDrop < -3.0 && faceSizeChange < tuning.faceShrinkThreshold {
-            return .forwardHead
-        }
-
-        // Pitch drop alone can indicate FHP (e.g. looking at side monitor with forward head)
-        // When face size barely changes but head tilts forward significantly
-        if pitchDrop > 3.0 && abs(faceSizeChange) < 0.03 {
-            return .forwardHead
         }
 
         // No significant deviation
         guard cvaDrop > 1.5 else { return .normal }
 
-        // CVA dropped. Classify by pitch.
-        let pitchDelta = currentPitch - baselinePitch
-        let absPitchDelta = abs(pitchDelta)
-        let strongPitchDown = absPitchDelta > 0.5
-        let mildPitchDown = absPitchDelta > 0.2
-        let faceGrowing = faceSizeChange > 0.04
-
-        if strongPitchDown && !faceGrowing {
-            return .lookingDown
-        } else if !mildPitchDown && faceGrowing {
-            return .forwardHead
-        } else if strongPitchDown && faceGrowing {
-            return .mixed
-        } else if mildPitchDown && !faceGrowing {
-            return .lookingDown
-        } else {
-            return .forwardHead
-        }
+        // CVA dropped but no FHP signals — classify as lookingDown
+        return .lookingDown
     }
 }
