@@ -563,7 +563,7 @@ final class MediaPipeClient: @unchecked Sendable {
         }
 
         socketFD = fd
-        var timeout = timeval(tv_sec: 3, tv_usec: 0)
+        var timeout = timeval(tv_sec: 1, tv_usec: 0)
         setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
         setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
         _isConnected = true
@@ -606,7 +606,7 @@ final class MediaPipeClient: @unchecked Sendable {
 
             if result == 0 {
                 socketFD = fd
-                var timeout = timeval(tv_sec: 3, tv_usec: 0)
+                var timeout = timeval(tv_sec: 1, tv_usec: 0)
                 setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
                 setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
                 _isConnected = true
@@ -690,11 +690,6 @@ final class MediaPipeClient: @unchecked Sendable {
         // Parse JSON
         do {
             let result = try JSONDecoder().decode(MediaPipeResult.self, from: responseData)
-            if let fl = result.faceLandmarks {
-                log("faceLandmarks count=\(fl.count) (need 1434 for 3D mesh)")
-            } else {
-                log("faceLandmarks=nil")
-            }
             return result
         } catch {
             log("JSON decode error: \(error)")
