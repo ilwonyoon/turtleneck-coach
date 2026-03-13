@@ -174,6 +174,8 @@ final class PostureEngine: ObservableObject {
     private var mediaPipeConnectTask: Task<Void, Never>?
     private var lastMediaPipeConnectAttemptAt: Date = .distantPast
     private let mediaPipeReconnectCooldown: TimeInterval = 5.0
+    private var mediaPipeConsecutiveFailures: Int = 0
+    private let mediaPipeMaxReconnectCooldown: TimeInterval = 60.0
     private var isAnalysisInFlight = false
     private var lastMediaPipeHeadPitch: CGFloat = 0
     #if DEBUG
@@ -699,7 +701,11 @@ final class PostureEngine: ObservableObject {
         guard !isMediaPipeConnectInFlight else { return }
 
         let now = Date()
-        guard now.timeIntervalSince(lastMediaPipeConnectAttemptAt) >= mediaPipeReconnectCooldown else { return }
+        let cooldown = min(
+            mediaPipeMaxReconnectCooldown,
+            mediaPipeReconnectCooldown * pow(2.0, Double(min(mediaPipeConsecutiveFailures, 4)))
+        )
+        guard now.timeIntervalSince(lastMediaPipeConnectAttemptAt) >= cooldown else { return }
 
         mediaPipeConnectAttempted = true
         isMediaPipeConnectInFlight = true
@@ -717,6 +723,7 @@ final class PostureEngine: ObservableObject {
                 guard self.isMonitoring else { return }
 
                 if connected {
+                    self.mediaPipeConsecutiveFailures = 0
                     #if DEBUG
                     let now = Date()
                     self.startupPerfState?.mediaPipeConnectedAt = now
@@ -728,8 +735,11 @@ final class PostureEngine: ObservableObject {
                     }
                     #endif
                     self.engineLog("MediaPipe server connected — using enhanced detection")
-                } else if logFailure {
-                    self.engineLog("MediaPipe server unavailable — falling back to Vision framework")
+                } else {
+                    self.mediaPipeConsecutiveFailures += 1
+                    if logFailure {
+                        self.engineLog("MediaPipe server unavailable (attempt \(self.mediaPipeConsecutiveFailures)) — falling back to Vision framework")
+                    }
                 }
             }
         }
@@ -950,6 +960,7 @@ final class PostureEngine: ObservableObject {
         mediaPipeClient.shutdownAsync()
         mediaPipeConnectAttempted = false
         isMediaPipeConnectInFlight = false
+        mediaPipeConsecutiveFailures = 0
         currentFrame = nil
         currentJoints = nil
         bodyDetected = false
