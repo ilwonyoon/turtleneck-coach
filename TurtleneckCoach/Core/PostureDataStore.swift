@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 
 struct SessionRecord: Codable, Identifiable, Hashable {
     let id: UUID
@@ -139,6 +140,7 @@ struct HourlyAggregate: Codable, Identifiable, Hashable {
 }
 
 final class PostureDataStore {
+    private let logger = Logger(subsystem: "com.turtleneck.detector", category: "DataStore")
     private let fileManager: FileManager
     private var calendar: Calendar
     private let storeDirectory: URL
@@ -392,14 +394,25 @@ final class PostureDataStore {
     }
 
     private func loadArray<T: Decodable>(from url: URL, as _: T.Type) -> [T] {
-        guard let data = try? Data(contentsOf: url) else { return [] }
-        return (try? decoder.decode([T].self, from: data)) ?? []
+        do {
+            let data = try Data(contentsOf: url)
+            return try decoder.decode([T].self, from: data)
+        } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == NSFileReadNoSuchFileError {
+            return []  // File doesn't exist yet — expected on first launch
+        } catch {
+            logger.log("Failed to load \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            return []
+        }
     }
 
     private func saveArray<T: Encodable>(_ values: [T], to url: URL) {
         ensureStoreDirectoryExists()
-        guard let data = try? encoder.encode(values) else { return }
-        try? data.write(to: url, options: .atomic)
+        do {
+            let data = try encoder.encode(values)
+            try data.write(to: url, options: .atomic)
+        } catch {
+            logger.log("Failed to save \(url.lastPathComponent, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     private func ensureStoreDirectoryExists() {

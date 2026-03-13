@@ -32,6 +32,10 @@ final class CameraManager: NSObject, @unchecked Sendable {
 
     /// Called on each new frame with the CGImage (already rotated to landscape if needed).
     var onFrame: ((CGImage) -> Void)?
+    /// Called when the camera session is interrupted (e.g. device disconnected).
+    var onSessionInterrupted: (() -> Void)?
+    /// Called when the camera session resumes after interruption.
+    var onSessionResumed: (() -> Void)?
     private(set) var activeDevice: CameraDeviceOption?
 
     enum CameraError: Error {
@@ -210,6 +214,39 @@ final class CameraManager: NSObject, @unchecked Sendable {
 
         session.commitConfiguration()
         isConfigured = true
+        registerSessionNotifications()
+    }
+
+    private var interruptionObserver: NSObjectProtocol?
+    private var resumeObserver: NSObjectProtocol?
+
+    private func registerSessionNotifications() {
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: .AVCaptureSessionWasInterrupted,
+            object: session,
+            queue: .main
+        ) { [weak self] _ in
+            self?.logger.log("Camera session interrupted")
+            self?.onSessionInterrupted?()
+        }
+        resumeObserver = NotificationCenter.default.addObserver(
+            forName: .AVCaptureSessionInterruptionEnded,
+            object: session,
+            queue: .main
+        ) { [weak self] _ in
+            self?.logger.log("Camera session interruption ended")
+            self?.onSessionResumed?()
+        }
+    }
+
+    deinit {
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+        if let resumeObserver {
+            NotificationCenter.default.removeObserver(resumeObserver)
+        }
+        session.stopRunning()
     }
 
     /// Request camera permission. Returns true if granted.

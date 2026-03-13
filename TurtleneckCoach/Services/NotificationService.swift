@@ -1,5 +1,6 @@
 import UserNotifications
 import Foundation
+import os.log
 
 enum NotificationFrequency: String, CaseIterable {
     case often
@@ -28,6 +29,7 @@ enum NotificationFrequency: String, CaseIterable {
 
 /// Manages macOS native notifications with cooldown.
 final class NotificationService: NSObject {
+    private let logger = Logger(subsystem: "com.turtleneck.detector", category: "Notifications")
     static let notificationsEnabledKey = "notificationsEnabled"
     static let notificationFrequencyKey = NotificationFrequency.storageKey
     static let minSeverityKey = "minSeverity"
@@ -66,7 +68,14 @@ final class NotificationService: NSObject {
     func requestPermission() {
         UNUserNotificationCenter.current().requestAuthorization(
             options: [.alert, .sound]
-        ) { _, _ in }
+        ) { [weak self] granted, error in
+            if let error {
+                self?.logger.log("Notification permission error: \(error.localizedDescription, privacy: .public)")
+            }
+            if !granted {
+                self?.logger.log("Notification permission denied by user")
+            }
+        }
     }
 
     /// Send a notification if cooldown has elapsed. Returns true if sent.

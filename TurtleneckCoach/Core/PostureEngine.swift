@@ -655,6 +655,17 @@ final class PostureEngine: ObservableObject {
                 }
             }
         }
+
+        camera.onSessionInterrupted = { [weak self] in
+            guard let self else { return }
+            self.engineLog("Camera session interrupted — pausing analysis")
+            self.bodyDetected = false
+        }
+
+        camera.onSessionResumed = { [weak self] in
+            guard let self else { return }
+            self.engineLog("Camera session resumed")
+        }
     }
 
     deinit {
