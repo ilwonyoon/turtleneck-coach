@@ -578,6 +578,9 @@ final class PostureEngine: ObservableObject {
     private var isSyncingCameraContextSelectionState = false
     private let contextSelectionRecalibrationMessage = "Camera Position changed. Recalibrating..."
     private var appWillTerminateObserver: NSObjectProtocol?
+    private var screenSleepObserver: NSObjectProtocol?
+    private var screenWakeObserver: NSObjectProtocol?
+    private var isScreenAsleep = false
 
     // MARK: - Init
 
@@ -658,6 +661,26 @@ final class PostureEngine: ObservableObject {
             }
         }
 
+        // Screen sleep/wake detection — pause camera + analysis to save battery & privacy
+        screenSleepObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.screensDidSleepNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleScreenSleep()
+            }
+        }
+        screenWakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.screensDidWakeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.handleScreenWake()
+            }
+        }
+
         camera.onSessionInterrupted = { [weak self] in
             guard let self else { return }
             self.engineLog("Camera session interrupted — pausing analysis")
@@ -673,6 +696,12 @@ final class PostureEngine: ObservableObject {
     deinit {
         if let appWillTerminateObserver {
             NotificationCenter.default.removeObserver(appWillTerminateObserver)
+        }
+        if let screenSleepObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(screenSleepObserver)
+        }
+        if let screenWakeObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(screenWakeObserver)
         }
         mediaPipeConnectTask?.cancel()
         mediaPipeClient.shutdown()
@@ -694,6 +723,36 @@ final class PostureEngine: ObservableObject {
         isMediaPipeConnectInFlight = false
         mediaPipeClient.shutdown()
         camera.stopSession()
+    }
+
+    /// Pause camera and analysis when screen sleeps to save battery and protect privacy.
+    private var wasMonitoringBeforeSleep = false
+
+    private func handleScreenSleep() {
+        isScreenAsleep = true
+        engineLog("Screen sleep detected")
+        guard isMonitoring else {
+            wasMonitoringBeforeSleep = false
+            return
+        }
+        wasMonitoringBeforeSleep = true
+        // Pause timers and camera but keep isMonitoring true so we auto-resume on wake
+        analysisTimer?.invalidate()
+        analysisTimer = nil
+        stopProbeTimer()
+        camera.stopSession()
+        engineLog("Camera and analysis paused for screen sleep")
+    }
+
+    private func handleScreenWake() {
+        isScreenAsleep = false
+        engineLog("Screen wake detected")
+        guard wasMonitoringBeforeSleep else { return }
+        wasMonitoringBeforeSleep = false
+        // Resume camera and analysis
+        camera.startSession()
+        scheduleAnalysis()
+        engineLog("Camera and analysis resumed after screen wake")
     }
 
     private func scheduleMediaPipeConnectIfNeeded(logFailure: Bool) {
@@ -1029,7 +1088,7 @@ final class PostureEngine: ObservableObject {
     // MARK: - Analyze
 
     private func analyzeLatestFrame(isProbe: Bool = false) async {
-        guard isMonitoring else { return }
+        guard isMonitoring, !isScreenAsleep else { return }
         guard !isAnalysisInFlight else {
             #if DEBUG
             startupPerfState?.analysisDrops += 1
