@@ -529,42 +529,7 @@ struct MenuBarView: View {
                 .buttonStyle(.bordered)
             }
 
-            #if DEBUG
-            if engine.isMonitoring && !engine.isCalibrating && engine.calibrationData != nil {
-                HStack(spacing: 8) {
-                    Button {
-                        engine.startDebugCapture(label: "GOOD_POSTURE")
-                    } label: {
-                        Label("Good 5s", systemImage: "checkmark.circle")
-                            .font(DS.Font.caption)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.green)
-                    .disabled(engine.debugCaptureLabel != nil)
-
-                    Button {
-                        engine.startDebugCapture(label: "TURTLE_NECK")
-                    } label: {
-                        Label("Turtle 5s", systemImage: "tortoise")
-                            .font(DS.Font.caption)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 6)
-                    }
-                    .buttonStyle(.bordered)
-                    .tint(.orange)
-                    .disabled(engine.debugCaptureLabel != nil)
-                }
-
-                if let label = engine.debugCaptureLabel {
-                    Text("Recording: \(label)...")
-                        .font(DS.Font.mini)
-                        .foregroundColor(.orange)
-                        .frame(maxWidth: .infinity)
-                }
-            }
-            #endif
+            // Debug capture buttons removed for launch — invoke via engine.startDebugCapture() in console if needed
         }
     }
 
