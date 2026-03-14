@@ -546,6 +546,14 @@ struct MenuBarView: View {
                 .font(DS.Font.micro)
                 .foregroundColor(.secondary)
             Spacer()
+            #if DEBUG
+            Button("Onboarding") {
+                OnboardingPreviewController.shared.show(engine: engine)
+            }
+            .font(DS.Font.caption)
+            .buttonStyle(.plain)
+            .foregroundColor(.secondary)
+            #endif
             Button("Quit") {
                 NSApplication.shared.terminate(nil)
             }
