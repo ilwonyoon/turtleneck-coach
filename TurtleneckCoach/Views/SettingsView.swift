@@ -92,6 +92,31 @@ struct SettingsView: View {
         return "\(position), \(framing)."
     }
 
+    private var sensitivityDescription: String {
+        switch SensitivityMode(rawValue: sensitivityModeRawValue) ?? .balanced {
+        case .relaxed: return "Relaxed scoring for casual use."
+        case .balanced: return "Standard posture monitoring."
+        case .strict: return "Strict scoring for focused work sessions."
+        }
+    }
+
+    private var frequencyDescription: String {
+        switch NotificationFrequency(rawValue: notificationFrequencyRawValue) ?? .normal {
+        case .often: return "Alerts every 30 seconds."
+        case .normal: return "Alerts every 2.5 minutes."
+        case .rarely: return "Alerts every 5 minutes."
+        }
+    }
+
+    private var minSeverityDescription: String {
+        switch Severity(rawValue: minSeverityRawValue) ?? .correction {
+        case .good: return "Notify for any deviation from good posture."
+        case .correction: return "Notify when posture needs correction."
+        case .bad: return "Notify only for bad posture."
+        case .away: return "Notify only when away or very bad posture."
+        }
+    }
+
     private let valueColumnWidth: CGFloat = 220
     private let menuWidth: CGFloat = 170
 
@@ -184,22 +209,25 @@ struct SettingsView: View {
             }
 
             Section {
-                LabeledContent("Sensitivity") {
-                    valueColumn {
-                        Picker("", selection: sensitivityModeBinding) {
-                            ForEach(SensitivityMode.allCases, id: \.self) { mode in
-                                Text(mode.displayName).tag(mode)
-                            }
+                LabeledContent {
+                    Picker("", selection: sensitivityModeBinding) {
+                        ForEach(SensitivityMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: menuWidth, alignment: .trailing)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: menuWidth, alignment: .trailing)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) { // DS: one-off
+                        Text("Sensitivity")
+                        Text(sensitivityDescription)
+                            .font(DS.Font.subhead)
+                            .foregroundStyle(.secondary)
                     }
                 }
             } header: {
                 Text("Sensitivity")
-            } footer: {
-                Text("How strict the posture scoring is. Relaxed suits casual use; Strict is for focused work sessions.")
             }
 
             Section {
@@ -238,37 +266,45 @@ struct SettingsView: View {
                     }
                 }
 
-                LabeledContent("Frequency") {
-                    valueColumn {
-                        Picker("", selection: notificationFrequencyBinding) {
-                            ForEach(NotificationFrequency.allCases, id: \.self) { frequency in
-                                Text(frequency.displayName).tag(frequency)
-                            }
+                LabeledContent {
+                    Picker("", selection: notificationFrequencyBinding) {
+                        ForEach(NotificationFrequency.allCases, id: \.self) { frequency in
+                            Text(frequency.displayName).tag(frequency)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: menuWidth, alignment: .trailing)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: menuWidth, alignment: .trailing)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) { // DS: one-off
+                        Text("Frequency")
+                        Text(frequencyDescription)
+                            .font(DS.Font.subhead)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .disabled(!notificationsEnabled)
 
-                LabeledContent("Minimum Severity") {
-                    valueColumn {
-                        Picker("", selection: minSeverityBinding) {
-                            ForEach(Severity.allCases, id: \.self) { severity in
-                                Text(severity.displayName).tag(severity)
-                            }
+                LabeledContent {
+                    Picker("", selection: minSeverityBinding) {
+                        ForEach(Severity.allCases, id: \.self) { severity in
+                            Text(severity.displayName).tag(severity)
                         }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: menuWidth, alignment: .trailing)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: menuWidth, alignment: .trailing)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) { // DS: one-off
+                        Text("Minimum Severity")
+                        Text(minSeverityDescription)
+                            .font(DS.Font.subhead)
+                            .foregroundStyle(.secondary)
                     }
                 }
                 .disabled(!notificationsEnabled)
             } header: {
                 Text("Notifications")
-            } footer: {
-                Text("Often: every 30s · Normal: every 2.5min · Rarely: every 5min. Delivered via macOS Notification Center.")
             }
 
             Section {
