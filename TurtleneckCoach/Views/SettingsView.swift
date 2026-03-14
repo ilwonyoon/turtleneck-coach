@@ -72,16 +72,24 @@ struct SettingsView: View {
         return "\(minutes)m \(seconds)s"
     }
 
-    private var detectedContextText: String {
-        let source = engine.inferredContextSource.capitalized
-        if engine.inferredCameraContext == .unknown {
-            return "Checking (\(source))"
-        }
-        return "\(engine.inferredCameraContext.displayName) (\(source))"
+    private var cameraSourceDescription: String {
+        let camera = engine.activeCameraDisplayName
+        let position = engine.inferredCameraContext == .unknown
+            ? "Checking..."
+            : engine.inferredCameraContext.displayName
+        let framing = engine.inferredFramingState.displayName
+        return "Using \(camera). \(position), \(framing)."
     }
 
-    private var framingStateText: String {
-        engine.inferredFramingState.displayName
+    private var manualCameraDescription: String {
+        if engine.manualCameraDeviceID.isEmpty {
+            return "Select a camera device below."
+        }
+        let position = engine.inferredCameraContext == .unknown
+            ? "Checking..."
+            : engine.inferredCameraContext.displayName
+        let framing = engine.inferredFramingState.displayName
+        return "\(position), \(framing)."
     }
 
     private let valueColumnWidth: CGFloat = 220
@@ -99,63 +107,47 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent("Source Mode") {
-                    valueColumn {
-                        Picker("", selection: $engine.cameraSourceMode) {
-                            Text("Auto (Recommended)").tag(CameraSourceMode.auto)
-                            Text("Manual").tag(CameraSourceMode.manual)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: menuWidth, alignment: .trailing)
+                LabeledContent {
+                    Picker("", selection: $engine.cameraSourceMode) {
+                        Text("Auto (Recommended)").tag(CameraSourceMode.auto)
+                        Text("Manual").tag(CameraSourceMode.manual)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: menuWidth, alignment: .trailing)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) { // DS: one-off (macOS System Settings pattern)
+                        Text("Camera Source")
+                        Text(cameraSourceDescription)
+                            .font(DS.Font.subhead)
+                            .foregroundStyle(.secondary)
                     }
                 }
 
                 if engine.cameraSourceMode == .manual {
-                    LabeledContent("Camera Device") {
-                        valueColumn {
-                            Picker("", selection: $engine.manualCameraDeviceID) {
-                                Text("Select Camera").tag("")
-                                ForEach(engine.availableCameraDevices) { option in
-                                    Text(engine.cameraDeviceDisplayName(for: option))
-                                        .tag(engine.cameraDeviceID(for: option))
-                                }
+                    LabeledContent {
+                        Picker("", selection: $engine.manualCameraDeviceID) {
+                            Text("Select Camera").tag("")
+                            ForEach(engine.availableCameraDevices) { option in
+                                Text(engine.cameraDeviceDisplayName(for: option))
+                                    .tag(engine.cameraDeviceID(for: option))
                             }
-                            .labelsHidden()
-                            .pickerStyle(.menu)
-                            .frame(width: menuWidth, alignment: .trailing)
-                            .disabled(engine.availableCameraDevices.isEmpty)
                         }
-                    }
-                }
-
-                LabeledContent("Active Camera") {
-                    valueColumn {
-                        Text(engine.activeCameraDisplayName)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-
-                LabeledContent("Detected Position") {
-                    valueColumn {
-                        Text(detectedContextText)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-
-                LabeledContent("Framing Check") {
-                    valueColumn {
-                        Text(framingStateText)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .frame(width: menuWidth, alignment: .trailing)
+                        .disabled(engine.availableCameraDevices.isEmpty)
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) { // DS: one-off
+                            Text("Camera Device")
+                            Text(manualCameraDescription)
+                                .font(DS.Font.subhead)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             } header: {
                 Text("Camera")
-            } footer: {
-                Text("Camera position and framing are auto-detected.")
             }
 
             Section {
