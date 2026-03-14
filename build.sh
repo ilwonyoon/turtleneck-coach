@@ -66,6 +66,7 @@ swiftc \
   TurtleneckCoach/Views/SettingsView.swift \
   TurtleneckCoach/Views/SettingsWindowController.swift \
   TurtleneckCoach/Views/OnboardingView.swift \
+  TurtleneckCoach/Views/OnboardingWindowController.swift \
   TurtleneckCoach/Views/OnboardingPreviewController.swift \
   -o TurtleneckCoach.app/Contents/MacOS/TurtleneckCoach \
   -target arm64-apple-macos14 \
