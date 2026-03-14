@@ -256,7 +256,7 @@ swiftc \
 
 chmod +x "${EXECUTABLE_PATH}"
 
-echo "[4/6] Signing nested frameworks/bundles (if present)..."
+echo "[4/6] Signing nested frameworks/bundles and Python binaries..."
 USE_HARDENED_RUNTIME=0
 if [[ "${SIGNING_IDENTITY}" != "-" ]]; then
   USE_HARDENED_RUNTIME=1
@@ -267,16 +267,33 @@ fi
 
 CODESIGN_BASE_ARGS=(--force --sign "${SIGNING_IDENTITY}" --entitlements "${ENTITLEMENTS_PATH}")
 
+# Sign all nested binaries in Frameworks and Resources (including Python .so/.dylib and executables)
+NESTED_SIGN_COUNT=0
+
+# Sign Mach-O executables in python_runtime/bin/
+while IFS= read -r -d '' nested_exec; do
+  if file "${nested_exec}" | grep -q "Mach-O"; then
+    if [[ "${USE_HARDENED_RUNTIME}" -eq 1 ]]; then
+      codesign "${CODESIGN_BASE_ARGS[@]}" --options runtime --timestamp "${nested_exec}"
+    else
+      codesign "${CODESIGN_BASE_ARGS[@]}" "${nested_exec}"
+    fi
+    NESTED_SIGN_COUNT=$((NESTED_SIGN_COUNT + 1))
+  fi
+done < <(find "${RESOURCES_DIR}/python_runtime/bin" -type f -perm +111 -print0 2>/dev/null || true)
+
+# Sign .so, .dylib, .framework in all of Contents/
 while IFS= read -r -d '' nested_code; do
-  echo "  signing: ${nested_code}"
   if [[ "${USE_HARDENED_RUNTIME}" -eq 1 ]]; then
     codesign "${CODESIGN_BASE_ARGS[@]}" --options runtime --timestamp "${nested_code}"
   else
     codesign "${CODESIGN_BASE_ARGS[@]}" "${nested_code}"
   fi
-done < <(find "${FRAMEWORKS_DIR}" -mindepth 1 \
-  \( -name "*.framework" -o -name "*.dylib" -o -name "*.so" -o -name "*.bundle" -o -name "*.xpc" \) \
+  NESTED_SIGN_COUNT=$((NESTED_SIGN_COUNT + 1))
+done < <(find "${CONTENTS_DIR}" -mindepth 2 \
+  \( -name "*.framework" -o -name "*.dylib" -o -name "*.so" \) \
   -print0 2>/dev/null || true)
+echo "  signed ${NESTED_SIGN_COUNT} nested binaries."
 
 echo "[5/6] Signing app bundle..."
 if [[ "${USE_HARDENED_RUNTIME}" -eq 1 ]]; then
