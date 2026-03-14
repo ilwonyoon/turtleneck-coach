@@ -94,9 +94,9 @@ struct SettingsView: View {
 
     private var sensitivityDescription: String {
         switch SensitivityMode(rawValue: sensitivityModeRawValue) ?? .balanced {
-        case .relaxed: return "Relaxed scoring for casual use."
-        case .balanced: return "Standard posture monitoring."
-        case .strict: return "Strict scoring for focused work sessions."
+        case .relaxed: return "Gentler scores. Recommended if you're just starting."
+        case .balanced: return "Standard scores for daily monitoring."
+        case .strict: return "Tighter scores for those with good posture."
         }
     }
 

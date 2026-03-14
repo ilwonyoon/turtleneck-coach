@@ -12,6 +12,16 @@ struct OnboardingView: View {
     @State private var notificationsDenied = false
     @State private var didAttemptNotificationRequest = false
 
+    @AppStorage(SensitivityMode.storageKey)
+    private var sensitivityModeRawValue = SensitivityMode.defaultMode.rawValue
+
+    private var sensitivityModeBinding: Binding<SensitivityMode> {
+        Binding(
+            get: { SensitivityMode(rawValue: sensitivityModeRawValue) ?? .balanced },
+            set: { sensitivityModeRawValue = $0.rawValue }
+        )
+    }
+
     private var cameraAspectRatio: CGFloat {
         guard let frame = engine.currentFrame else { return 4.0 / 3.0 }
         return CGFloat(frame.width) / CGFloat(frame.height)
@@ -27,6 +37,10 @@ struct OnboardingView: View {
             case 0:
                 welcomeStep
             case 1:
+                cameraAnywhereStep
+            case 2:
+                sensitivityStep
+            case 3:
                 calibrateStep
             default:
                 scoreZonesStep
@@ -116,6 +130,147 @@ struct OnboardingView: View {
         .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
     }
 
+    private var cameraAnywhereStep: some View {
+        VStack(spacing: DS.Space.lg) {
+            Spacer(minLength: DS.Space.lg)
+
+            Image(systemName: "camera.on.rectangle.fill")
+                .font(DS.Font.display)
+                .foregroundStyle(.blue)
+
+            Text("Works With Any Camera")
+                .font(DS.Font.titleBold)
+
+            Text("Built-in webcam, external monitor camera, or laptop on the side — Turtleneck Coach adapts automatically.")
+                .font(DS.Font.subheadMedium)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
+            VStack(alignment: .leading, spacing: 10) { // DS: one-off
+                featureRow(icon: "laptopcomputer", color: .blue,
+                           title: "Built-in Camera",
+                           detail: "Your MacBook's FaceTime camera works perfectly.")
+                featureRow(icon: "display", color: .purple,
+                           title: "External Display",
+                           detail: "Studio Display, webcams, or any USB camera.")
+                featureRow(icon: "arrow.triangle.2.circlepath", color: .green,
+                           title: "Auto-Detect",
+                           detail: "Adjusts scoring based on camera angle and position.")
+            }
+            .padding(DS.Space.md)
+            .background(DS.Surface.card)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
+
+            Spacer(minLength: DS.Space.lg)
+
+            Button {
+                step = 2
+            } label: {
+                Text("Next")
+                    .font(DS.Font.subheadMedium)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var sensitivityStep: some View {
+        VStack(spacing: DS.Space.lg) {
+            Spacer(minLength: DS.Space.lg)
+
+            Image(systemName: "slider.horizontal.3")
+                .font(DS.Font.display)
+                .foregroundStyle(DS.Palette.green)
+
+            Text("Choose Your Level")
+                .font(DS.Font.titleBold)
+
+            Text("This controls how scores are calculated.\nYou can change this anytime in Settings.")
+                .font(DS.Font.subheadMedium)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
+            VStack(spacing: 8) { // DS: one-off
+                sensitivityCard(
+                    mode: .relaxed,
+                    icon: "leaf.fill",
+                    color: .green,
+                    detail: "Gentler scores. Recommended if you're just starting."
+                )
+                sensitivityCard(
+                    mode: .balanced,
+                    icon: "equal.circle.fill",
+                    color: .blue,
+                    detail: "Standard scores for daily monitoring."
+                )
+                sensitivityCard(
+                    mode: .strict,
+                    icon: "bolt.fill",
+                    color: .orange,
+                    detail: "Tighter scores for those with good posture."
+                )
+            }
+
+            Spacer(minLength: DS.Space.lg)
+
+            Button {
+                step = 3
+                engine.startMonitoring()
+                engine.startCalibration()
+            } label: {
+                Text("Next")
+                    .font(DS.Font.subheadMedium)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private func sensitivityCard(mode: SensitivityMode, icon: String, color: Color, detail: String) -> some View {
+        let isSelected = (SensitivityMode(rawValue: sensitivityModeRawValue) ?? .balanced) == mode
+
+        return Button {
+            sensitivityModeRawValue = mode.rawValue
+        } label: {
+            HStack(spacing: DS.Space.md) {
+                Image(systemName: icon)
+                    .font(DS.Font.icon)
+                    .foregroundStyle(color)
+                    .frame(width: DS.Size.iconFrame)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(mode.displayName)
+                        .font(DS.Font.subheadBold)
+                    Text(detail)
+                        .font(DS.Font.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(color)
+                        .font(DS.Font.icon)
+                }
+            }
+            .padding(.horizontal, DS.Space.md)
+            .padding(.vertical, 10) // DS: one-off
+            .background(isSelected ? color.opacity(0.08) : Color.clear)
+            .background(DS.Surface.card)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .overlay(
+                RoundedRectangle(cornerRadius: DS.Radius.md)
+                    .strokeBorder(isSelected ? color.opacity(0.4) : Color.clear, lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
     private var calibrateStep: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) { // DS: one-off
@@ -176,7 +331,7 @@ struct OnboardingView: View {
         }
         .onAppear {
             if engine.calibrationSuccess == true && engine.calibrationData != nil {
-                step = 2
+                step = 4
             }
         }
         .task {
@@ -187,7 +342,7 @@ struct OnboardingView: View {
         .onChange(of: engine.isCalibrating) { _, isCalibrating in
             guard !isCalibrating else { return }
             if engine.calibrationSuccess == true && engine.calibrationData != nil {
-                step = 2
+                step = 4
             }
         }
     }
@@ -234,6 +389,21 @@ struct OnboardingView: View {
                 )
             }
             .padding(.top, DS.Space.lg)
+
+            // Menu bar hint
+            HStack(spacing: 8) { // DS: one-off
+                Image(systemName: "menubar.arrow.up.rectangle")
+                    .font(DS.Font.icon)
+                    .foregroundStyle(.secondary)
+                Text("Look for the turtle icon in your menu bar to check your score anytime.")
+                    .font(DS.Font.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(DS.Space.md)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(DS.Surface.card)
+            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
+            .padding(.top, DS.Space.md)
 
             // Notification denied banner
             if notificationsDenied {
@@ -366,7 +536,6 @@ struct OnboardingView: View {
                 isRequestingPermissions = false
                 if cameraGranted {
                     step = 1
-                    engine.startMonitoring()
                 } else {
                     cameraDenied = true
                 }
