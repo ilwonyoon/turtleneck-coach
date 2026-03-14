@@ -108,8 +108,6 @@ struct MenuBarView: View {
                         }
                     }
 
-                    cameraPositionMenuRow
-
                     // Controls
                     controlButtons
 
@@ -229,68 +227,6 @@ struct MenuBarView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-    }
-
-    // MARK: - Camera Position
-
-    private var activeCameraPosition: CameraContext {
-        if let manualContext = engine.cameraContextSelection.resolvedContext {
-            return manualContext
-        }
-        return engine.inferredCameraContext
-    }
-
-    private var cameraPositionMenuTitle: String {
-        if engine.cameraContextSelection == .auto {
-            if activeCameraPosition == .unknown {
-                return "Auto"
-            }
-            return "Auto: \(activeCameraPosition.displayName)"
-        }
-        return activeCameraPosition.displayName
-    }
-
-    private var cameraPositionMenuRow: some View {
-        Menu {
-            Button("Auto (Recommended)") {
-                engine.cameraContextSelection = .auto
-            }
-
-            Divider()
-
-            Button("Above Eye Level  •  monitor/webcam above screen") {
-                engine.cameraContextSelection = .aboveEye
-            }
-
-            Button("Eye Level  •  camera roughly aligned with your eyes") {
-                engine.cameraContextSelection = .eyeLevel
-            }
-
-            Button("Below Eye Level  •  laptop below your eye line") {
-                engine.cameraContextSelection = .belowEye
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Text("Camera Position")
-                    .font(DS.Font.caption)
-                    .foregroundColor(.secondary)
-                    .textCase(.uppercase)
-                    .tracking(0.5)
-
-                Spacer()
-
-                Text(cameraPositionMenuTitle)
-                    .font(DS.Font.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-
-                Image(systemName: "chevron.down")
-                    .font(.caption2)
-                    .foregroundColor(.secondary)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: - Status Card

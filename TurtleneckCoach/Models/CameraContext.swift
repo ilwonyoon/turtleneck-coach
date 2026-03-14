@@ -70,39 +70,6 @@ enum FramingState: String, Codable, CaseIterable {
     }
 }
 
-enum CameraContextSelection: String, Codable, CaseIterable {
-    case auto
-    case aboveEye = "desktop"
-    case eyeLevel = "eyeLevel"
-    case belowEye = "laptop"
-
-    var displayName: String {
-        switch self {
-        case .auto:
-            return "Auto (Recommended)"
-        case .aboveEye:
-            return "Above Eye Level"
-        case .eyeLevel:
-            return "Eye Level"
-        case .belowEye:
-            return "Below Eye Level"
-        }
-    }
-
-    var resolvedContext: CameraContext? {
-        switch self {
-        case .auto:
-            return nil
-        case .aboveEye:
-            return .aboveEye
-        case .eyeLevel:
-            return .eyeLevel
-        case .belowEye:
-            return .belowEye
-        }
-    }
-}
-
 struct CameraContextInference: Equatable {
     let context: CameraContext
     let confidence: CGFloat

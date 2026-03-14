@@ -84,13 +84,6 @@ struct SettingsView: View {
         engine.inferredFramingState.displayName
     }
 
-    private var cameraPositionExampleText: String {
-        if let manualContext = engine.cameraContextSelection.resolvedContext {
-            return manualContext.exampleDescription
-        }
-        return engine.inferredCameraContext.exampleDescription
-    }
-
     private let valueColumnWidth: CGFloat = 220
     private let menuWidth: CGFloat = 170
 
@@ -144,33 +137,11 @@ struct SettingsView: View {
                     }
                 }
 
-                LabeledContent("Camera Position") {
-                    valueColumn {
-                        Picker("", selection: $engine.cameraContextSelection) {
-                            ForEach(CameraContextSelection.allCases, id: \.self) { selection in
-                                Text(selection.displayName).tag(selection)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .frame(width: menuWidth, alignment: .trailing)
-                    }
-                }
-
                 LabeledContent("Detected Position") {
                     valueColumn {
                         Text(detectedContextText)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
-                    }
-                }
-
-                LabeledContent("Typical Setup") {
-                    valueColumn {
-                        Text(cameraPositionExampleText)
-                            .foregroundStyle(.secondary)
-                            .multilineTextAlignment(.trailing)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
 
@@ -184,7 +155,7 @@ struct SettingsView: View {
             } header: {
                 Text("Camera")
             } footer: {
-                Text("Scoring depends on camera position and framing. Auto detects the closest match; manual lets you choose Above Eye Level, Eye Level, or Below Eye Level.")
+                Text("Camera position and framing are auto-detected.")
             }
 
             Section {

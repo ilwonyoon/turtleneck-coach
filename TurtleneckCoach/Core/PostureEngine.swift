@@ -22,7 +22,6 @@ enum PowerSavingSettings {
 enum CameraSelectionSettings {
     static let cameraSourceModeKey = "cameraSourceMode"
     static let manualCameraDeviceIDKey = "manualCameraDeviceID"
-    static let cameraContextSelectionKey = "cameraContextSelection"
 }
 
 /// Main orchestrator: continuous camera -> periodic analysis -> UI + notifications.
@@ -61,13 +60,6 @@ final class PostureEngine: ObservableObject {
             applyCameraSelectionIfMonitoring()
         }
     }
-    @Published var cameraContextSelection: CameraContextSelection = .auto {
-        didSet {
-            let previous = oldValue
-            persistCameraContextSelectionIfNeeded()
-            handleCameraContextSelectionChanged(from: previous)
-        }
-    }
     @Published var availableCameraDevices: [CameraDeviceOption] = []
     @Published var activeCameraDisplayName = "No active camera"
     @Published private(set) var isCalibrationStale = false
@@ -84,10 +76,6 @@ final class PostureEngine: ObservableObject {
     @AppStorage(CameraSelectionSettings.manualCameraDeviceIDKey)
     private var storedManualCameraDeviceID = "" {
         didSet { syncManualCameraDeviceIDFromStorage() }
-    }
-    @AppStorage(CameraSelectionSettings.cameraContextSelectionKey)
-    private var cameraContextSelectionRawValue = CameraContextSelection.auto.rawValue {
-        didSet { syncCameraContextSelectionFromStorage() }
     }
     @AppStorage(PowerSavingSettings.autoPauseWhenAwayKey)
     private var autoPauseEnabled = PowerSavingSettings.defaultAutoPauseWhenAway {
@@ -575,8 +563,6 @@ final class PostureEngine: ObservableObject {
     private var sessionLongestSlouchSeconds: TimeInterval = 0
     private var sessionCurrentSlouchStart: Date?
     private var isSyncingCameraSelectionState = false
-    private var isSyncingCameraContextSelectionState = false
-    private let contextSelectionRecalibrationMessage = "Camera Position changed. Recalibrating..."
     private var appWillTerminateObserver: NSObjectProtocol?
     private var screenSleepObserver: NSObjectProtocol?
     private var screenWakeObserver: NSObjectProtocol?
@@ -600,7 +586,6 @@ final class PostureEngine: ObservableObject {
             PowerSavingSettings.inactiveTimeoutSecondsKey: PowerSavingSettings.defaultInactiveTimeoutSeconds,
             CameraSelectionSettings.cameraSourceModeKey: CameraSourceMode.auto.rawValue,
             CameraSelectionSettings.manualCameraDeviceIDKey: "",
-            CameraSelectionSettings.cameraContextSelectionKey: CameraContextSelection.auto.rawValue,
             "adaptiveContextLogOnlyEnabled": true
         ])
         handleInactiveTimeoutChanged()
@@ -869,53 +854,14 @@ final class PostureEngine: ObservableObject {
         refreshActiveCameraDisplayName()
     }
 
-    private func persistCameraContextSelectionIfNeeded() {
-        guard !isSyncingCameraContextSelectionState else { return }
-        if cameraContextSelectionRawValue != cameraContextSelection.rawValue {
-            cameraContextSelectionRawValue = cameraContextSelection.rawValue
-        }
-    }
-
-    private func syncCameraContextSelectionFromStorage() {
-        guard !isSyncingCameraContextSelectionState else { return }
-        let resolved = CameraContextSelection(rawValue: cameraContextSelectionRawValue) ?? .auto
-        guard cameraContextSelection != resolved else { return }
-        isSyncingCameraContextSelectionState = true
-        cameraContextSelection = resolved
-        isSyncingCameraContextSelectionState = false
-    }
-
     private func loadCameraSelectionSettings() {
         isSyncingCameraSelectionState = true
         cameraSourceMode = CameraSourceMode(rawValue: cameraSourceModeRawValue) ?? .auto
         manualCameraDeviceID = storedManualCameraDeviceID
         isSyncingCameraSelectionState = false
 
-        isSyncingCameraContextSelectionState = true
-        cameraContextSelection = CameraContextSelection(rawValue: cameraContextSelectionRawValue) ?? .auto
-        isSyncingCameraContextSelectionState = false
-
         if cameraSourceModeRawValue != cameraSourceMode.rawValue {
             cameraSourceModeRawValue = cameraSourceMode.rawValue
-        }
-        if cameraContextSelectionRawValue != cameraContextSelection.rawValue {
-            cameraContextSelectionRawValue = cameraContextSelection.rawValue
-        }
-    }
-
-    private func handleCameraContextSelectionChanged(from previous: CameraContextSelection) {
-        guard previous != cameraContextSelection else { return }
-        guard !isSyncingCameraContextSelectionState else { return }
-
-        if calibrationData != nil {
-            isCalibrationStale = true
-        }
-
-        if isMonitoring {
-            startCalibration(reasonMessage: contextSelectionRecalibrationMessage)
-            engineLog("camera position selection changed \(previous.rawValue) -> \(cameraContextSelection.rawValue); auto-recalibrating")
-        } else {
-            engineLog("camera position selection changed \(previous.rawValue) -> \(cameraContextSelection.rawValue); calibration marked stale while paused")
         }
     }
 
@@ -1265,7 +1211,6 @@ final class PostureEngine: ObservableObject {
                 baseline: baseline,
                 previousState: postureState,
                 cameraPosition: cameraPosition,
-                cameraContext: cameraContextSelection.resolvedContext ?? inferredCameraContext,
                 yawDegrees: abs(currentHeadYaw),
                 sensitivityMode: sensitivityMode
             )
@@ -1541,7 +1486,7 @@ final class PostureEngine: ObservableObject {
         let totalScore = laptopScore + desktopScore + eyeLevelScore
         var context: CameraContext = .unknown
         var confidence: CGFloat = 0
-        var source = "auto"
+        let source = "auto"
 
         if totalScore > 0 {
             let ranked: [(CameraContext, CGFloat)] = [
@@ -1559,13 +1504,6 @@ final class PostureEngine: ObservableObject {
             }
         } else {
             reasons.append("noStrongHints")
-        }
-
-        if let manualContext = cameraContextSelection.resolvedContext {
-            context = manualContext
-            confidence = 1
-            source = "manual"
-            reasons.append("manualContextOverride")
         }
 
         if framingState == .checking, context != .unknown {

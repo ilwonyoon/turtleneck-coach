@@ -69,7 +69,6 @@ struct PostureAnalyzer {
         baseline: CalibrationData,
         previousState: PostureState,
         cameraPosition: CameraPosition,
-        cameraContext: CameraContext = .unknown,
         yawDegrees: CGFloat = 0,
         sensitivityMode: SensitivityMode = currentSensitivityMode
     ) -> PostureState {
@@ -133,8 +132,7 @@ struct PostureAnalyzer {
                 currentPitch: metrics.headPitch, baselinePitch: baseline.headPitch,
                 currentFaceSize: metrics.faceSizeNormalized, baselineFaceSize: baseline.baselineFaceSize,
                 currentForwardDepth: metrics.forwardDepth, baselineForwardDepth: baseline.forwardDepth,
-                classification: classification,
-                cameraContext: cameraContext
+                classification: classification
             )
             let forwardDeviation = relativeChange(
                 baseline: baseline.headForwardRatio,
@@ -237,8 +235,7 @@ struct PostureAnalyzer {
         currentFaceSize: CGFloat, baselineFaceSize: CGFloat,
         currentForwardDepth: CGFloat = 0,
         baselineForwardDepth: CGFloat = 0,
-        classification: PostureClassification,
-        cameraContext: CameraContext = .unknown
+        classification: PostureClassification
     ) -> Int {
         let cvaScore = relativeScore(currentCVA: currentCVA, baselineCVA: baselineCVA)
         let pitchDrop = max(0, baselinePitch - currentPitch)
