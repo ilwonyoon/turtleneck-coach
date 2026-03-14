@@ -15,8 +15,10 @@ struct DashboardView: View {
     @State private var sevenDayGoodPosturePercent: Double = 0
     @State private var coachingTipOffset: Int = 0
     @State private var refreshTimer = Timer.publish(every: 60, on: .main, in: .common).autoconnect()
-    @State private var animateIn = false
+    @State private var cardsVisible = false
+    @State private var numbersVisible = false
     @State private var chartAnimateIn = false
+    @State private var weeklyAnimateIn = false
 
     private var calendar: Calendar { .current }
     private var coachingTips: [CoachingTip] { CoachingTip.tips(for: coachingLevel) }
@@ -50,8 +52,12 @@ struct DashboardView: View {
                 summaryCards
 
                 postureTimelineCard
+                    .offset(y: chartAnimateIn ? 0 : 8)
+                    .opacity(chartAnimateIn ? 1 : 0)
 
                 weeklyTrendCard
+                    .offset(y: weeklyAnimateIn ? 0 : 8)
+                    .opacity(weeklyAnimateIn ? 1 : 0)
             }
             .padding(DS.Space.lg)
         }
@@ -59,10 +65,23 @@ struct DashboardView: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .onAppear {
             reloadData()
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                animateIn = true
-                withAnimation(.easeOut(duration: 0.8)) {
+            // Stagger: cards → numbers → today chart → weekly chart
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                withAnimation(.spring(response: 0.5, dampingFraction: 0.85)) {
+                    cardsVisible = true
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                numbersVisible = true
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
                     chartAnimateIn = true
+                }
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                    weeklyAnimateIn = true
                 }
             }
         }
@@ -83,9 +102,13 @@ struct DashboardView: View {
         HStack(spacing: DS.Space.sm) {
             goodPostureHeroCard
                 .frame(maxHeight: .infinity)
+                .offset(y: cardsVisible ? 0 : 8)
+                .opacity(cardsVisible ? 1 : 0)
 
             coachingTipCard
                 .frame(maxHeight: .infinity)
+                .offset(y: cardsVisible ? 0 : 8)
+                .opacity(cardsVisible ? 1 : 0)
         }
     }
 
@@ -96,16 +119,16 @@ struct DashboardView: View {
                 .foregroundColor(.secondary)
 
             HStack(alignment: .firstTextBaseline, spacing: DS.Space.xs) {
-                Text(formattedDuration(minutes: animateIn ? todaySummary.goodPostureMinutes : 0))
+                Text(formattedDuration(minutes: numbersVisible ? todaySummary.goodPostureMinutes : 0))
                     .font(DS.Font.scoreLg)
                     .foregroundStyle(DS.Severity.good)
-                    .contentTransition(.numericText())
-                    .animation(.easeOut(duration: 0.8), value: animateIn)
-                Text("/ " + formattedDuration(minutes: animateIn ? todaySummary.totalMonitoredMinutes : 0))
+                    .contentTransition(.numericText(countsDown: false))
+                    .animation(.spring(response: 0.6, dampingFraction: 0.85), value: numbersVisible)
+                Text("/ " + formattedDuration(minutes: numbersVisible ? todaySummary.totalMonitoredMinutes : 0))
                     .font(DS.Font.subhead)
                     .foregroundColor(.secondary)
-                    .contentTransition(.numericText())
-                    .animation(.easeOut(duration: 0.8), value: animateIn)
+                    .contentTransition(.numericText(countsDown: false))
+                    .animation(.spring(response: 0.6, dampingFraction: 0.85), value: numbersVisible)
             }
 
             Spacer(minLength: 0)
@@ -115,14 +138,10 @@ struct DashboardView: View {
                 .foregroundColor(.primary)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeIn(duration: 0.6).delay(0.4), value: animateIn)
             Text(coachMessage?.sub ?? "")
                 .font(DS.Font.caption)
                 .foregroundColor(.secondary)
                 .lineLimit(1)
-                .opacity(animateIn ? 1 : 0)
-                .animation(.easeIn(duration: 0.6).delay(0.4), value: animateIn)
         }
         .padding(DS.Space.md)
         .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -563,11 +582,7 @@ struct DashboardView: View {
         let safeMinutes = Int(max(0, minutes).rounded())
         let hours = safeMinutes / 60
         let remainingMinutes = safeMinutes % 60
-
-        if hours > 0 {
-            return "\(hours)h \(remainingMinutes)m"
-        }
-        return "\(remainingMinutes)m"
+        return String(format: "%d:%02d", hours, remainingMinutes)
     }
 
     private func formattedDurationCompact(minutes: Double) -> String {
@@ -605,7 +620,7 @@ private struct CircularPercentView: View {
                 )
                 .rotationEffect(.degrees(-90))
                 .scaleEffect(x: -1, y: 1)
-                .animation(.easeOut(duration: 1.0), value: progress)
+                .animation(.spring(response: 0.8, dampingFraction: 0.75), value: progress)
         }
     }
 }

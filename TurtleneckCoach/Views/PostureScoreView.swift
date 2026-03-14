@@ -33,7 +33,7 @@ struct PostureScoreView: View {
                     Text("\(score)")
                         .font(DS.Font.scoreLg)
                         .foregroundColor(scoreColor)
-                        .contentTransition(.numericText())
+                        .contentTransition(.numericText(countsDown: false))
                         .animation(.easeInOut(duration: 0.8), value: score)
                     Text("/ 100")
                         .font(DS.Font.callout)
