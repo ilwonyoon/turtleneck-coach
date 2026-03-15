@@ -1298,12 +1298,14 @@ final class PostureEngine: ObservableObject {
             }
         }
         #endif
+        #if DEBUG
         // Debug: log smoothed CVA, score, and severity every 3rd frame
         if Int.random(in: 0..<3) == 0 {
             let source = usingMediaPipe ? "MP" : "Vision"
             engineLog(String(format: "[SCORE/%@] rawCVA=%.1f smoothedCVA=%.1f relScore=%d severity=%@ menuBar=%@ pitch=%.1f",
                 source, rawCVA, smoothed, score, postureState.severity.rawValue, menuBarSeverity.rawValue, lastMediaPipeHeadPitch))
         }
+        #endif
         // Prune entries older than 2 minutes
         let pruneDate = now.addingTimeInterval(-120)
         scoreHistory.removeAll { $0.date < pruneDate }
