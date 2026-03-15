@@ -128,35 +128,20 @@ struct OnboardingView: View {
         VStack(spacing: 0) {
             Spacer()
 
-            // Hero: Turtle at desk with monitor
+            // Hero: Camera placement illustration
             // TODO: Replace with custom illustration
             onboardingImage("onboarding_camera")
-                .frame(width: 160, height: 120) // DS: one-off (onboarding hero)
+                .frame(width: 120, height: 120) // DS: one-off (onboarding hero)
 
-            Text("Any Camera Works")
+            Text("Place Your Camera Anywhere")
                 .font(DS.Onboarding.title)
                 .padding(.top, DS.Space.lg)
 
-            Text("Adapts automatically to your setup.")
+            Text("Above, below, or to the side — scoring adjusts automatically to your camera's position.")
                 .font(DS.Onboarding.body)
                 .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
                 .padding(.top, DS.Space.sm)
-
-            VStack(alignment: .leading, spacing: DS.Space.lg) {
-                featureRow(icon: "laptopcomputer", color: .blue,
-                           title: "Built-in",
-                           detail: "MacBook FaceTime camera.")
-                featureRow(icon: "display", color: .purple,
-                           title: "External",
-                           detail: "Studio Display, webcams, USB cameras.")
-                featureRow(icon: "arrow.triangle.2.circlepath", color: .green,
-                           title: "Auto-Detect",
-                           detail: "Adjusts for camera angle and position.")
-            }
-            .padding(DS.Space.xl)
-            .background(DS.Surface.card)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-            .padding(.top, DS.Space.xxl)
 
             Spacer()
 
