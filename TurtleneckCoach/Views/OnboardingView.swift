@@ -137,7 +137,7 @@ struct OnboardingView: View {
                 .font(DS.Onboarding.title)
                 .padding(.top, DS.Space.lg)
 
-            Text("Above, below, or to the side — scoring adjusts automatically to your camera's position.")
+            Text("Above, below, or to the side — just recalibrate when you change your setup.")
                 .font(DS.Onboarding.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
