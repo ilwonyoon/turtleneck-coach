@@ -79,7 +79,7 @@ struct OnboardingView: View {
             .padding(.top, DS.Space.xxl)
 
             // Disclaimer
-            Text("Not a medical device. Turtleneck Coach is a posture awareness tool that provides reminders to help you maintain better habits.")
+            Text("This is not a medical product. Forward head posture improves with stretching, exercise, and good habits. Turtleneck Coach helps you stay aware of your posture throughout the day.")
                 .font(DS.Onboarding.detail)
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
