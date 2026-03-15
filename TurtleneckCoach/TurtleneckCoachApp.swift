@@ -8,17 +8,19 @@ struct TurtleneckCoachApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView(engine: engine)
-                .frame(width: 340, height: 520)
+            Group {
+                if hasCompletedOnboarding {
+                    MenuBarView(engine: engine)
+                        .frame(width: 340, height: 520)
+                } else {
+                    OnboardingView(engine: engine)
+                        .frame(width: 340)
+                }
+            }
         } label: {
             menuBarLabel
         }
         .menuBarExtraStyle(.window)
-        .onChange(of: hasCompletedOnboarding) { _, completed in
-            if completed {
-                OnboardingWindowController.shared.close()
-            }
-        }
     }
 
     /// Request camera permission.
@@ -40,10 +42,5 @@ struct TurtleneckCoachApp: App {
         Image(systemName: "tortoise.fill")
             .symbolRenderingMode(.palette)
             .foregroundStyle(engine.menuBarIconColor)
-            .onAppear {
-                if !hasCompletedOnboarding {
-                    OnboardingWindowController.shared.show(engine: engine)
-                }
-            }
     }
 }
