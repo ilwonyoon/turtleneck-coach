@@ -225,6 +225,9 @@ struct SettingsView: View {
                                     }
                                     launchAtLogin = newValue
                                 } catch {
+                                    #if DEBUG
+                                    print("Launch-at-login toggle failed: \(error.localizedDescription)")
+                                    #endif
                                     launchAtLogin = SMAppService.mainApp.status == .enabled
                                 }
                             }
@@ -416,6 +419,7 @@ struct SettingsView: View {
         .padding(DS.Space.xl)
         .frame(minWidth: 540, minHeight: 460)
         .onAppear {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
             engine.refreshCameraDevices()
             UNUserNotificationCenter.current().getNotificationSettings { settings in
                 DispatchQueue.main.async {
