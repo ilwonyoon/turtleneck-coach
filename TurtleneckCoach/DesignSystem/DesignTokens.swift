@@ -131,22 +131,22 @@ enum DS {
 
     /// Onboarding typography — larger scale for welcome/setup windows.
     enum Onboarding {
-        /// 64pt — hero icon (tortoise, checkmark)
-        static let heroIcon    = SwiftUI.Font.system(size: 64)
-        /// 26pt Semibold — step title
-        static let title       = SwiftUI.Font.system(size: 26, weight: .semibold)
-        /// 15pt Regular — body / description text
-        static let body        = SwiftUI.Font.system(size: 15)
-        /// 15pt Medium — card titles, buttons
-        static let bodyMedium  = SwiftUI.Font.system(size: 15, weight: .medium)
-        /// 15pt Semibold — bold card titles (score zones)
-        static let bodyBold    = SwiftUI.Font.system(size: 15, weight: .semibold)
-        /// 14pt Regular — secondary descriptions in cards
-        static let detail      = SwiftUI.Font.system(size: 14)
-        /// 22pt — feature/card icons
-        static let icon        = SwiftUI.Font.system(size: 22)
-        /// 17pt — feature row icons
-        static let featureIcon = SwiftUI.Font.system(size: 17)
+        /// 52pt — hero icon (tortoise, checkmark)
+        static let heroIcon    = SwiftUI.Font.system(size: 52)
+        /// 22pt Semibold — step title (app name)
+        static let title       = SwiftUI.Font.system(size: 22, weight: .semibold)
+        /// 14pt Regular — body / description text
+        static let body        = SwiftUI.Font.system(size: 14)
+        /// 16pt Medium — card titles, buttons
+        static let bodyMedium  = SwiftUI.Font.system(size: 16, weight: .medium)
+        /// 16pt Semibold — bold card titles (score zones)
+        static let bodyBold    = SwiftUI.Font.system(size: 16, weight: .semibold)
+        /// 13pt Regular — secondary descriptions in cards
+        static let detail      = SwiftUI.Font.system(size: 13)
+        /// 24pt — feature/card icons
+        static let icon        = SwiftUI.Font.system(size: 24)
+        /// 18pt — feature row icons
+        static let featureIcon = SwiftUI.Font.system(size: 18)
         /// 30pt — icon frame width
         static let iconFrame: CGFloat = 30
         /// 26pt — feature icon frame width

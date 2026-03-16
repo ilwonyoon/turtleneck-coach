@@ -42,53 +42,44 @@ struct OnboardingView: View {
             Spacer(minLength: DS.Space.lg)
 
             Image(systemName: "tortoise.fill")
-                .font(DS.Font.display)
+                .font(DS.Onboarding.heroIcon)
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(DS.Palette.green)
 
             Text("Turtleneck Coach")
-                .font(DS.Font.titleBold)
+                .font(DS.Onboarding.title)
 
             HStack(spacing: 4) {
-                Text("Reduce your bad posture time while you work.")
-                    .font(DS.Font.subheadMedium)
-                    .foregroundStyle(.secondary)
-
-                Text("100% on-device.")
-                    .font(DS.Font.subheadMedium)
+                Text("Posture reminders, 100% on-device.")
+                    .font(DS.Onboarding.body)
                     .foregroundStyle(.secondary)
 
                 Image(systemName: "info.circle")
-                    .font(DS.Font.caption)
+                    .font(DS.Onboarding.detail)
                     .foregroundStyle(.tertiary)
-                    .help("All posture analysis runs locally on your Mac.\nNo images are stored, recorded, or sent anywhere.")
+                    .help("All analysis runs on your Mac.\nNo images are stored or sent anywhere.")
             }
-            .multilineTextAlignment(.center)
-            .frame(maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: 10) {
                 featureRow(icon: "camera.fill", color: .blue,
-                           title: "Camera Access",
-                           detail: "Tracks your head and shoulders to detect when you start slouching.")
+                           title: "Camera",
+                           detail: "Tracks head & shoulders.")
                 featureRow(icon: "bell.fill", color: .orange,
                            title: "Notifications",
-                           detail: "Gentle reminders when you've been leaning forward for a while.")
-                featureRow(icon: "lock.shield.fill", color: .green,
-                           title: "Private by Design",
-                           detail: "All processing happens on your Mac. Nothing leaves your device.")
+                           detail: "Alerts when slouching too long.")
             }
             .padding(DS.Space.md)
             .background(DS.Surface.card)
             .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
 
-            Spacer(minLength: DS.Space.lg)
+            Spacer(minLength: DS.Space.md)
 
             if cameraDenied {
                 cameraDeniedBanner
             }
 
-            Text("When you start, sit upright for a few seconds so Turtleneck Coach can learn your posture for your current camera position.")
-                .font(DS.Font.caption)
+            Text("Sit upright when you start — we'll learn your posture.")
+                .font(DS.Onboarding.detail)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
@@ -97,7 +88,7 @@ struct OnboardingView: View {
                 requestPermissionsAndStart()
             } label: {
                 Text(isRequestingPermissions ? "Requesting Access..." : "Start Monitoring")
-                    .font(DS.Font.subheadMedium)
+                    .font(DS.Onboarding.bodyMedium)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 8)
             }
@@ -349,16 +340,16 @@ struct OnboardingView: View {
     private func featureRow(icon: String, color: Color, title: String, detail: String) -> some View {
         HStack(alignment: .top, spacing: 10) { // DS: one-off
             Image(systemName: icon)
-                .font(DS.Font.callout)
+                .font(DS.Onboarding.featureIcon)
                 .foregroundStyle(color)
-                .frame(width: DS.Size.featureIconFrame, alignment: .center)
+                .frame(width: DS.Onboarding.featureIconFrame, alignment: .center)
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
-                    .font(DS.Font.subheadMedium)
+                    .font(DS.Onboarding.bodyMedium)
                 Text(detail)
-                    .font(DS.Font.caption)
+                    .font(DS.Onboarding.detail)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
