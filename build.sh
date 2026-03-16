@@ -68,7 +68,7 @@ swiftc \
   TurtleneckCoach/Views/OnboardingView.swift \
   -o TurtleneckCoach.app/Contents/MacOS/TurtleneckCoach \
   -target arm64-apple-macos14 \
-  -framework SwiftUI -framework Vision -framework AVFoundation -framework UserNotifications -framework AppKit -framework Network -framework Charts \
+  -framework SwiftUI -framework Vision -framework AVFoundation -framework UserNotifications -framework AppKit -framework Network -framework Charts -framework ServiceManagement \
   -parse-as-library -D DEBUG
 
 echo "Signing..."

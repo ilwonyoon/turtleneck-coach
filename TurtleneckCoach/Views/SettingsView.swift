@@ -1,9 +1,12 @@
 import SwiftUI
 import UserNotifications
 import AppKit
+import ServiceManagement
 
 struct SettingsView: View {
     @ObservedObject var engine: PostureEngine
+
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     @AppStorage(NotificationService.notificationsEnabledKey)
     private var notificationsEnabled = true
@@ -206,6 +209,32 @@ struct SettingsView: View {
                 Text("Power Saving")
             } footer: {
                 Text("Reduces camera activity when no one is detected to save battery.")
+            }
+
+            Section {
+                LabeledContent("Open at Login") {
+                    valueColumn {
+                        Toggle("", isOn: Binding(
+                            get: { launchAtLogin },
+                            set: { newValue in
+                                do {
+                                    if newValue {
+                                        try SMAppService.mainApp.register()
+                                    } else {
+                                        try SMAppService.mainApp.unregister()
+                                    }
+                                    launchAtLogin = newValue
+                                } catch {
+                                    launchAtLogin = SMAppService.mainApp.status == .enabled
+                                }
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                    }
+                }
+            } header: {
+                Text("General")
             }
 
             Section {
