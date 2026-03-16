@@ -49,11 +49,22 @@ struct OnboardingView: View {
             Text("Turtleneck Coach")
                 .font(DS.Font.titleBold)
 
-            Text("Reduce your bad posture time while you work.\nNo images are stored or sent anywhere.")
-                .font(DS.Font.subheadMedium)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+            HStack(spacing: 4) {
+                Text("Reduce your bad posture time while you work.")
+                    .font(DS.Font.subheadMedium)
+                    .foregroundStyle(.secondary)
+
+                Text("100% on-device.")
+                    .font(DS.Font.subheadMedium)
+                    .foregroundStyle(.secondary)
+
+                Image(systemName: "info.circle")
+                    .font(DS.Font.caption)
+                    .foregroundStyle(.tertiary)
+                    .help("All posture analysis runs locally on your Mac.\nNo images are stored, recorded, or sent anywhere.")
+            }
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
 
             VStack(alignment: .leading, spacing: 10) {
                 featureRow(icon: "camera.fill", color: .blue,
