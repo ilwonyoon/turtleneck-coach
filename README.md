@@ -25,11 +25,11 @@
 ## Keep The Turtle Green
 
 <p align="center">
-  <img src="./docs/assets/turtle-good.png" alt="Green turtle posture state" width="220" />
+  <img src="./docs/assets/turtle-states.png" alt="Turtleneck Coach turtle sidebar states" width="900" />
 </p>
 
 <p align="center">
-  You do not need to watch posture charts all day. Just keep the turtle green while you work.
+  You do not need to watch posture charts all day. Just keep the turtle green in the sidebar while you work.
 </p>
 
 ## Features
@@ -46,11 +46,11 @@ See your current posture state live and get quiet reminders when forward drift l
 </tr>
 <tr>
 <td width="40%" valign="middle">
-<h3>Recalibrate for your current setup</h3>
-Different desk height, camera angle, or seating position? Recalibrate and keep going. The app learns your upright baseline for this setup instead of forcing one fixed posture rule.
+<h3>Read the signal instantly</h3>
+The sidebar turtle tells you how you are doing at a glance. Green means keep going. Yellow and orange mean it is time to correct before bad posture becomes your default.
 </td>
 <td width="60%">
-<img src="./docs/assets/turtle-good.png" alt="Green turtle icon representing good posture" width="70%" />
+<img src="./docs/assets/turtle-states.png" alt="Turtle sidebar states from red to green" width="100%" />
 </td>
 </tr>
 <tr>
@@ -59,7 +59,7 @@ Different desk height, camera angle, or seating position? Recalibrate and keep g
 Open the dashboard for daily sessions, weekly trends, and coaching tips. The goal is not more warnings. It is better posture habits over time.
 </td>
 <td width="60%">
-<img src="./docs/assets/dashboard.png" alt="Dashboard with trends and coaching tips" width="100%" />
+<img src="./docs/assets/dashboard-overview.png" alt="Dashboard with daily activity and weekly progress" width="100%" />
 </td>
 </tr>
 </table>
