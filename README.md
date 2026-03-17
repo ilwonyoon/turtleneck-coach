@@ -9,8 +9,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ilwonyoon/turtleneck-coach/releases/latest">
-    <img src="https://img.shields.io/badge/Download-macOS%2014%2B-0A84FF?style=for-the-badge&logo=apple" alt="Download Turtleneck Coach for macOS" />
+  <a href="https://github.com/ilwonyoon/turtleneck-coach/releases/latest/download/TurtleneckCoach-1.0.0.dmg">
+    <img src="./docs/assets/download_for_mac.png" alt="Download for Mac" width="288" />
   </a>
 </p>
 
