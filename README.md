@@ -34,6 +34,7 @@ See your current posture state live and get quiet reminders when forward drift l
 <td width="40%" valign="middle">
 <h3>Read the signal instantly</h3>
 The sidebar turtle tells you how you are doing at a glance. Green means keep going. Yellow and orange mean it is time to correct before bad posture becomes your default.
+<br /><br />
 </td>
 <td width="60%">
 <img src="./docs/assets/turtle-states-tight.png" alt="Turtle sidebar states from red to green" width="100%" />
