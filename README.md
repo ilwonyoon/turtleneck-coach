@@ -49,6 +49,15 @@ Open the dashboard for daily sessions, weekly trends, and coaching tips. The goa
 <img src="./docs/assets/dashboard-overview.png" alt="Dashboard with daily activity and weekly progress" width="100%" />
 </td>
 </tr>
+<tr>
+<td width="40%" valign="middle">
+<h3>Built for different desk setups</h3>
+Move between a laptop on the desk, a raised laptop, or a monitor setup without changing how the app works. Recalibrate when your setup moves and keep going.
+</td>
+<td width="60%">
+<img src="./docs/assets/different-setups.png" alt="Three desk setups: laptop on desk, raised laptop, and monitor with Mac mini" width="100%" />
+</td>
+</tr>
 </table>
 
 ## Built For Everyday Use
@@ -57,7 +66,6 @@ Open the dashboard for daily sessions, weekly trends, and coaching tips. The goa
 - Sensitivity modes: Relaxed, Balanced, and Strict
 - Battery friendly: pauses when you step away or close your laptop
 - Private by default: camera processing stays on-device
-- Designed for real desks: recalibrate when your setup changes
 
 ## Install
 
