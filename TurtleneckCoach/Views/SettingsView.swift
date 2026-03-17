@@ -1,9 +1,12 @@
 import SwiftUI
 import UserNotifications
 import AppKit
+import ServiceManagement
 
 struct SettingsView: View {
     @ObservedObject var engine: PostureEngine
+
+    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     @AppStorage(NotificationService.notificationsEnabledKey)
     private var notificationsEnabled = true
@@ -209,6 +212,35 @@ struct SettingsView: View {
             }
 
             Section {
+                LabeledContent("Open at Login") {
+                    valueColumn {
+                        Toggle("", isOn: Binding(
+                            get: { launchAtLogin },
+                            set: { newValue in
+                                do {
+                                    if newValue {
+                                        try SMAppService.mainApp.register()
+                                    } else {
+                                        try SMAppService.mainApp.unregister()
+                                    }
+                                    launchAtLogin = newValue
+                                } catch {
+                                    #if DEBUG
+                                    print("Launch-at-login toggle failed: \(error.localizedDescription)")
+                                    #endif
+                                    launchAtLogin = SMAppService.mainApp.status == .enabled
+                                }
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                    }
+                }
+            } header: {
+                Text("General")
+            }
+
+            Section {
                 LabeledContent {
                     Picker("", selection: sensitivityModeBinding) {
                         ForEach(SensitivityMode.allCases, id: \.self) { mode in
@@ -387,6 +419,7 @@ struct SettingsView: View {
         .padding(DS.Space.xl)
         .frame(minWidth: 540, minHeight: 460)
         .onAppear {
+            launchAtLogin = SMAppService.mainApp.status == .enabled
             engine.refreshCameraDevices()
             UNUserNotificationCenter.current().getNotificationSettings { settings in
                 DispatchQueue.main.async {

@@ -252,7 +252,8 @@ swiftc \
   -framework UserNotifications \
   -framework AppKit \
   -framework Network \
-  -framework Charts
+  -framework Charts \
+  -framework ServiceManagement
 
 chmod +x "${EXECUTABLE_PATH}"
 

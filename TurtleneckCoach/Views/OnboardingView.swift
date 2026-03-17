@@ -1,6 +1,6 @@
 import SwiftUI
 import AppKit
-import UserNotifications
+
 
 struct OnboardingView: View {
     @ObservedObject var engine: PostureEngine
@@ -9,7 +9,6 @@ struct OnboardingView: View {
     @State private var step = 0
     @State private var isRequestingPermissions = false
     @State private var cameraDenied = false
-    @State private var notificationsDenied = false
     @State private var didAttemptNotificationRequest = false
 
     private var cameraAspectRatio: CGFloat {
@@ -26,10 +25,8 @@ struct OnboardingView: View {
             switch step {
             case 0:
                 welcomeStep
-            case 1:
-                calibrateStep
             default:
-                scoreZonesStep
+                calibrateStep
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -39,56 +36,38 @@ struct OnboardingView: View {
 
     private var welcomeStep: some View {
         VStack(spacing: DS.Space.lg) {
-            Spacer(minLength: DS.Space.lg)
+            Spacer()
 
-            Image(systemName: "tortoise.fill")
-                .font(DS.Font.display)
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(DS.Palette.green)
+            Image(nsImage: NSApp.applicationIconImage)
+                .resizable()
+                .frame(width: 80, height: 80)
+                .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
 
             Text("Turtleneck Coach")
-                .font(DS.Font.titleBold)
+                .font(DS.Onboarding.title)
 
-            Text("Reduce your bad posture time while you work.\nNo images are stored or sent anywhere.")
-                .font(DS.Font.subheadMedium)
+            Text("Monitors your posture while you work.\n100% on-device.")
+                .font(DS.Onboarding.body)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
 
-            VStack(alignment: .leading, spacing: 10) {
-                featureRow(icon: "camera.fill", color: .blue,
-                           title: "Camera Access",
-                           detail: "Tracks your head and shoulders to detect when you start slouching.")
-                featureRow(icon: "bell.fill", color: .orange,
-                           title: "Notifications",
-                           detail: "Gentle reminders when you've been leaning forward for a while.")
-                featureRow(icon: "lock.shield.fill", color: .green,
-                           title: "Private by Design",
-                           detail: "All processing happens on your Mac. Nothing leaves your device.")
-            }
-            .padding(DS.Space.md)
-            .background(DS.Surface.card)
-            .clipShape(RoundedRectangle(cornerRadius: DS.Radius.lg))
-
-            Spacer(minLength: DS.Space.lg)
+            Spacer()
 
             if cameraDenied {
                 cameraDeniedBanner
             }
 
-            Text("When you start, sit upright for a few seconds so Turtleneck Coach can learn your posture for your current camera position.")
-                .font(DS.Font.caption)
+            Text("Sit upright to start.")
+                .font(DS.Onboarding.detail)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
 
             Button {
                 requestPermissionsAndStart()
             } label: {
                 Text(isRequestingPermissions ? "Requesting Access..." : "Start Monitoring")
-                    .font(DS.Font.subheadMedium)
+                    .font(DS.Onboarding.bodyMedium)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+                    .padding(.vertical, DS.Space.sm)
             }
             .buttonStyle(.borderedProminent)
             .disabled(isRequestingPermissions)
@@ -96,8 +75,8 @@ struct OnboardingView: View {
     }
 
     private var cameraDeniedBanner: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .top, spacing: 8) {
+        VStack(alignment: .leading, spacing: DS.Space.sm) {
+            HStack(alignment: .top, spacing: DS.Space.sm) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .foregroundStyle(DS.Palette.orange)
                 Text("Camera access is required to monitor posture.")
@@ -176,7 +155,7 @@ struct OnboardingView: View {
         }
         .onAppear {
             if engine.calibrationSuccess == true && engine.calibrationData != nil {
-                step = 2
+                hasCompletedOnboarding = true
             }
         }
         .task {
@@ -187,105 +166,7 @@ struct OnboardingView: View {
         .onChange(of: engine.isCalibrating) { _, isCalibrating in
             guard !isCalibrating else { return }
             if engine.calibrationSuccess == true && engine.calibrationData != nil {
-                step = 2
-            }
-        }
-    }
-
-    private var scoreZonesStep: some View {
-        VStack(spacing: 0) {
-            // Success badge
-            Image(systemName: "checkmark.circle.fill")
-                .font(DS.Font.heroIcon)
-                .foregroundStyle(DS.Palette.green)
-                .padding(.top, DS.Space.lg)
-
-            Text("Calibration Complete")
-                .font(DS.Font.titleBold)
-                .padding(.top, 10)
-
-            Text("Here's how your score works:")
-                .font(DS.Font.subhead)
-                .foregroundStyle(.secondary)
-                .padding(.top, 4)
-
-            // Score zone cards
-            VStack(spacing: 8) {
-                scoreZoneCard(
-                    color: .green,
-                    icon: "face.smiling",
-                    title: "Great",
-                    range: "75–100",
-                    detail: "You're in great posture."
-                )
-                scoreZoneCard(
-                    color: .yellow,
-                    icon: "exclamationmark.triangle",
-                    title: "Adjust",
-                    range: "50–74",
-                    detail: "Chin may be drifting forward."
-                )
-                scoreZoneCard(
-                    color: .orange,
-                    icon: "arrow.up.circle",
-                    title: "Reset",
-                    range: "Below 50",
-                    detail: "Time to sit up and reset."
-                )
-            }
-            .padding(.top, DS.Space.lg)
-
-            // Notification denied banner
-            if notificationsDenied {
-                notificationDeniedBanner
-                    .padding(.top, DS.Space.md)
-            }
-
-            // CTA button
-            Button {
                 hasCompletedOnboarding = true
-            } label: {
-                Text("Start Monitoring")
-                    .font(DS.Font.subheadMedium)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-            }
-            .buttonStyle(.borderedProminent)
-            .padding(.top, DS.Space.lg)
-        }
-        .onAppear {
-            checkNotificationStatus()
-        }
-    }
-
-    private var notificationDeniedBanner: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "bell.slash.fill")
-                    .foregroundStyle(DS.Palette.orange)
-                Text("Notifications are off")
-                    .font(DS.Font.subheadBold)
-            }
-            Text("Enable notifications in System Settings to get posture alerts.")
-                .font(DS.Font.caption)
-                .foregroundStyle(.secondary)
-            Button("Open Settings") {
-                if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings") {
-                    NSWorkspace.shared.open(url)
-                }
-            }
-            .font(DS.Font.caption)
-        }
-        .padding(DS.Space.md)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DS.Surface.card)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-    }
-
-    private func checkNotificationStatus() {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            DispatchQueue.main.async {
-                notificationsDenied = settings.authorizationStatus == .denied
             }
         }
     }
@@ -295,64 +176,9 @@ struct OnboardingView: View {
         didAttemptNotificationRequest = true
         Task {
             await TurtleneckCoachApp.requestNotificationPermissionIfNeeded()
-            checkNotificationStatus()
         }
     }
 
-    private func scoreZoneCard(color: Color, icon: String, title: String, range: String, detail: String) -> some View {
-        HStack(spacing: DS.Space.md) {
-            RoundedRectangle(cornerRadius: DS.Radius.sm)
-                .fill(color.opacity(0.8))
-                .frame(width: DS.Size.colorAccentBar)
-
-            Image(systemName: icon)
-                .font(DS.Font.icon)
-                .foregroundStyle(color)
-                .frame(width: DS.Size.iconFrame)
-
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 6) {
-                    Text(title)
-                        .font(DS.Font.subheadBold)
-                    Text(range)
-                        .font(DS.Font.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(.quaternary.opacity(0.5))
-                        .clipShape(Capsule())
-                }
-                Text(detail)
-                    .font(DS.Font.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, DS.Space.md)
-        .padding(.vertical, 10) // DS: one-off
-        .background(DS.Surface.card)
-        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.md))
-    }
-
-    private func featureRow(icon: String, color: Color, title: String, detail: String) -> some View {
-        HStack(alignment: .top, spacing: 10) { // DS: one-off
-            Image(systemName: icon)
-                .font(DS.Font.callout)
-                .foregroundStyle(color)
-                .frame(width: DS.Size.featureIconFrame, alignment: .center)
-                .padding(.top, 2)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(DS.Font.subheadMedium)
-                Text(detail)
-                    .font(DS.Font.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-    }
 
     private func requestPermissionsAndStart() {
         guard !isRequestingPermissions else { return }

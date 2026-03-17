@@ -11,12 +11,11 @@ struct TurtleneckCoachApp: App {
             Group {
                 if hasCompletedOnboarding {
                     MenuBarView(engine: engine)
-                        .frame(width: 340, height: 520)
                 } else {
                     OnboardingView(engine: engine)
-                        .frame(width: 340)
                 }
             }
+            .frame(width: 340, height: 520)
         } label: {
             menuBarLabel
         }
