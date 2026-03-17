@@ -4,6 +4,7 @@ This document defines the DMG distribution workflow for this repository’s curr
 
 ## Release Entry Points
 
+- Public landing page for installs/screenshots: [`README.md`](../README.md)
 - Development/local app only: [`build.sh`](../build.sh)
 - Public release app build/signing: [`scripts/build-release.sh`](../scripts/build-release.sh)
 - DMG packaging: [`scripts/create-dmg.sh`](../scripts/create-dmg.sh)
@@ -27,6 +28,13 @@ Important:
 - Vision-only public releases are out of scope unless the product requirement changes explicitly.
 
 This is not a universal build today. Intel Macs are out of scope for the current release path unless the build scripts are updated accordingly.
+
+## Release Presentation Policy
+
+- `README.md` is the product landing page for GitHub visitors.
+- Reusable screenshots and logo assets live under [`docs/assets`](../docs/assets).
+- GitHub Release assets should stay limited to the installer artifact unless there is a strong technical reason to upload more.
+- Do not upload marketing screenshots to each release. Reference the checked-in assets from `README.md` instead.
 
 ## 1) Prerequisites Checklist
 
@@ -164,7 +172,33 @@ Use [`scripts/notarize.sh`](../scripts/notarize.sh).
   - [ ] `spctl --assess --type open --context context:primary-signature --verbose=4 TurtleneckCoach-<version>.dmg`
 - [ ] Smoke-test installation on a clean macOS user account.
 
-## 8) Sparkle Auto-Update Integration (Future)
+## 8) GitHub Release Page Structure
+
+Use GitHub Releases as the changelog + download surface, not as the full product landing page.
+
+### Recommended release body
+
+- Release title: `Turtleneck Coach vX.Y.Z`
+- One short summary sentence
+- `### Highlights` with 3-5 bullets
+- Optional install/reminder note if requirements changed
+- Link readers back to [`README.md`](../README.md) for screenshots, product tour, and positioning copy
+
+### Asset policy
+
+- Upload the notarized DMG as the main public release asset.
+- Keep screenshots/logo in [`docs/assets`](../docs/assets) and reference them from [`README.md`](../README.md).
+- Do not upload marketing screenshots to each release unless the image itself is the thing being distributed.
+
+### Manual publishing checklist
+
+- Build and sign with [`scripts/build-release.sh`](../scripts/build-release.sh).
+- Package with [`scripts/create-dmg.sh`](../scripts/create-dmg.sh).
+- Notarize with [`scripts/notarize.sh`](../scripts/notarize.sh).
+- Create the GitHub Release manually with a concise changelog-focused body.
+- Upload the notarized DMG only.
+
+## 9) Sparkle Auto-Update Integration (Future)
 
 ### Checklist
 
@@ -175,7 +209,7 @@ Use [`scripts/notarize.sh`](../scripts/notarize.sh).
 - [ ] Ensure every update payload is notarized and stapled.
 - [ ] Add release CI pipeline for build -> sign -> notarize -> appcast publish.
 
-## 9) Mac App Store Migration Path (Future)
+## 10) Mac App Store Migration Path (Future)
 
 ### Checklist
 
@@ -186,7 +220,7 @@ Use [`scripts/notarize.sh`](../scripts/notarize.sh).
 - [ ] Transition signing from Developer ID to Mac App Store distribution cert/profile.
 - [ ] Archive and submit via App Store Connect pipeline.
 
-## 10) Recommended Command Sequence
+## 11) Recommended Command Sequence
 
 ```bash
 # 0) Do not use ./build.sh for public release. It is dev-only.
