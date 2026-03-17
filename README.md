@@ -15,21 +15,7 @@
 </p>
 
 <p align="center">
-  <img src="./docs/assets/live-preview.png" alt="Turtleneck Coach live posture monitoring preview" width="900" />
-</p>
-
-<p align="center">
   Turtleneck Coach is a gentle posture coach for macOS. It lives in your menu bar, adapts to your current setup, and nudges you before forward-head posture turns into a habit.
-</p>
-
-## Keep The Turtle Green
-
-<p align="center">
-  <img src="./docs/assets/turtle-states.png" alt="Turtleneck Coach turtle sidebar states" width="900" />
-</p>
-
-<p align="center">
-  You do not need to watch posture charts all day. Just keep the turtle green in the sidebar while you work.
 </p>
 
 ## Features
@@ -41,7 +27,7 @@
 See your current posture state live and get quiet reminders when forward drift lasts too long. Turtleneck Coach stays lightweight so you can leave it running in the background.
 </td>
 <td width="60%">
-<img src="./docs/assets/live-preview.png" alt="Live posture monitoring view" width="100%" />
+<img src="./docs/assets/live-comparison.png" alt="Live posture monitoring with good and bad posture examples" width="100%" />
 </td>
 </tr>
 <tr>
