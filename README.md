@@ -42,15 +42,6 @@ The sidebar turtle tells you how you are doing at a glance. Green means keep goi
 </tr>
 <tr>
 <td width="40%" valign="middle">
-<h3>See progress over time</h3>
-Open the dashboard for daily sessions, weekly trends, and coaching tips. The goal is not more warnings. It is better posture habits over time.
-</td>
-<td width="60%">
-<img src="./docs/assets/dashboard-overview.png" alt="Dashboard with daily activity and weekly progress" width="100%" />
-</td>
-</tr>
-<tr>
-<td width="40%" valign="middle">
 <h3>Built for different desk setups</h3>
 Move between a laptop on the desk, a raised laptop, or a monitor setup without changing how the app works. Recalibrate when your setup moves and keep going.
 </td>
@@ -58,12 +49,29 @@ Move between a laptop on the desk, a raised laptop, or a monitor setup without c
 <img src="./docs/assets/different-setups.png" alt="Three desk setups: laptop on desk, raised laptop, and monitor with Mac mini" width="100%" />
 </td>
 </tr>
+<tr>
+<td width="40%" valign="middle">
+<h3>Choose the sensitivity that fits you</h3>
+Relaxed, Balanced, or Strict. Pick the coaching style that matches your posture habits and how often you want reminders during the day.
+</td>
+<td width="60%">
+<img src="./docs/assets/sensitivity.png" alt="Sensitivity settings with Relaxed, Balanced, and Strict options" width="100%" />
+</td>
+</tr>
+<tr>
+<td width="40%" valign="middle">
+<h3>See progress over time</h3>
+Open the dashboard for daily sessions, weekly trends, and coaching tips. The goal is not more warnings. It is better posture habits over time.
+</td>
+<td width="60%">
+<img src="./docs/assets/dashboard-overview.png" alt="Dashboard with daily activity and weekly progress" width="100%" />
+</td>
+</tr>
 </table>
 
 ## Built For Everyday Use
 
 - Menu bar first: glanceable posture state without opening a full app window
-- Sensitivity modes: Relaxed, Balanced, and Strict
 - Battery friendly: pauses when you step away or close your laptop
 - Private by default: camera processing stays on-device
 
