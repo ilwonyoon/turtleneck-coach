@@ -53,9 +53,10 @@ Move between a laptop on the desk, a raised laptop, or a monitor setup without c
 <td width="40%" valign="middle">
 <h3>Choose the sensitivity that fits you</h3>
 Relaxed, Balanced, or Strict. Pick the coaching style that matches your posture habits and how often you want reminders during the day.
+<br /><br />
 </td>
 <td width="60%">
-<img src="./docs/assets/sensitivity.png" alt="Sensitivity settings with Relaxed, Balanced, and Strict options" width="100%" />
+<img src="./docs/assets/sensitivity-tight.png" alt="Sensitivity settings with Relaxed, Balanced, and Strict options" width="100%" />
 </td>
 </tr>
 <tr>
