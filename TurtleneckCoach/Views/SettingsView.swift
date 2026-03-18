@@ -22,6 +22,9 @@ struct SettingsView: View {
     @AppStorage(NotificationService.minSeverityKey)
     private var minSeverityRawValue = Severity.correction.rawValue
 
+    @AppStorage(NotificationService.notificationSoundKey)
+    private var notificationSoundRawValue = NotificationSoundOption.defaultOption.id
+
     @AppStorage(PowerSavingSettings.autoPauseWhenAwayKey)
     private var autoPauseWhenAway = PowerSavingSettings.defaultAutoPauseWhenAway
 
@@ -53,6 +56,21 @@ struct SettingsView: View {
         Binding(
             get: { Severity(rawValue: minSeverityRawValue) ?? .correction },
             set: { minSeverityRawValue = $0.rawValue }
+        )
+    }
+
+    private var notificationSoundBinding: Binding<String> {
+        Binding(
+            get: { NotificationSoundOption.normalizedID(notificationSoundRawValue) },
+            set: { newValue in
+                let normalizedValue = NotificationSoundOption.normalizedID(newValue)
+                guard notificationSoundRawValue != normalizedValue else {
+                    return
+                }
+
+                notificationSoundRawValue = normalizedValue
+                NotificationService.previewSound(soundID: normalizedValue)
+            }
         )
     }
 
@@ -114,6 +132,24 @@ struct SettingsView: View {
         case .correction: return "Notify when posture needs correction."
         case .bad: return "Notify only for bad posture."
         case .away: return "Notify only when away or very bad posture."
+        }
+    }
+
+    private var notificationSoundDescription: String {
+        let option = NotificationSoundOption.option(for: notificationSoundRawValue)
+
+        guard option.id != NotificationSoundOption.offID else {
+            return "Currently off. Posture alerts appear silently."
+        }
+
+        return "Currently on. \(option.displayName) plays for posture alerts."
+    }
+
+    private func notificationSoundLabel(for option: NotificationSoundOption) -> some View {
+        Label {
+            Text(option.displayName)
+        } icon: {
+            Image(systemName: option.id == NotificationSoundOption.offID ? "speaker.slash.fill" : "speaker.wave.2.fill")
         }
     }
 
@@ -332,6 +368,26 @@ struct SettingsView: View {
                     }
                 }
                 .disabled(!notificationsEnabled)
+
+                LabeledContent {
+                    Picker("", selection: notificationSoundBinding) {
+                        ForEach(NotificationSoundOption.allOptions) { option in
+                            notificationSoundLabel(for: option)
+                                .tag(option.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: menuWidth, alignment: .trailing)
+                } label: {
+                    VStack(alignment: .leading, spacing: 2) { // DS: one-off
+                        Text("Sound")
+                        Text(notificationSoundDescription)
+                            .font(DS.Font.subhead)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .disabled(!notificationsEnabled)
             } header: {
                 Text("Notifications")
             }
@@ -417,6 +473,7 @@ struct SettingsView: View {
         .frame(minWidth: 540, minHeight: 460)
         .onAppear {
             launchAtLogin = SMAppService.mainApp.status == .enabled
+            normalizeNotificationSoundSettings()
             engine.refreshCameraDevices()
             UNUserNotificationCenter.current().getNotificationSettings { settings in
                 DispatchQueue.main.async {
@@ -441,6 +498,10 @@ struct SettingsView: View {
 
     private var privacyPolicyURL: URL {
         URL(string: "https://gist.github.com/ilwonyoon/3e4c3781ab34990acb8af2f5972b687b")!
+    }
+
+    private func normalizeNotificationSoundSettings() {
+        notificationSoundRawValue = NotificationService.migrateLegacySoundPreference()
     }
 
     private func openFeedbackEmail() {
