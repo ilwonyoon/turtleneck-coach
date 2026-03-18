@@ -28,9 +28,16 @@ struct SettingsView: View {
     @AppStorage(PowerSavingSettings.inactiveTimeoutSecondsKey)
     private var inactiveTimeoutSeconds = PowerSavingSettings.defaultInactiveTimeoutSeconds
 
+    private var inactiveTimeoutSliderValue: Binding<Double> {
+        Binding(
+            get: { PowerSavingSettings.inactiveTimeoutSliderIndex(for: inactiveTimeoutSeconds) },
+            set: { inactiveTimeoutSeconds = PowerSavingSettings.inactiveTimeoutSeconds(forSliderIndex: $0) }
+        )
+    }
+
     private var sensitivityModeBinding: Binding<SensitivityMode> {
         Binding(
-            get: { SensitivityMode(rawValue: sensitivityModeRawValue) ?? .balanced },
+            get: { SensitivityMode(rawValue: sensitivityModeRawValue) ?? SensitivityMode.defaultMode },
             set: { sensitivityModeRawValue = $0.rawValue }
         )
     }
@@ -62,17 +69,7 @@ struct SettingsView: View {
     }
 
     private var inactiveTimeoutLabel: String {
-        let totalSeconds = Int(inactiveTimeoutSeconds.rounded())
-        let minutes = totalSeconds / 60
-        let seconds = totalSeconds % 60
-
-        if minutes == 0 {
-            return "\(totalSeconds)s"
-        }
-        if seconds == 0 {
-            return "\(minutes)m"
-        }
-        return "\(minutes)m \(seconds)s"
+        PowerSavingSettings.inactiveTimeoutLabel(for: inactiveTimeoutSeconds)
     }
 
     private var cameraSourceDescription: String {
@@ -96,7 +93,7 @@ struct SettingsView: View {
     }
 
     private var sensitivityDescription: String {
-        switch SensitivityMode(rawValue: sensitivityModeRawValue) ?? .balanced {
+        switch SensitivityMode(rawValue: sensitivityModeRawValue) ?? SensitivityMode.defaultMode {
         case .relaxed: return "Gentler scores. Recommended if you're just starting."
         case .balanced: return "Standard scores for daily monitoring."
         case .strict: return "Tighter scores for those with good posture."
@@ -191,9 +188,9 @@ struct SettingsView: View {
                     valueColumn {
                         HStack(spacing: 8) {
                             Slider(
-                                value: $inactiveTimeoutSeconds,
-                                in: PowerSavingSettings.minInactiveTimeoutSeconds...PowerSavingSettings.maxInactiveTimeoutSeconds,
-                                step: 5
+                                value: inactiveTimeoutSliderValue,
+                                in: 0...Double(PowerSavingSettings.inactiveTimeoutOptionsSeconds.count - 1),
+                                step: 1
                             )
                             .frame(width: 120)
 

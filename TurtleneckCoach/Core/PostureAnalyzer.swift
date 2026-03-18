@@ -6,7 +6,7 @@ enum SensitivityMode: String, CaseIterable {
     case strict
 
     static let storageKey = "sensitivityMode"
-    static let defaultMode: SensitivityMode = .balanced
+    static let defaultMode: SensitivityMode = .relaxed
 
     var displayName: String {
         switch self {
@@ -46,7 +46,7 @@ struct PostureAnalyzer {
 
     static var currentSensitivityMode: SensitivityMode {
         let rawValue = UserDefaults.standard.string(forKey: SensitivityMode.storageKey)
-        return SensitivityMode(rawValue: rawValue ?? "") ?? .balanced
+        return SensitivityMode(rawValue: rawValue ?? "") ?? SensitivityMode.defaultMode
     }
 
     // Score severity thresholds based on sensitivity mode.

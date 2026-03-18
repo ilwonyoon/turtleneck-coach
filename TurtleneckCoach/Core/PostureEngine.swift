@@ -14,9 +14,38 @@ enum PowerSavingSettings {
     static let autoPauseWhenAwayKey = "autoPauseWhenAway"
     static let inactiveTimeoutSecondsKey = "inactiveTimeoutSeconds"
     static let defaultAutoPauseWhenAway = true
-    static let defaultInactiveTimeoutSeconds: Double = 30
-    static let minInactiveTimeoutSeconds: Double = 30
-    static let maxInactiveTimeoutSeconds: Double = 300
+    static let inactiveTimeoutOptionsSeconds: [Double] = [60, 120, 300, 900, 1800]
+    static let defaultInactiveTimeoutSeconds: Double = 300
+    static let minInactiveTimeoutSeconds: Double = inactiveTimeoutOptionsSeconds.first ?? 60
+    static let maxInactiveTimeoutSeconds: Double = inactiveTimeoutOptionsSeconds.last ?? 1800
+
+    static func normalizedInactiveTimeoutSeconds(_ value: Double) -> Double {
+        let clamped = min(max(value, minInactiveTimeoutSeconds), maxInactiveTimeoutSeconds)
+        return inactiveTimeoutOptionsSeconds.min { lhs, rhs in
+            let lhsDelta = abs(lhs - clamped)
+            let rhsDelta = abs(rhs - clamped)
+            if lhsDelta == rhsDelta { return lhs < rhs }
+            return lhsDelta < rhsDelta
+        } ?? defaultInactiveTimeoutSeconds
+    }
+
+    static func inactiveTimeoutSliderIndex(for seconds: Double) -> Double {
+        let normalized = normalizedInactiveTimeoutSeconds(seconds)
+        guard let index = inactiveTimeoutOptionsSeconds.firstIndex(of: normalized) else { return 0 }
+        return Double(index)
+    }
+
+    static func inactiveTimeoutSeconds(forSliderIndex index: Double) -> Double {
+        guard !inactiveTimeoutOptionsSeconds.isEmpty else { return defaultInactiveTimeoutSeconds }
+        let maxIndex = inactiveTimeoutOptionsSeconds.count - 1
+        let clampedIndex = min(max(Int(index.rounded()), 0), maxIndex)
+        return inactiveTimeoutOptionsSeconds[clampedIndex]
+    }
+
+    static func inactiveTimeoutLabel(for seconds: Double) -> String {
+        let minutes = Int(normalizedInactiveTimeoutSeconds(seconds) / 60)
+        return "\(minutes)m"
+    }
 }
 
 enum CameraSelectionSettings {
@@ -102,7 +131,7 @@ final class PostureEngine: ObservableObject {
 
     private var sensitivityMode: SensitivityMode {
         let rawValue = UserDefaults.standard.string(forKey: SensitivityMode.storageKey) ?? sensitivityModeRawValue
-        return SensitivityMode(rawValue: rawValue) ?? .balanced
+        return SensitivityMode(rawValue: rawValue) ?? SensitivityMode.defaultMode
     }
 
     var postureEmoji: String {
@@ -582,6 +611,7 @@ final class PostureEngine: ObservableObject {
             }
         }
         UserDefaults.standard.register(defaults: [
+            SensitivityMode.storageKey: SensitivityMode.defaultMode.rawValue,
             PowerSavingSettings.autoPauseWhenAwayKey: PowerSavingSettings.defaultAutoPauseWhenAway,
             PowerSavingSettings.inactiveTimeoutSecondsKey: PowerSavingSettings.defaultInactiveTimeoutSeconds,
             CameraSelectionSettings.cameraSourceModeKey: CameraSourceMode.auto.rawValue,
@@ -994,7 +1024,7 @@ final class PostureEngine: ObservableObject {
     }
 
     private var inactiveTimeoutInterval: TimeInterval {
-        max(PowerSavingSettings.minInactiveTimeoutSeconds, inactiveTimeout)
+        PowerSavingSettings.normalizedInactiveTimeoutSeconds(inactiveTimeout)
     }
 
     private var drowsyTimeoutInterval: TimeInterval {
@@ -1657,12 +1687,9 @@ final class PostureEngine: ObservableObject {
     }
 
     private func handleInactiveTimeoutChanged() {
-        let clamped = min(
-            max(inactiveTimeout, PowerSavingSettings.minInactiveTimeoutSeconds),
-            PowerSavingSettings.maxInactiveTimeoutSeconds
-        )
-        if clamped != inactiveTimeout {
-            inactiveTimeout = clamped
+        let normalized = PowerSavingSettings.normalizedInactiveTimeoutSeconds(inactiveTimeout)
+        if normalized != inactiveTimeout {
+            inactiveTimeout = normalized
             return
         }
     }
