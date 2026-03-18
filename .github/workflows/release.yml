@@ -10,7 +10,6 @@ permissions:
 
 env:
   APP_NAME: TurtleneckCoach
-  SIGNING_IDENTITY: "Developer ID Application: ILWON YOON (LG7667PAS6)"
 
 jobs:
   build-sign-release:
@@ -72,13 +71,17 @@ jobs:
           # Verify the signing identity is available
           security find-identity -v -p codesigning "${KEYCHAIN_PATH}"
 
+          # Extract signing identity name from keychain
+          IDENTITY=$(security find-identity -v -p codesigning "${KEYCHAIN_PATH}" | grep "Developer ID Application" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "signing_identity=${IDENTITY}" >> "$GITHUB_OUTPUT"
+
           # Clean up cert file
           rm -f "${CERT_PATH}"
 
       - name: Build and sign app
         run: |
           chmod +x ./scripts/build-release.sh
-          ./scripts/build-release.sh "${SIGNING_IDENTITY}"
+          ./scripts/build-release.sh "${{ steps.keychain.outputs.signing_identity }}"
 
       - name: Verify code signature
         run: |
