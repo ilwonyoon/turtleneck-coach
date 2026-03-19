@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ilwonyoon/turtleneck-coach/releases/latest/download/TurtleneckCoach-1.0.0.dmg">
+  <a href="https://github.com/ilwonyoon/turtleneck-coach/releases/latest">
     <img src="./docs/assets/download_for_mac_lg.png" alt="Download for Mac" width="202" />
   </a>
 </p>
