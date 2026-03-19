@@ -79,6 +79,9 @@ jobs:
           rm -f "${CERT_PATH}"
 
       - name: Build and sign app
+        env:
+          ANALYTICS_ENDPOINT_URL: https://turtleneck-analytics.ilwonyoon-turtleneck.workers.dev/v1/events
+          ANALYTICS_ENABLED_BY_DEFAULT: "1"
         run: |
           chmod +x ./scripts/build-release.sh
           ./scripts/build-release.sh "${{ steps.keychain.outputs.signing_identity }}"
