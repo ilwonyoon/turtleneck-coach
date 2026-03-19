@@ -619,6 +619,7 @@ final class PostureEngine: ObservableObject {
             "adaptiveContextLogOnlyEnabled": true
         ])
         handleInactiveTimeoutChanged()
+        UsageAnalyticsService.shared.start()
 
         #if DEBUG
         // Log engine creation
@@ -738,6 +739,7 @@ final class PostureEngine: ObservableObject {
         isMediaPipeConnectInFlight = false
         mediaPipeClient.shutdown()
         camera.stopSession()
+        UsageAnalyticsService.shared.stop()
     }
 
     /// Pause camera and analysis when screen sleeps to save battery and protect privacy.

@@ -56,6 +56,7 @@ swiftc \
   TurtleneckCoach/Services/DashboardMessages.swift \
   TurtleneckCoach/Services/CoachingTips.swift \
   TurtleneckCoach/Services/NotificationService.swift \
+  TurtleneckCoach/Services/UsageAnalyticsService.swift \
   TurtleneckCoach/TurtleneckCoachApp.swift \
   TurtleneckCoach/Views/CalibrationView.swift \
   TurtleneckCoach/Views/CameraPreviewView.swift \

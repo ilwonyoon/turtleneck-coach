@@ -2,11 +2,11 @@
 
 **Turtleneck Coach** — Posture Monitoring for macOS
 
-*Last updated: March 6, 2026*
+*Last updated: March 18, 2026*
 
 ## Summary
 
-Turtleneck Coach processes posture data on your Mac. The public DMG release does not create an account, does not send analytics, and does not upload camera frames or session data to a remote server.
+Turtleneck Coach processes posture data on your Mac. The app does not create an account and does not upload camera frames or posture session data to a remote server. Public releases may send anonymous install and activity pings when anonymous usage analytics is enabled.
 
 ## What the App Uses
 
@@ -32,6 +32,7 @@ The app stores a small amount of local settings data in macOS UserDefaults, incl
 - camera/setup preferences
 - sensitivity and notification settings
 - some window and onboarding preferences
+- anonymous analytics preference and a random install identifier
 
 ### Session Statistics
 
@@ -62,10 +63,23 @@ Session history is currently pruned after about 90 days.
 - Internal or debug builds may write temporary debug logs and labeled snapshot images to `/tmp` when diagnostic features are compiled in and used.
 - These debug artifacts are for testing and are not part of normal public use.
 
+## Anonymous Usage Analytics
+
+When enabled, the app may send a small anonymous event payload containing:
+
+- a random install identifier generated on-device
+- event type (`first_install`, `app_open`, or `daily_active`)
+- app version and build number
+- macOS version
+- event timestamp and local calendar day
+
+These events do **not** include camera frames, posture measurements, calibration values, session summaries, exported files, or typed feedback content.
+
 ## Data Sharing
 
 - No camera frames, posture data, or session summaries are sent to our servers.
-- No third-party analytics, ad SDKs, or crash-reporting services are included.
+- Anonymous usage analytics can be disabled in Settings.
+- No ad SDKs are included.
 - The app does not require sign-in or an online account.
 
 ## Export and User-Initiated File Access

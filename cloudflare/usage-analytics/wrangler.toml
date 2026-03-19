@@ -1,0 +1,10 @@
+name = "turtleneck-analytics"
+main = "src/index.js"
+compatibility_date = "2026-03-18"
+workers_dev = true
+preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "turtleneck-analytics"
+database_id = "b1cb0148-4e5d-4609-a53d-84818aa9daf7"

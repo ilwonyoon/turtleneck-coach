@@ -1,0 +1,5 @@
+{
+  "name": "turtleneck-analytics-worker",
+  "private": true,
+  "type": "module"
+}

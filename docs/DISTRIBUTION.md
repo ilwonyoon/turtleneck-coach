@@ -110,6 +110,8 @@ Use [`scripts/build-release.sh`](../scripts/build-release.sh).
 
 - [ ] Run:
   - [ ] `./scripts/build-release.sh`
+- [ ] Optional analytics endpoint injection:
+  - [ ] `ANALYTICS_ENDPOINT_URL=https://<worker-domain>/v1/events ./scripts/build-release.sh`
 - [ ] Confirm app output exists:
   - [ ] `./TurtleneckCoach.app`
 - [ ] Confirm signature:
@@ -119,6 +121,8 @@ Use [`scripts/build-release.sh`](../scripts/build-release.sh).
 
 - [ ] Run with real identity:
   - [ ] `./scripts/build-release.sh "Developer ID Application: Your Name (TEAMID)"`
+- [ ] Optional analytics endpoint injection:
+  - [ ] `ANALYTICS_ENDPOINT_URL=https://<worker-domain>/v1/events ./scripts/build-release.sh "Developer ID Application: Your Name (TEAMID)"`
 - [ ] Confirm hardened runtime was enabled in script output.
 - [ ] Verify signature:
   - [ ] `codesign --verify --deep --strict --verbose=2 TurtleneckCoach.app`
@@ -226,6 +230,7 @@ Use GitHub Releases as the changelog + download surface, not as the full product
 # 0) Do not use ./build.sh for public release. It is dev-only.
 
 # 1) Build/sign app with Developer ID
+ANALYTICS_ENDPOINT_URL=https://<worker-domain>/v1/events \
 ./scripts/build-release.sh "Developer ID Application: Your Name (TEAMID)"
 
 # 2) Create DMG from the signed app

@@ -94,6 +94,7 @@ Open the dashboard for daily sessions, weekly trends, and coaching tips. The goa
 
 - Camera processing stays on-device.
 - Calibration and session data are stored locally on your Mac.
+- Public releases can send anonymous install and activity pings when enabled in Settings.
 - Turtleneck Coach is not a medical device.
 
-See the [privacy policy](./docs/privacy-policy.md) and [distribution guide](./docs/DISTRIBUTION.md) for more detail.
+See the [privacy policy](./docs/privacy-policy.md), [distribution guide](./docs/DISTRIBUTION.md), and [Cloudflare analytics setup](./docs/analytics-cloudflare.md) for more detail.

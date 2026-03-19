@@ -31,6 +31,9 @@ struct SettingsView: View {
     @AppStorage(PowerSavingSettings.inactiveTimeoutSecondsKey)
     private var inactiveTimeoutSeconds = PowerSavingSettings.defaultInactiveTimeoutSeconds
 
+    @AppStorage(UsageAnalyticsService.analyticsEnabledKey)
+    private var anonymousUsageAnalyticsEnabled = true
+
     private var inactiveTimeoutSliderValue: Binding<Double> {
         Binding(
             get: { PowerSavingSettings.inactiveTimeoutSliderIndex(for: inactiveTimeoutSeconds) },
@@ -143,6 +146,14 @@ struct SettingsView: View {
         }
 
         return "Currently on. \(option.displayName) plays for posture alerts."
+    }
+
+    private var analyticsAvailable: Bool {
+        UsageAnalyticsService.isConfigured()
+    }
+
+    private var anonymousAnalyticsDescription: String {
+        "Sends anonymous install and activity pings only. Camera frames, posture measurements, and session history stay on-device."
     }
 
     private func notificationSoundLabel(for option: NotificationSoundOption) -> some View {
@@ -271,6 +282,27 @@ struct SettingsView: View {
                 }
             } header: {
                 Text("General")
+            }
+
+            if analyticsAvailable {
+                Section {
+                    LabeledContent {
+                        Toggle("", isOn: $anonymousUsageAnalyticsEnabled)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    } label: {
+                        VStack(alignment: .leading, spacing: 2) { // DS: one-off
+                            Text("Share Anonymous Usage Analytics")
+                            Text(anonymousAnalyticsDescription)
+                                .font(DS.Font.subhead)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("Privacy")
+                } footer: {
+                    Text("This controls anonymous install, app-open, and daily-active pings for the public release.")
+                }
             }
 
             Section {
@@ -483,6 +515,9 @@ struct SettingsView: View {
         }
         .onChange(of: engine.cameraSourceMode) {
             engine.refreshCameraDevices()
+        }
+        .onChange(of: anonymousUsageAnalyticsEnabled) {
+            UsageAnalyticsService.shared.handlePreferenceChanged()
         }
     }
 

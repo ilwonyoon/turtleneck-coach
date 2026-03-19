@@ -46,6 +46,8 @@ STRICT_SELF_CONTAINED_MEDIAPIPE="${STRICT_SELF_CONTAINED_MEDIAPIPE:-0}"
 REQUIRE_COMPLETE_VENDORING="${REQUIRE_COMPLETE_VENDORING:-${STRICT_SELF_CONTAINED_MEDIAPIPE}}"
 
 SIGNING_IDENTITY="${1:-${SIGNING_IDENTITY:--}}"
+ANALYTICS_ENDPOINT_URL="${ANALYTICS_ENDPOINT_URL:-}"
+ANALYTICS_ENABLED_BY_DEFAULT="${ANALYTICS_ENABLED_BY_DEFAULT:-1}"
 
 if [[ "${SIGNING_IDENTITY}" == "-h" || "${SIGNING_IDENTITY}" == "--help" ]]; then
   cat <<'USAGE'
@@ -116,9 +118,24 @@ else
   <string>AppIcon</string>
   <key>NSCameraUsageDescription</key>
   <string>Turtleneck Coach uses the camera to analyze your posture. Images are processed on-device and never stored.</string>
+  <key>TurtleneckAnalyticsEndpointURL</key>
+  <string></string>
+  <key>TurtleneckAnalyticsEnabledByDefault</key>
+  <true/>
 </dict>
 </plist>
 PLIST
+fi
+
+if command -v plutil >/dev/null 2>&1; then
+  plutil -replace TurtleneckAnalyticsEndpointURL -string "${ANALYTICS_ENDPOINT_URL}" "${INFO_PLIST_DEST}"
+  if [[ "${ANALYTICS_ENABLED_BY_DEFAULT}" == "0" ]]; then
+    plutil -replace TurtleneckAnalyticsEnabledByDefault -bool NO "${INFO_PLIST_DEST}"
+  else
+    plutil -replace TurtleneckAnalyticsEnabledByDefault -bool YES "${INFO_PLIST_DEST}"
+  fi
+else
+  echo "warning: plutil not found; analytics Info.plist keys were not updated." >&2
 fi
 
 ICON_SOURCE="${PROJECT_ROOT}/TurtleneckCoach/Resources/AppIcon.icns"
