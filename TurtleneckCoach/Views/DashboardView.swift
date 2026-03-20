@@ -88,6 +88,12 @@ struct DashboardView: View {
         .onChange(of: engine.isMonitoring) { _, _ in
             reloadData()
         }
+        .onChange(of: engine.bodyDetected) { _, _ in
+            reloadData()
+        }
+        .onChange(of: engine.powerState) { _, _ in
+            reloadData()
+        }
         .onReceive(refreshTimer) { _ in
             reloadData()
         }
@@ -114,9 +120,21 @@ struct DashboardView: View {
 
     private var goodPostureHeroCard: some View {
         VStack(alignment: .leading, spacing: DS.Space.sm) {
-            Text("Good Posture")
-                .font(DS.Font.caption)
-                .foregroundColor(.secondary)
+            HStack(alignment: .center) {
+                Text("Good Posture")
+                    .font(DS.Font.caption)
+                    .foregroundColor(.secondary)
+                Spacer()
+                Text(engine.dashboardLiveStatusText)
+                    .font(DS.Font.mini)
+                    .foregroundStyle(engine.dashboardLiveStatusColor)
+                    .padding(.horizontal, DS.Space.sm)
+                    .padding(.vertical, 3) // DS: one-off
+                    .background(
+                        engine.dashboardLiveStatusColor.opacity(0.12),
+                        in: Capsule()
+                    )
+            }
 
             HStack(alignment: .firstTextBaseline, spacing: DS.Space.xs) {
                 Text(formattedDuration(minutes: numbersVisible ? todaySummary.goodPostureMinutes : 0))

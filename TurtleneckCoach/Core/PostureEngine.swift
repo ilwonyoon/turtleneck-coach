@@ -218,8 +218,6 @@ final class PostureEngine: ObservableObject {
     private var pendingSeverity: Severity?
     private var pendingSeverityStart: Date?
     private var pendingTransitionStepCount = 0
-    private var lastSuccessfulDetectionAt: Date?
-    private let noDetectionIdleTimeout: TimeInterval = 10.0
     private let worsenInitialHold: TimeInterval = 1.0
     private let worsenFollowUpHold: TimeInterval = 0.5
     private let improveInitialHold: TimeInterval = 2.0
@@ -532,6 +530,9 @@ final class PostureEngine: ObservableObject {
 
     var menuBarStatusText: String {
         if isMonitoring {
+            if !bodyDetected {
+                return powerState == .inactive ? "Paused" : "No Body"
+            }
             switch powerState {
             case .drowsy:
                 return "Low Power"
@@ -541,7 +542,7 @@ final class PostureEngine: ObservableObject {
                 break
             }
         }
-        guard !menuBarIsIdle else { return "—" }
+        guard bodyDetected, !menuBarIsIdle else { return "—" }
         switch menuBarSeverity {
         case .good: return "Great"
         case .correction: return "Adjust"
@@ -551,8 +552,27 @@ final class PostureEngine: ObservableObject {
     }
 
     var menuBarIconColor: Color {
-        guard !menuBarIsIdle else { return .secondary }
+        guard bodyDetected, !menuBarIsIdle else { return .secondary }
         return menuBarSeverityColor
+    }
+
+    var dashboardLiveStatusText: String {
+        guard isMonitoring else { return "Paused" }
+        if isCalibrating { return "Calibrating" }
+        if calibrationData == nil { return "Starting up" }
+        if !bodyDetected {
+            return powerState == .inactive ? "Paused" : "No body detected"
+        }
+        if powerState == .drowsy { return "Low Power" }
+        return "Monitoring"
+    }
+
+    var dashboardLiveStatusColor: Color {
+        guard isMonitoring, bodyDetected else { return .secondary }
+        if powerState == .drowsy {
+            return DS.Severity.mild
+        }
+        return DS.Severity.good
     }
 
     var menuBarSeverityColor: Color {
@@ -700,7 +720,7 @@ final class PostureEngine: ObservableObject {
         camera.onSessionInterrupted = { [weak self] in
             guard let self else { return }
             self.engineLog("Camera session interrupted — pausing analysis")
-            self.bodyDetected = false
+            self.handleDetectionLoss()
         }
 
         camera.onSessionResumed = { [weak self] in
@@ -1018,7 +1038,9 @@ final class PostureEngine: ObservableObject {
     }
 
     func currentSessionSnapshot() -> SessionRecord? {
-        buildSessionRecord(endDate: Date())
+        let now = Date()
+        updateSessionTrackingClock(now: now)
+        return buildSessionRecord(endDate: now)
     }
 
     private var powerStateManagementEnabled: Bool {
@@ -1090,7 +1112,7 @@ final class PostureEngine: ObservableObject {
 
         guard let image = grabPendingFrame() else {
             if Int.random(in: 0..<30) == 0 { engineLog("no pending frame") }
-            updateMenuBarForNoDetection(at: now)
+            handleDetectionLoss()
             handleNoDetection(at: now)
             return
         }
@@ -1127,15 +1149,13 @@ final class PostureEngine: ObservableObject {
         guard isMonitoring || isProbe else { return }
 
         guard let result = detectionResult else {
-            setDetectionState(bodyDetected: false, joints: nil)
-            updateMenuBarForNoDetection(at: now)
+            handleDetectionLoss()
             handleNoDetection(at: now)
             return
         }
 
         handleDetectionSuccess()
         setDetectionState(bodyDetected: true, joints: result.joints)
-        lastSuccessfulDetectionAt = now
         setMenuBarIdleIfNeeded(false)
         if let mesh = result.joints.faceMesh {
             engineLog("faceMesh present: \(mesh.landmarks.count) landmarks, \(mesh.depthValues.count) depths")
@@ -1409,6 +1429,15 @@ final class PostureEngine: ObservableObject {
         if abs(currentHeadYaw - yaw) >= 0.25 {
             currentHeadYaw = yaw
         }
+    }
+
+    private func handleDetectionLoss() {
+        let now = Date()
+        updateSessionTrackingClock(now: now)
+        endActiveSlouchIfNeeded(at: now)
+        setDetectionState(bodyDetected: false, joints: nil)
+        goodPostureStart = nil
+        resetMenuBarForIdle()
     }
 
     private func setDetectionState(bodyDetected detected: Bool, joints: DetectedJoints?) {
@@ -1859,17 +1888,25 @@ final class PostureEngine: ObservableObject {
         }
 
         let delta = max(0, now.timeIntervalSince(lastTick))
-        sessionTotalSeconds += delta
-        if shouldCountAsGoodPosture {
-            sessionGoodPostureSeconds += delta
-        }
-        if shouldCountAsBadPosture {
-            if sessionCurrentSlouchStart == nil {
-                sessionCurrentSlouchStart = lastTick
+        if shouldCountAsMonitoredTime {
+            sessionTotalSeconds += delta
+            if shouldCountAsGoodPosture {
+                sessionGoodPostureSeconds += delta
             }
-            sessionBadPostureSeconds += delta
+            if shouldCountAsBadPosture {
+                if sessionCurrentSlouchStart == nil {
+                    sessionCurrentSlouchStart = lastTick
+                }
+                sessionBadPostureSeconds += delta
+            }
         }
         sessionLastTick = now
+    }
+
+    private var shouldCountAsMonitoredTime: Bool {
+        calibrationData != nil &&
+        !isCalibrating &&
+        bodyDetected
     }
 
     private var shouldCountAsGoodPosture: Bool {
@@ -1918,6 +1955,13 @@ final class PostureEngine: ObservableObject {
         }
     }
 
+    private func endActiveSlouchIfNeeded(at now: Date) {
+        guard let slouchStart = sessionCurrentSlouchStart else { return }
+        let slouchDuration = max(0, now.timeIntervalSince(slouchStart))
+        sessionLongestSlouchSeconds = max(sessionLongestSlouchSeconds, slouchDuration)
+        sessionCurrentSlouchStart = nil
+    }
+
     private func persistSessionSnapshot(endDate: Date) {
         updateSessionTrackingClock(now: endDate)
         guard let record = buildSessionRecord(endDate: endDate) else { return }
@@ -1927,8 +1971,7 @@ final class PostureEngine: ObservableObject {
     private func buildSessionRecord(endDate: Date) -> SessionRecord? {
         guard let id = activeSessionID, let startDate = sessionStartDate else { return nil }
 
-        let wallClockDuration = max(0, endDate.timeIntervalSince(startDate))
-        let duration = max(sessionTotalSeconds, wallClockDuration)
+        let duration = max(0, sessionTotalSeconds)
         guard duration > 0 else { return nil }
 
         let averageScore = sessionScoreSampleCount > 0
@@ -1942,7 +1985,7 @@ final class PostureEngine: ObservableObject {
         let clampedGoodSeconds = min(duration, max(0, sessionGoodPostureSeconds))
         let goodPosturePercent = duration > 0 ? (clampedGoodSeconds / duration) * 100 : 0
         let liveSlouchSeconds: TimeInterval
-        if let slouchStart = sessionCurrentSlouchStart, isBadSeverity(postureState.severity) {
+        if bodyDetected, let slouchStart = sessionCurrentSlouchStart, isBadSeverity(postureState.severity) {
             liveSlouchSeconds = max(0, endDate.timeIntervalSince(slouchStart))
         } else {
             liveSlouchSeconds = 0
@@ -2038,19 +2081,12 @@ final class PostureEngine: ObservableObject {
         }
     }
 
-    private func updateMenuBarForNoDetection(at now: Date) {
-        guard let lastSuccessfulDetectionAt else { return }
-        guard now.timeIntervalSince(lastSuccessfulDetectionAt) >= noDetectionIdleTimeout else { return }
-        resetMenuBarForIdle()
-    }
-
     private func resetMenuBarForIdle() {
         menuBarSeverity = .good
         menuBarIsIdle = true
         pendingSeverity = nil
         pendingSeverityStart = nil
         pendingTransitionStepCount = 0
-        lastSuccessfulDetectionAt = nil
     }
 
     private func holdDuration(isWorsening: Bool, stepCount: Int) -> TimeInterval {
@@ -2146,4 +2182,56 @@ final class PostureEngine: ObservableObject {
             scheduleAnalysis()
         }
     }
+
+    #if DEBUG
+    func debugPrimeSessionForTesting(
+        startDate: Date,
+        calibrationData: CalibrationData,
+        postureState: PostureState = .initial,
+        bodyDetected: Bool = true,
+        powerState: MonitoringPowerState = .active
+    ) {
+        resetSessionTracking()
+        activeSessionID = UUID()
+        sessionStartDate = startDate
+        sessionLastTick = startDate
+        sessionTotalSeconds = 0
+        sessionGoodPostureSeconds = 0
+        sessionScoreSum = 0
+        sessionScoreSampleCount = 0
+        sessionCVASum = 0
+        sessionCVASampleCount = 0
+        sessionSlouchEventCount = 0
+        sessionBadPostureSeconds = 0
+        sessionResetCount = 0
+        sessionLongestSlouchSeconds = 0
+        sessionCurrentSlouchStart = nil
+
+        isMonitoring = true
+        isCalibrating = false
+        self.calibrationData = calibrationData
+        self.postureState = postureState
+        self.bodyDetected = bodyDetected
+        self.powerState = powerState
+        if postureState.severity == .good && bodyDetected {
+            goodPostureStart = startDate
+        } else {
+            goodPostureStart = nil
+        }
+        menuBarSeverity = postureState.severity
+        menuBarIsIdle = !bodyDetected
+    }
+
+    func debugAdvanceSessionClockForTesting(to now: Date) {
+        updateSessionTrackingClock(now: now)
+    }
+
+    func debugHandleDetectionLossForTesting(at now: Date) {
+        updateSessionTrackingClock(now: now)
+        endActiveSlouchIfNeeded(at: now)
+        setDetectionState(bodyDetected: false, joints: nil)
+        goodPostureStart = nil
+        resetMenuBarForIdle()
+    }
+    #endif
 }

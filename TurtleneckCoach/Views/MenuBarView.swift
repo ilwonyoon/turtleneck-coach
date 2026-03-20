@@ -10,7 +10,7 @@ struct MenuBarView: View {
 
     /// Single accent color derived from held severity — synced with menu bar.
     private var accentColor: Color {
-        guard engine.isMonitoring, engine.calibrationData != nil, !engine.menuBarIsIdle else { return .gray }
+        guard engine.isMonitoring, engine.calibrationData != nil, engine.bodyDetected, !engine.menuBarIsIdle else { return .gray }
         return engine.menuBarSeverityColor
     }
 
@@ -255,8 +255,11 @@ struct MenuBarView: View {
         guard engine.isMonitoring else { return "Paused" }
         if engine.isCalibrating { return "Calibrating..." }
         if engine.calibrationData == nil { return "Starting up..." }
+        if !engine.bodyDetected {
+            return engine.powerState == .inactive ? "Paused" : "No body detected"
+        }
         if engine.powerState == .inactive { return "Paused" }
-        if engine.powerState == .drowsy && !engine.bodyDetected { return "Low Power" }
+        if engine.powerState == .drowsy { return "Low Power" }
 
         // Head turned sideways — show rotation-specific main text
         let absYaw = abs(engine.currentHeadYaw)
@@ -284,10 +287,18 @@ struct MenuBarView: View {
         guard engine.isMonitoring else { return "Tap Start when you're ready." }
         if engine.isCalibrating { return "Sit up straight. Hold still." }
         if engine.calibrationData == nil { return "Preparing camera..." }
-        if engine.powerState == .inactive { return "No one detected. Probing every 6 seconds." }
-        if engine.powerState == .drowsy && !engine.bodyDetected {
-            return "No body detected. Slower checks to save battery."
+        if !engine.bodyDetected {
+            switch engine.powerState {
+            case .inactive:
+                return "No one detected. Probing every 6 seconds."
+            case .drowsy:
+                return "No body detected. Slower checks to save battery."
+            case .active:
+                return "Tracking resumes when you return to frame."
+            }
         }
+        if engine.powerState == .inactive { return "No one detected. Probing every 6 seconds." }
+        if engine.powerState == .drowsy { return "Reduced checks to save battery." }
 
         switch engine.menuBarSeverity {
         case .good:
